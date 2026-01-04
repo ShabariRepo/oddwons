@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     sendgrid_api_key: str = ""
     from_email: str = "alerts@oddwons.ai"
 
+    # AI Analysis (Groq)
+    groq_api_key: str = ""
+    ai_analysis_enabled: bool = True
+    ai_model: str = "llama-3.3-70b-versatile"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
