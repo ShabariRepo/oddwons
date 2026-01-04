@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     stripe_price_premium: str = ""
     stripe_price_pro: str = ""
 
+    # SendGrid (Email)
+    sendgrid_api_key: str = ""
+    from_email: str = "alerts@oddwons.ai"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
