@@ -6,7 +6,7 @@ export interface User {
   name?: string
   is_active: boolean
   is_verified: boolean
-  subscription_tier: 'free' | 'basic' | 'premium' | 'pro'
+  subscription_tier?: 'basic' | 'premium' | 'pro'
   subscription_status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'inactive'
   subscription_end?: string
   created_at: string

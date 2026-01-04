@@ -7,7 +7,6 @@ from app.core.database import Base
 
 
 class SubscriptionTier(str, enum.Enum):
-    FREE = "free"
     BASIC = "basic"
     PREMIUM = "premium"
     PRO = "pro"
@@ -35,7 +34,7 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
 
     # Subscription
-    subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.FREE)
+    subscription_tier = Column(Enum(SubscriptionTier), nullable=True)
     subscription_status = Column(Enum(SubscriptionStatus), default=SubscriptionStatus.INACTIVE)
 
     # Stripe
@@ -54,17 +53,18 @@ class User(Base):
 
     @property
     def is_subscribed(self) -> bool:
-        """Check if user has an active paid subscription."""
+        """Check if user has an active subscription."""
         return (
-            self.subscription_status == SubscriptionStatus.ACTIVE and
-            self.subscription_tier != SubscriptionTier.FREE
+            self.subscription_tier is not None and
+            self.subscription_status in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING)
         )
 
     @property
     def tier_level(self) -> int:
         """Get numeric tier level for comparison."""
+        if self.subscription_tier is None:
+            return 0
         levels = {
-            SubscriptionTier.FREE: 0,
             SubscriptionTier.BASIC: 1,
             SubscriptionTier.PREMIUM: 2,
             SubscriptionTier.PRO: 3,

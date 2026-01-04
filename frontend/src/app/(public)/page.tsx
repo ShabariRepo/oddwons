@@ -38,14 +38,15 @@ const features = [
 
 const tiers = [
   {
-    name: 'Free',
-    price: 0,
-    features: ['Basic market overview', 'Limited market data', '5 alerts per day'],
-  },
-  {
     name: 'Basic',
     price: 9.99,
-    features: ['Daily market digest', 'Top 5 opportunities', 'Email notifications', 'Basic pattern alerts'],
+    features: [
+      'Daily market digest',
+      'Top 5 opportunities',
+      'Email notifications',
+      'Basic pattern alerts',
+      '7-day free trial',
+    ],
   },
   {
     name: 'Premium',
@@ -57,6 +58,7 @@ const tiers = [
       'Custom parameters',
       'SMS notifications',
       'Discord/Slack integration',
+      '7-day free trial',
     ],
   },
   {
@@ -68,6 +70,7 @@ const tiers = [
       'API access',
       'Priority support',
       'Early feature access',
+      '7-day free trial',
     ],
   },
 ]
@@ -162,7 +165,7 @@ export default function LandingPage() {
               Choose the plan that fits your trading style.
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {tiers.map((tier) => (
               <div
                 key={tier.name}

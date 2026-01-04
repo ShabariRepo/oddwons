@@ -5,7 +5,6 @@ from enum import Enum
 
 
 class SubscriptionTier(str, Enum):
-    FREE = "free"
     BASIC = "basic"
     PREMIUM = "premium"
     PRO = "pro"
@@ -61,7 +60,7 @@ class UserResponse(UserBase):
     id: str
     is_active: bool
     is_verified: bool
-    subscription_tier: SubscriptionTier
+    subscription_tier: Optional[SubscriptionTier] = None
     subscription_status: SubscriptionStatus
     subscription_end: Optional[datetime] = None
     created_at: datetime
@@ -78,7 +77,7 @@ class UserProfile(UserResponse):
 
 # Subscription schemas
 class SubscriptionInfo(BaseModel):
-    tier: SubscriptionTier
+    tier: Optional[SubscriptionTier] = None
     status: SubscriptionStatus
     current_period_end: Optional[datetime] = None
     cancel_at_period_end: bool = False

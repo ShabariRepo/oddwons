@@ -35,10 +35,10 @@ OddWons is a subscription-based prediction market analysis app that analyzes Kal
 - **Scoring System**: Confidence score, profit potential, time sensitivity, risk assessment (all 0-100 or 1-5 scales)
 - **Alert System**: Tier-based thresholds, multi-channel delivery (email, SMS, push, webhooks)
 
-### Subscription Tiers
-- Basic ($9.99): Daily digest, top 5 opportunities, email notifications
-- Premium ($19.99): Real-time alerts, custom parameters, SMS, Discord/Slack
-- Pro ($29.99): Custom analysis, advanced patterns, API access, priority support
+### Subscription Tiers (all with 7-day free trial)
+- Basic ($9.99/mo): Daily digest, top 5 opportunities, email notifications
+- Premium ($19.99/mo): Real-time alerts, custom parameters, SMS, Discord/Slack
+- Pro ($29.99/mo): Custom analysis, advanced patterns, API access, priority support
 
 ## Tech Stack
 

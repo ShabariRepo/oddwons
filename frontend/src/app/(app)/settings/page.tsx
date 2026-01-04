@@ -8,16 +8,6 @@ import { createCheckout, createPortal, changePassword } from '@/lib/auth'
 
 const plans = [
   {
-    id: 'free',
-    name: 'Free',
-    price: 0,
-    features: [
-      'Basic market overview',
-      'Limited market data',
-      '5 pattern alerts per day',
-    ],
-  },
-  {
     id: 'basic',
     name: 'Basic',
     price: 9.99,
@@ -26,6 +16,7 @@ const plans = [
       'Top 5 opportunities',
       'Email notifications',
       'Basic pattern alerts',
+      '7-day free trial',
     ],
   },
   {
@@ -39,6 +30,7 @@ const plans = [
       'SMS notifications',
       'Discord/Slack integration',
       'Historical performance data',
+      '7-day free trial',
     ],
     recommended: true,
   },
@@ -53,6 +45,7 @@ const plans = [
       'API access',
       'Priority support',
       'Early access to new features',
+      '7-day free trial',
     ],
   },
 ]
@@ -69,10 +62,10 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
-  const currentTier = user?.subscription_tier || 'free'
+  const currentTier = user?.subscription_tier
+  const hasSubscription = currentTier && user?.subscription_status === 'active'
 
   const handleUpgrade = async (planId: string) => {
-    if (planId === 'free') return
 
     setLoading(planId)
     setError('')
@@ -186,23 +179,31 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Current Plan</h2>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-primary-100 rounded-lg">
-                  <CreditCard className="w-6 h-6 text-primary-600" />
+                <div className={clsx(
+                  'p-3 rounded-lg',
+                  hasSubscription ? 'bg-primary-100' : 'bg-gray-100'
+                )}>
+                  <CreditCard className={clsx(
+                    'w-6 h-6',
+                    hasSubscription ? 'text-primary-600' : 'text-gray-400'
+                  )} />
                 </div>
                 <div>
                   <p className="font-medium text-gray-900">
-                    {currentTier.charAt(0).toUpperCase() + currentTier.slice(1)} Plan
+                    {hasSubscription
+                      ? `${currentTier!.charAt(0).toUpperCase() + currentTier!.slice(1)} Plan`
+                      : 'No Active Plan'}
                   </p>
                   <p className="text-sm text-gray-500">
                     {user?.subscription_status === 'active'
-                      ? 'Active subscription'
-                      : currentTier === 'free'
-                        ? 'Free tier - no billing'
-                        : 'Subscription inactive'}
+                      ? user?.subscription_status === 'trialing'
+                        ? 'Free trial active'
+                        : 'Active subscription'
+                      : 'Start a 7-day free trial below'}
                   </p>
                 </div>
               </div>
-              {currentTier !== 'free' && user?.subscription_status === 'active' && (
+              {hasSubscription && (
                 <button
                   onClick={handleManageSubscription}
                   disabled={loading === 'portal'}
@@ -217,11 +218,13 @@ export default function SettingsPage() {
           </div>
 
           <h2 className="text-lg font-semibold text-gray-900">Available Plans</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {plans.map((plan) => {
-              const isCurrent = plan.id === currentTier
-              const isUpgrade = plans.findIndex(p => p.id === plan.id) > plans.findIndex(p => p.id === currentTier)
-              const isDowngrade = plans.findIndex(p => p.id === plan.id) < plans.findIndex(p => p.id === currentTier)
+              const isCurrent = hasSubscription && plan.id === currentTier
+              const currentIndex = hasSubscription ? plans.findIndex(p => p.id === currentTier) : -1
+              const planIndex = plans.findIndex(p => p.id === plan.id)
+              const isUpgrade = !hasSubscription || planIndex > currentIndex
+              const isDowngrade = hasSubscription && planIndex < currentIndex
 
               return (
                 <div
@@ -242,10 +245,8 @@ export default function SettingsPage() {
 
                   <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
                   <p className="mt-2">
-                    <span className="text-3xl font-bold text-gray-900">
-                      {plan.price === 0 ? 'Free' : `$${plan.price}`}
-                    </span>
-                    {plan.price > 0 && <span className="text-gray-500">/month</span>}
+                    <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
+                    <span className="text-gray-500">/month</span>
                   </p>
 
                   <ul className="mt-6 space-y-3">
@@ -258,19 +259,17 @@ export default function SettingsPage() {
                   </ul>
 
                   <button
-                    onClick={() => isUpgrade ? handleUpgrade(plan.id) : isDowngrade ? handleManageSubscription() : null}
+                    onClick={() => isCurrent ? null : isDowngrade ? handleManageSubscription() : handleUpgrade(plan.id)}
                     className={clsx(
                       'w-full mt-6 flex justify-center items-center gap-2',
                       isCurrent
                         ? 'btn-secondary cursor-default'
-                        : isUpgrade
-                          ? 'btn-primary'
-                          : 'btn-secondary'
+                        : 'btn-primary'
                     )}
                     disabled={isCurrent || loading === plan.id}
                   >
                     {loading === plan.id && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {isCurrent ? 'Current Plan' : isUpgrade ? 'Upgrade' : 'Downgrade'}
+                    {isCurrent ? 'Current Plan' : !hasSubscription ? 'Start Free Trial' : isDowngrade ? 'Downgrade' : 'Upgrade'}
                   </button>
                 </div>
               )
