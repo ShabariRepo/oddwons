@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # App Settings
     debug: bool = True
     log_level: str = "INFO"
+    frontend_url: str = "http://localhost:3000"
 
     # Data Collection
     collection_interval_minutes: int = 15
@@ -25,6 +26,21 @@ class Settings(BaseSettings):
     kalshi_base_url: str = "https://api.elections.kalshi.com/trade-api/v2"
     polymarket_gamma_url: str = "https://gamma-api.polymarket.com"
     polymarket_clob_url: str = "https://clob.polymarket.com"
+
+    # Authentication
+    secret_key: str = "your-secret-key-change-in-production"
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+
+    # Stripe
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+
+    # Stripe Price IDs (configure in Stripe dashboard)
+    stripe_price_basic: str = ""
+    stripe_price_premium: str = ""
+    stripe_price_pro: str = ""
 
     class Config:
         env_file = ".env"

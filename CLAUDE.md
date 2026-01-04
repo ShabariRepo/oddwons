@@ -75,29 +75,48 @@ curl -X POST http://localhost:8000/api/v1/collect
 app/                          # Python backend
 ├── main.py                   # FastAPI entry point
 ├── config.py                 # Environment settings
-├── api/routes/               # API endpoints
+├── api/routes/
+│   ├── markets.py            # Market endpoints
+│   ├── patterns.py           # Pattern detection endpoints
+│   ├── auth.py               # Authentication endpoints
+│   └── billing.py            # Stripe billing endpoints
 ├── core/database.py          # PostgreSQL + Redis
-├── models/                   # SQLAlchemy models
-├── schemas/                  # Pydantic schemas
+├── models/
+│   ├── market.py             # Market models
+│   └── user.py               # User + subscription models
+├── schemas/
+│   ├── market.py             # Market schemas
+│   └── user.py               # User + auth schemas
 └── services/
     ├── kalshi_client.py
     ├── polymarket_client.py
     ├── data_collector.py
     ├── alerts.py
+    ├── auth.py               # JWT authentication
+    ├── billing.py            # Stripe integration
     └── patterns/             # Pattern detection engine
 
 frontend/                     # Next.js frontend
 ├── src/
-│   ├── app/                  # Next.js app router pages
-│   │   ├── page.tsx          # Dashboard
-│   │   ├── opportunities/    # Opportunities page
-│   │   ├── markets/          # Markets listing
-│   │   ├── alerts/           # Alerts page
-│   │   ├── analytics/        # Analytics page
-│   │   └── settings/         # Settings page
-│   ├── components/           # React components
+│   ├── app/
+│   │   ├── (app)/            # Protected routes (require auth)
+│   │   │   ├── page.tsx      # Dashboard
+│   │   │   ├── opportunities/
+│   │   │   ├── markets/
+│   │   │   ├── alerts/
+│   │   │   ├── analytics/
+│   │   │   └── settings/     # Subscription management
+│   │   ├── login/            # Public login page
+│   │   └── register/         # Public registration page
+│   ├── components/
+│   │   ├── AuthProvider.tsx  # Auth context
+│   │   ├── AppLayout.tsx     # Protected layout wrapper
+│   │   ├── Sidebar.tsx
+│   │   └── Header.tsx
 │   ├── hooks/useAPI.ts       # SWR data fetching hooks
-│   └── lib/                  # Types and API utilities
+│   └── lib/
+│       ├── types.ts
+│       └── auth.ts           # Auth utilities + billing API
 └── package.json
 ```
 
@@ -119,6 +138,19 @@ frontend/                     # Next.js frontend
 - `GET /api/v1/patterns/alerts` - Get alerts by tier
 - `GET /api/v1/patterns/alerts/stats` - Alert statistics
 
+### Authentication
+- `POST /api/v1/auth/register` - Register new user
+- `POST /api/v1/auth/login` - Login, returns JWT token
+- `GET /api/v1/auth/me` - Get current user info
+- `POST /api/v1/auth/change-password` - Change password
+
+### Billing (Stripe)
+- `GET /api/v1/billing/subscription` - Get current subscription
+- `POST /api/v1/billing/checkout` - Create Stripe checkout session
+- `POST /api/v1/billing/portal` - Create Stripe billing portal session
+- `POST /api/v1/billing/webhook` - Stripe webhook handler
+- `GET /api/v1/billing/prices` - Get available subscription prices
+
 ### System
 - `GET /health` - Health check
 - `POST /api/v1/collect` - Trigger data collection + analysis
@@ -137,9 +169,32 @@ frontend/                     # Next.js frontend
 | cross_platform_arbitrage | Arbitrage | Price diff between platforms |
 | related_market_arbitrage | Arbitrage | Mispricing in related markets |
 
+## Environment Variables
+
+```bash
+# Database
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/oddwons
+REDIS_URL=redis://localhost:6379
+
+# Authentication
+SECRET_KEY=your-secret-key-change-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=10080  # 7 days
+
+# Stripe Billing
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_BASIC=price_...
+STRIPE_PRICE_PREMIUM=price_...
+STRIPE_PRICE_PRO=price_...
+```
+
 ## Development Notes
 
 - Data collection runs automatically every 15 minutes
 - Direct API clients (Kalshi/Polymarket) are fallbacks for MCP
 - Redis caches current market prices (1 hour TTL)
 - Keep 6-12 months of historical data for pattern detection
+- JWT tokens are stored in localStorage on frontend
+- Protected routes redirect to /login if not authenticated

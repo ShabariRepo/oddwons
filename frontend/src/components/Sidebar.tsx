@@ -11,6 +11,7 @@ import {
   Settings,
   Zap,
 } from 'lucide-react'
+import { useAuth } from './AuthProvider'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -21,8 +22,19 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
+const tierColors: Record<string, string> = {
+  free: 'from-gray-600 to-gray-500',
+  basic: 'from-primary-600 to-primary-500',
+  premium: 'from-purple-600 to-purple-500',
+  pro: 'from-yellow-600 to-yellow-500',
+}
+
 export function Sidebar() {
   const pathname = usePathname()
+  const { user } = useAuth()
+
+  const tier = user?.subscription_tier || 'free'
+  const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1)
 
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-gray-900">
@@ -60,15 +72,25 @@ export function Sidebar() {
 
       {/* Tier Badge */}
       <div className="p-4 border-t border-gray-800">
-        <div className="bg-gradient-to-r from-primary-600 to-primary-500 rounded-lg p-4">
-          <p className="text-xs text-primary-100 uppercase tracking-wide">Current Plan</p>
-          <p className="text-lg font-bold text-white mt-1">Basic</p>
-          <Link
-            href="/settings"
-            className="mt-3 block text-center text-sm text-white bg-white/20 hover:bg-white/30 rounded-lg py-2 transition-colors"
-          >
-            Upgrade Plan
-          </Link>
+        <div className={clsx('bg-gradient-to-r rounded-lg p-4', tierColors[tier])}>
+          <p className="text-xs text-white/80 uppercase tracking-wide">Current Plan</p>
+          <p className="text-lg font-bold text-white mt-1">{tierLabel}</p>
+          {tier === 'free' && (
+            <Link
+              href="/settings"
+              className="mt-3 block text-center text-sm text-white bg-white/20 hover:bg-white/30 rounded-lg py-2 transition-colors"
+            >
+              Upgrade Plan
+            </Link>
+          )}
+          {tier !== 'free' && tier !== 'pro' && (
+            <Link
+              href="/settings"
+              className="mt-3 block text-center text-sm text-white bg-white/20 hover:bg-white/30 rounded-lg py-2 transition-colors"
+            >
+              Manage Plan
+            </Link>
+          )}
         </div>
       </div>
     </aside>
