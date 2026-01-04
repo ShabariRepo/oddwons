@@ -45,8 +45,10 @@ OddWons is a subscription-based prediction market analysis app that analyzes Kal
 - **Backend**: Python + FastAPI
 - **Frontend**: Next.js 14 + TypeScript + Tailwind CSS
 - **Database**: PostgreSQL + Redis
-- **Background Jobs**: APScheduler
+- **AI**: Groq (llama-3.3-70b-versatile)
+- **Background Jobs**: Railway Cron (production) / APScheduler (local)
 - **HTTP Client**: httpx (async)
+- **Email**: SendGrid
 
 ## Development Commands
 
@@ -78,16 +80,19 @@ app/                          # Python backend
 ├── api/routes/
 │   ├── markets.py            # Market endpoints
 │   ├── patterns.py           # Pattern detection endpoints
+│   ├── insights.py           # AI insights endpoints (tier-gated)
 │   ├── auth.py               # Authentication endpoints
 │   └── billing.py            # Stripe billing endpoints
 ├── core/database.py          # PostgreSQL + Redis
 ├── models/
 │   ├── market.py             # Market models
-│   └── user.py               # User + subscription models
+│   ├── user.py               # User + subscription models
+│   └── ai_insight.py         # AIInsight, ArbitrageOpportunity, DailyDigest
 ├── schemas/
 │   ├── market.py             # Market schemas
 │   └── user.py               # User + auth schemas
 └── services/
+    ├── ai_agent.py           # Groq-powered MarketAnalysisAgent
     ├── kalshi_client.py
     ├── polymarket_client.py
     ├── data_collector.py
@@ -95,6 +100,9 @@ app/                          # Python backend
     ├── auth.py               # JWT authentication
     ├── billing.py            # Stripe integration
     └── patterns/             # Pattern detection engine
+
+collect_data.py               # Railway cron: data collection (runs every 15 min)
+run_analysis.py               # Railway cron: AI analysis (runs offset)
 
 frontend/                     # Next.js frontend
 ├── src/
@@ -137,6 +145,13 @@ frontend/                     # Next.js frontend
 ### Alerts
 - `GET /api/v1/patterns/alerts` - Get alerts by tier
 - `GET /api/v1/patterns/alerts/stats` - Alert statistics
+
+### AI Insights (Tier-Gated)
+- `GET /api/v1/insights/ai` - Get AI-powered recommendations (FREE: none, BASIC: top 5, PREMIUM: all+arbitrage, PRO: everything)
+- `GET /api/v1/insights/arbitrage` - Cross-platform arbitrage opportunities (Premium+)
+- `GET /api/v1/insights/digest` - Daily market digest (Basic+)
+- `GET /api/v1/insights/stats` - Insight statistics
+- `POST /api/v1/insights/refresh` - Trigger manual AI analysis (Pro only)
 
 ### Authentication
 - `POST /api/v1/auth/register` - Register new user
@@ -181,6 +196,11 @@ SECRET_KEY=your-secret-key-change-in-production
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=10080  # 7 days
 
+# AI Analysis (Groq)
+GROQ_API_KEY=gsk_...
+AI_ANALYSIS_ENABLED=true
+AI_MODEL=llama-3.3-70b-versatile
+
 # Stripe Billing
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
@@ -188,6 +208,10 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_PRICE_BASIC=price_...
 STRIPE_PRICE_PREMIUM=price_...
 STRIPE_PRICE_PRO=price_...
+
+# Email (SendGrid)
+SENDGRID_API_KEY=SG.xxx
+FROM_EMAIL=alerts@oddwons.ai
 ```
 
 ## Development Notes
