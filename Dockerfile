@@ -16,8 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app/ ./app/
 
-# Expose port
+# Expose port (Railway uses dynamic PORT)
 EXPOSE 8000
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Set default port
+ENV PORT=8000
+
+# Run the application with dynamic port
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
