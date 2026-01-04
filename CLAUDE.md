@@ -43,6 +43,7 @@ OddWons is a subscription-based prediction market analysis app that analyzes Kal
 ## Tech Stack
 
 - **Backend**: Python + FastAPI
+- **Frontend**: Next.js 14 + TypeScript + Tailwind CSS
 - **Database**: PostgreSQL + Redis
 - **Background Jobs**: APScheduler
 - **HTTP Client**: httpx (async)
@@ -53,15 +54,16 @@ OddWons is a subscription-based prediction market analysis app that analyzes Kal
 # Start database services
 docker-compose up -d
 
-# Create virtual environment
+# Backend setup
 python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 
-# Run the API server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Frontend setup (in separate terminal)
+cd frontend
+npm install
+npm run dev  # Runs on port 3000
 
 # Trigger manual data collection
 curl -X POST http://localhost:8000/api/v1/collect
@@ -70,25 +72,33 @@ curl -X POST http://localhost:8000/api/v1/collect
 ## Project Structure
 
 ```
-app/
-├── main.py              # FastAPI app entry point
-├── config.py            # Settings from environment
-├── api/routes/          # API endpoints
-├── core/database.py     # PostgreSQL + Redis setup
-├── models/              # SQLAlchemy models
-├── schemas/             # Pydantic schemas
+app/                          # Python backend
+├── main.py                   # FastAPI entry point
+├── config.py                 # Environment settings
+├── api/routes/               # API endpoints
+├── core/database.py          # PostgreSQL + Redis
+├── models/                   # SQLAlchemy models
+├── schemas/                  # Pydantic schemas
 └── services/
-    ├── kalshi_client.py      # Kalshi API client
-    ├── polymarket_client.py  # Polymarket API client
-    ├── data_collector.py     # Scheduled data collection
-    ├── alerts.py             # Alert generation service
+    ├── kalshi_client.py
+    ├── polymarket_client.py
+    ├── data_collector.py
+    ├── alerts.py
     └── patterns/             # Pattern detection engine
-        ├── base.py           # Base classes and types
-        ├── volume.py         # Volume pattern detector
-        ├── price.py          # Price pattern detector
-        ├── arbitrage.py      # Arbitrage detector
-        ├── scoring.py        # Pattern scoring system
-        └── engine.py         # Main detection engine
+
+frontend/                     # Next.js frontend
+├── src/
+│   ├── app/                  # Next.js app router pages
+│   │   ├── page.tsx          # Dashboard
+│   │   ├── opportunities/    # Opportunities page
+│   │   ├── markets/          # Markets listing
+│   │   ├── alerts/           # Alerts page
+│   │   ├── analytics/        # Analytics page
+│   │   └── settings/         # Settings page
+│   ├── components/           # React components
+│   ├── hooks/useAPI.ts       # SWR data fetching hooks
+│   └── lib/                  # Types and API utilities
+└── package.json
 ```
 
 ## API Endpoints
