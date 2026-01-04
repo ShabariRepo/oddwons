@@ -179,9 +179,9 @@ class DataCollector:
             await session.rollback()
             raise
 
-    async def run_collection(self) -> dict:
+    async def run_collection(self, run_pattern_detection: bool = True) -> dict:
         """Run full data collection from all platforms."""
-        results = {"kalshi": 0, "polymarket": 0, "errors": []}
+        results = {"kalshi": 0, "polymarket": 0, "patterns": 0, "errors": []}
 
         async with AsyncSessionLocal() as session:
             try:
@@ -195,6 +195,18 @@ class DataCollector:
             except Exception as e:
                 results["errors"].append(f"Polymarket: {str(e)}")
                 logger.error(f"Polymarket collection failed: {e}")
+
+        # Run pattern detection after data collection
+        if run_pattern_detection:
+            try:
+                from app.services.patterns.engine import pattern_engine
+                analysis = await pattern_engine.run_full_analysis()
+                results["patterns"] = analysis.get("total_patterns_detected", 0)
+                results["patterns_saved"] = analysis.get("patterns_saved", 0)
+                logger.info(f"Pattern detection found {results['patterns']} patterns")
+            except Exception as e:
+                results["errors"].append(f"Pattern detection: {str(e)}")
+                logger.error(f"Pattern detection failed: {e}")
 
         # Update last collection timestamp
         r = await self.get_redis()

@@ -77,19 +77,55 @@ app/
 ├── core/database.py     # PostgreSQL + Redis setup
 ├── models/              # SQLAlchemy models
 ├── schemas/             # Pydantic schemas
-└── services/            # Business logic
+└── services/
     ├── kalshi_client.py      # Kalshi API client
     ├── polymarket_client.py  # Polymarket API client
-    └── data_collector.py     # Scheduled data collection
+    ├── data_collector.py     # Scheduled data collection
+    ├── alerts.py             # Alert generation service
+    └── patterns/             # Pattern detection engine
+        ├── base.py           # Base classes and types
+        ├── volume.py         # Volume pattern detector
+        ├── price.py          # Price pattern detector
+        ├── arbitrage.py      # Arbitrage detector
+        ├── scoring.py        # Pattern scoring system
+        └── engine.py         # Main detection engine
 ```
 
 ## API Endpoints
 
-- `GET /health` - Health check
+### Markets
 - `GET /api/v1/markets` - List markets (with filters)
 - `GET /api/v1/markets/{id}` - Market details with history
 - `GET /api/v1/markets/stats/summary` - Platform stats
-- `POST /api/v1/collect` - Trigger data collection
+
+### Patterns
+- `GET /api/v1/patterns` - List detected patterns
+- `GET /api/v1/patterns/opportunities` - Top opportunities by tier
+- `GET /api/v1/patterns/stats` - Pattern statistics
+- `GET /api/v1/patterns/types` - Available pattern types
+- `POST /api/v1/patterns/analyze` - Trigger pattern analysis
+
+### Alerts
+- `GET /api/v1/patterns/alerts` - Get alerts by tier
+- `GET /api/v1/patterns/alerts/stats` - Alert statistics
+
+### System
+- `GET /health` - Health check
+- `POST /api/v1/collect` - Trigger data collection + analysis
+
+## Pattern Types
+
+| Type | Category | Description |
+|------|----------|-------------|
+| volume_spike | Volume | >3x normal volume detected |
+| unusual_flow | Volume | Unusual directional betting |
+| volume_divergence | Volume | Volume up, price stable |
+| rapid_price_change | Price | >10% price movement |
+| trend_reversal | Price | Momentum shift detected |
+| support_break | Price | Price breaks support level |
+| resistance_break | Price | Price breaks resistance |
+| cross_platform_arbitrage | Arbitrage | Price diff between platforms |
+| related_market_arbitrage | Arbitrage | Mispricing in related markets |
 
 ## Development Notes
 
