@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { clsx } from 'clsx'
 import {
@@ -41,9 +42,13 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex items-center h-16 px-6 border-b border-gray-800">
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
+          <Image
+            src="/oddwons-logo.png"
+            alt="OddWons"
+            width={32}
+            height={32}
+            className="rounded-lg"
+          />
           <span className="text-xl font-bold text-white">OddWons</span>
         </Link>
       </div>

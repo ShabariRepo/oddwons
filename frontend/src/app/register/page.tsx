@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Zap, Mail, Lock, User, Loader2, Check } from 'lucide-react'
+import { Mail, Lock, User, Loader2, Check } from 'lucide-react'
+import Image from 'next/image'
 import { register } from '@/lib/auth'
 import { useAuth } from '@/components/AuthProvider'
 
@@ -47,9 +48,13 @@ export default function RegisterPage() {
           {/* Logo */}
           <div>
             <Link href="/" className="inline-flex items-center gap-2">
-              <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
-              </div>
+              <Image
+                src="/oddwons-logo.png"
+                alt="OddWons"
+                width={40}
+                height={40}
+                className="rounded-xl"
+              />
               <span className="text-xl font-bold text-gray-900">OddWons</span>
             </Link>
             <h2 className="mt-6 text-3xl font-bold text-gray-900">

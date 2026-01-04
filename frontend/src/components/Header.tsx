@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Bell, Menu, Search, X, LogOut, Settings, User } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { clsx } from 'clsx'
 import { useAuth } from './AuthProvider'
@@ -112,7 +113,16 @@ export function Header() {
           <div className="fixed inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
           <div className="fixed inset-y-0 left-0 w-72 bg-gray-900 p-6">
             <div className="flex items-center justify-between mb-8">
-              <span className="text-xl font-bold text-white">OddWons</span>
+              <div className="flex items-center gap-2">
+                <Image
+                  src="/oddwons-logo.png"
+                  alt="OddWons"
+                  width={32}
+                  height={32}
+                  className="rounded-lg"
+                />
+                <span className="text-xl font-bold text-white">OddWons</span>
+              </div>
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="p-2 text-gray-400 hover:text-white"

@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Zap, Mail, Lock, Loader2 } from 'lucide-react'
+import { Mail, Lock, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 import { login } from '@/lib/auth'
 import { useAuth } from '@/components/AuthProvider'
 
@@ -37,9 +38,13 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center">
           <Link href="/" className="inline-flex items-center gap-2">
-            <div className="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center">
-              <Zap className="w-7 h-7 text-white" />
-            </div>
+            <Image
+              src="/oddwons-logo.png"
+              alt="OddWons"
+              width={48}
+              height={48}
+              className="rounded-xl"
+            />
           </Link>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
             Sign in to OddWons
