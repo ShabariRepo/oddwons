@@ -69,7 +69,8 @@ async def create_checkout_by_tier(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a checkout session for a specific tier."""
-    tier_enum = SubscriptionTier(tier)
+    # Convert lowercase tier to uppercase for enum matching
+    tier_enum = SubscriptionTier(tier.upper())
     price_id = TIER_TO_PRICE.get(tier_enum)
 
     if not price_id:
@@ -198,7 +199,10 @@ async def stripe_webhook(
 
     logger.info(f"Received Stripe webhook: {event_type}")
 
-    if event_type == "customer.subscription.created":
+    if event_type == "checkout.session.completed":
+        # Handle successful checkout - subscription is created separately
+        logger.info(f"Checkout completed: {data.get('id')}")
+    elif event_type == "customer.subscription.created":
         await handle_subscription_created(data, db)
     elif event_type == "customer.subscription.updated":
         await handle_subscription_updated(data, db)
