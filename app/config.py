@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # AI Analysis (Groq)
     groq_api_key: str = ""
     ai_analysis_enabled: bool = True
-    ai_model: str = "llama-3.3-70b-versatile"
+    ai_model: str = "gpt-oss-20b-128k"
 
     class Config:
         env_file = ".env"

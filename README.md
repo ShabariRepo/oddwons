@@ -18,7 +18,7 @@ AI-powered prediction market analysis for Kalshi and Polymarket. Get actionable 
 
 - **Backend**: Python, FastAPI, SQLAlchemy, PostgreSQL, Redis
 - **Frontend**: Next.js 14, TypeScript, Tailwind CSS
-- **AI**: Groq (llama-3.3-70b-versatile)
+- **AI**: Groq (gpt-oss-20b-128k default)
 - **Auth**: JWT tokens
 - **Payments**: Stripe
 - **Email**: SendGrid

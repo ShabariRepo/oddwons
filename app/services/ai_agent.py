@@ -32,7 +32,7 @@ class MarketAnalysisAgent:
         # 2. qwen3-32b-131k       - 662 TPS,  $0.29 in / $0.59 out   (good balance)
         # 3. llama-4-scout-17bx16e-128k - 594 TPS, $0.11 in / $0.34 out (newer llama)
         # 4. llama-3.3-70b-versatile - 394 TPS, $0.59 in / $0.79 out (slowest, most expensive)
-        self.model = os.environ.get("AI_MODEL", "llama-3.3-70b-versatile")
+        self.model = os.environ.get("AI_MODEL", "gpt-oss-20b-128k")
 
     def is_enabled(self) -> bool:
         """Check if AI analysis is enabled."""
