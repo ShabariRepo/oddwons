@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { TrendingUp, Bell, BarChart3, Shield, Clock, Check } from 'lucide-react'
+import { TrendingUp, Bell, BarChart3, Shield, Clock, Check, Zap } from 'lucide-react'
 
 const features = [
   {
