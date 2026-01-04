@@ -8,7 +8,7 @@ import { clsx } from 'clsx'
 import { useAuth } from './AuthProvider'
 
 const mobileNavigation = [
-  { name: 'Dashboard', href: '/' },
+  { name: 'Dashboard', href: '/dashboard' },
   { name: 'Opportunities', href: '/opportunities' },
   { name: 'Markets', href: '/markets' },
   { name: 'Alerts', href: '/alerts' },

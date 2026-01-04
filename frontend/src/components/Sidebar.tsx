@@ -14,7 +14,7 @@ import {
 import { useAuth } from './AuthProvider'
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Opportunities', href: '/opportunities', icon: Zap },
   { name: 'Markets', href: '/markets', icon: TrendingUp },
   { name: 'Alerts', href: '/alerts', icon: Bell },
