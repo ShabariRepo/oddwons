@@ -42,25 +42,58 @@ OddWons is a subscription-based prediction market analysis app that analyzes Kal
 
 ## Tech Stack
 
-### Backend
-- Node.js/Express.js or Python/FastAPI
-- PostgreSQL + Redis
-- Bull/BullMQ for background jobs
+- **Backend**: Python + FastAPI
+- **Database**: PostgreSQL + Redis
+- **Background Jobs**: APScheduler
+- **HTTP Client**: httpx (async)
 
-### Frontend
-- React/Next.js or Vue/Nuxt
-- Tailwind CSS
-- Chart.js or D3.js for visualization
+## Development Commands
 
-### Infrastructure
-- Railway for hosting
-- Stripe for payments
-- SendGrid/Mailgun for email
-- Twilio for SMS
+```bash
+# Start database services
+docker-compose up -d
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the API server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Trigger manual data collection
+curl -X POST http://localhost:8000/api/v1/collect
+```
+
+## Project Structure
+
+```
+app/
+├── main.py              # FastAPI app entry point
+├── config.py            # Settings from environment
+├── api/routes/          # API endpoints
+├── core/database.py     # PostgreSQL + Redis setup
+├── models/              # SQLAlchemy models
+├── schemas/             # Pydantic schemas
+└── services/            # Business logic
+    ├── kalshi_client.py      # Kalshi API client
+    ├── polymarket_client.py  # Polymarket API client
+    └── data_collector.py     # Scheduled data collection
+```
+
+## API Endpoints
+
+- `GET /health` - Health check
+- `GET /api/v1/markets` - List markets (with filters)
+- `GET /api/v1/markets/{id}` - Market details with history
+- `GET /api/v1/markets/stats/summary` - Platform stats
+- `POST /api/v1/collect` - Trigger data collection
 
 ## Development Notes
 
-- Prioritize MCP server integration over direct API implementation
-- Design for horizontal scaling from the start
-- Implement aggressive caching to handle rate limits
+- Data collection runs automatically every 15 minutes
+- Direct API clients (Kalshi/Polymarket) are fallbacks for MCP
+- Redis caches current market prices (1 hour TTL)
 - Keep 6-12 months of historical data for pattern detection

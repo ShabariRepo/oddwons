@@ -1,6 +1,15 @@
 # Dependencies
 node_modules/
 .pnpm-store/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
 
 # Environment
 .env
