@@ -1,5 +1,6 @@
 import httpx
 import json
+import asyncio
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
@@ -169,27 +170,41 @@ class PolymarketClient:
 
         return markets
 
-    async def fetch_all_markets(self) -> List[PolymarketMarketData]:
-        """Fetch all active markets with pagination."""
+    async def fetch_all_markets(self, max_pages: int = 100) -> List[PolymarketMarketData]:
+        """Fetch all active markets with pagination and rate limiting."""
         all_markets = []
         offset = 0
         limit = 100
+        page = 0
 
-        while True:
-            events = await self.get_events(limit=limit, offset=offset, active=True)
+        while page < max_pages:
+            try:
+                events = await self.get_events(limit=limit, offset=offset, active=True)
 
-            if not events:
-                break
+                if not events:
+                    break
 
-            for event in events:
-                all_markets.extend(self.parse_market(event))
+                for event in events:
+                    all_markets.extend(self.parse_market(event))
 
-            if len(events) < limit:
-                break
+                if len(events) < limit:
+                    break
 
-            offset += limit
+                offset += limit
+                page += 1
 
-        logger.info(f"Fetched {len(all_markets)} markets from Polymarket")
+                # Rate limiting: 0.2 second delay between requests
+                await asyncio.sleep(0.2)
+
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    # Rate limited - wait and retry
+                    logger.warning("Polymarket rate limited, waiting 5 seconds...")
+                    await asyncio.sleep(5)
+                    continue
+                raise
+
+        logger.info(f"Fetched {len(all_markets)} markets from Polymarket ({page} pages)")
         return all_markets
 
 

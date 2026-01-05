@@ -1,4 +1,5 @@
 import httpx
+import asyncio
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
@@ -119,26 +120,40 @@ class KalshiClient:
             category=market.get("category"),
         )
 
-    async def fetch_all_markets(self) -> List[KalshiMarketData]:
-        """Fetch all open markets with pagination."""
+    async def fetch_all_markets(self, max_pages: int = 50) -> List[KalshiMarketData]:
+        """Fetch all open markets with pagination and rate limiting."""
         all_markets = []
         cursor = None
+        page = 0
 
-        while True:
-            result = await self.get_markets(limit=100, cursor=cursor)
-            markets = result.get("markets", [])
+        while page < max_pages:
+            try:
+                result = await self.get_markets(limit=100, cursor=cursor)
+                markets = result.get("markets", [])
 
-            for m in markets:
-                try:
-                    all_markets.append(self.parse_market(m))
-                except Exception as e:
-                    logger.warning(f"Failed to parse market: {e}")
+                for m in markets:
+                    try:
+                        all_markets.append(self.parse_market(m))
+                    except Exception as e:
+                        logger.warning(f"Failed to parse market: {e}")
 
-            cursor = result.get("cursor")
-            if not cursor or not markets:
-                break
+                cursor = result.get("cursor")
+                if not cursor or not markets:
+                    break
 
-        logger.info(f"Fetched {len(all_markets)} markets from Kalshi")
+                page += 1
+                # Rate limiting: 0.5 second delay between requests to avoid 429
+                await asyncio.sleep(0.5)
+
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    # Rate limited - wait and retry
+                    logger.warning("Kalshi rate limited, waiting 5 seconds...")
+                    await asyncio.sleep(5)
+                    continue
+                raise
+
+        logger.info(f"Fetched {len(all_markets)} markets from Kalshi ({page} pages)")
         return all_markets
 
 
