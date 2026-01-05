@@ -363,3 +363,44 @@ Major product shift from "alpha hunter" to "research companion":
 - Price history passed to AI for momentum context
 - Fallback methods available when Groq is unavailable
 - IMPORTANT: Server must load GROQ_API_KEY from .env (`set -a && source .env && set +a`)
+
+### Dynamic Cross-Platform Matching (Jan 2026)
+**MAJOR IMPROVEMENT:** From 6 hardcoded patterns to 420+ dynamic matches!
+
+**New Components:**
+- `cross_platform_matches` table: Stores discovered matches with cached prices/volumes
+- `CrossPlatformMatch` model: SQLAlchemy model in `app/models/cross_platform_match.py`
+- `MarketMatcher` service: Uses rapidfuzz for fuzzy title matching (`app/services/market_matcher.py`)
+- Integrated into `run_analysis.py` to discover matches every 15 minutes
+
+**How It Works:**
+1. MarketMatcher loads all Kalshi and Polymarket markets with volume > $1k
+2. Uses fuzzy string matching (token_sort_ratio) with 70% similarity threshold
+3. Validates matches by checking close dates within 365 days
+4. Saves matches to database with prices, volumes, similarity scores
+5. CrossPlatformService reads from DB instead of hardcoded patterns
+
+**Database Schema:**
+```sql
+cross_platform_matches (
+  match_id VARCHAR(255) UNIQUE,
+  topic VARCHAR(500),
+  category VARCHAR(100),
+  kalshi_market_id, kalshi_title, kalshi_yes_price, kalshi_volume,
+  polymarket_market_id, polymarket_title, polymarket_yes_price, polymarket_volume,
+  price_gap_cents, gap_direction, combined_volume, similarity_score,
+  ai_analysis, news_headlines, gap_explanation (cached AI content)
+)
+```
+
+**Dependency:**
+```bash
+pip install rapidfuzz  # Added to requirements.txt
+```
+
+**Run Manually:**
+```python
+from app.services.market_matcher import run_market_matching
+result = await run_market_matching(min_volume=1000)
+print(f"Found {result['matches_found']} matches")
+```
