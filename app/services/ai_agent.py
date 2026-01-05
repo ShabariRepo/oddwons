@@ -436,8 +436,10 @@ Be ruthless. Only include REAL opportunities. Subscribers are paying for alpha, 
         category_focus = category_config["focus"]
 
         # Limit batch size to keep context manageable
-        markets_batch = markets[:15]
-        patterns_batch = patterns[:20]
+        # Reduce batch for categories with many markets to avoid token limits
+        max_markets = 10 if len(markets) > 50 else 15
+        markets_batch = markets[:max_markets]
+        patterns_batch = patterns[:15]
 
         prompt = f"""{category_context}
 
@@ -494,7 +496,7 @@ Quality over quantity. If there's nothing good, say so. Subscribers pay for alph
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=3000,
+                max_tokens=4000,
                 response_format={"type": "json_object"}
             )
 
