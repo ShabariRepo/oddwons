@@ -404,3 +404,30 @@ from app.services.market_matcher import run_market_matching
 result = await run_market_matching(min_volume=1000)
 print(f"Found {result['matches_found']} matches")
 ```
+
+### Frontend Wiring to Real Data (Jan 2026)
+**MAJOR UPDATE:** Frontend now shows real data from backend instead of boilerplate.
+
+**Dashboard (`/dashboard`):**
+- AI Market Highlights section showing Groq-powered insights
+- Cross-Platform Watch showing price comparisons between Kalshi/Polymarket
+- Stats cards for: Markets Tracked, AI Highlights, Total Volume, Cross-Platform Matches
+
+**AI Highlights page (`/opportunities`):**
+- Shows real AI insights from `ai_insights` table (167+ active)
+- Category filtering (politics, sports, crypto, finance, tech, entertainment)
+- Tier-gated content (FREE: summary, BASIC: +volume/movement, PREMIUM: +catalyst, PRO: +analyst notes)
+
+**Cross-Platform page (`/cross-platform`):**
+- Lists all 420+ fuzzy-matched markets between Kalshi and Polymarket
+- Shows price gaps, volumes, match confidence scores
+- Filter by minimum gap size (1¢, 2¢, 3¢, 5¢, 10¢)
+
+**New Frontend Files:**
+- `frontend/src/app/(app)/cross-platform/page.tsx` - Cross-platform comparison page
+- `frontend/src/lib/types.ts` - Added AIInsight, CrossPlatformMatch, DailyDigest types
+- `frontend/src/lib/api.ts` - Added getAIInsights, getCrossPlatformMatches, etc.
+- `frontend/src/hooks/useAPI.ts` - Added useAIInsights, useCrossPlatformMatches hooks
+
+**Sidebar Navigation:**
+- Dashboard -> AI Highlights -> Cross-Platform -> Markets -> Alerts -> Analytics -> Settings
