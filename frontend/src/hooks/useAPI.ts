@@ -20,6 +20,20 @@ const fetcher = async <T>(key: string): Promise<T> => {
       return api.getPatternStats() as Promise<T>
     case 'alerts':
       return api.getAlerts(params[0], parseInt(params[1] || '10')) as Promise<T>
+    case 'aiInsights':
+      return api.getAIInsights(params[0] ? JSON.parse(params[0]) : undefined) as Promise<T>
+    case 'insightStats':
+      return api.getInsightStats() as Promise<T>
+    case 'dailyDigest':
+      return api.getDailyDigest() as Promise<T>
+    case 'crossPlatformMatches':
+      return api.getCrossPlatformMatches(params[0] ? JSON.parse(params[0]) : undefined) as Promise<T>
+    case 'crossPlatformSpotlight':
+      return api.getCrossPlatformSpotlight(params[0]) as Promise<T>
+    case 'crossPlatformSpotlights':
+      return api.getCrossPlatformSpotlights(parseInt(params[0] || '10')) as Promise<T>
+    case 'crossPlatformStats':
+      return api.getCrossPlatformStats() as Promise<T>
     default:
       throw new Error(`Unknown endpoint: ${endpoint}`)
   }
@@ -77,5 +91,62 @@ export function useAlerts(tier: string = 'basic', limit: number = 10) {
     `alerts|${tier}|${limit}`,
     fetcher<Awaited<ReturnType<typeof api.getAlerts>>>,
     { refreshInterval: 30000 }
+  )
+}
+
+// AI Insights hooks
+export function useAIInsights(params?: Parameters<typeof api.getAIInsights>[0]) {
+  return useSWR(
+    ['aiInsights', params ? JSON.stringify(params) : ''].join('|'),
+    fetcher<Awaited<ReturnType<typeof api.getAIInsights>>>,
+    { refreshInterval: 60000 }
+  )
+}
+
+export function useInsightStats() {
+  return useSWR(
+    'insightStats',
+    fetcher<Awaited<ReturnType<typeof api.getInsightStats>>>,
+    { refreshInterval: 60000 }
+  )
+}
+
+export function useDailyDigest() {
+  return useSWR(
+    'dailyDigest',
+    fetcher<Awaited<ReturnType<typeof api.getDailyDigest>>>,
+    { refreshInterval: 300000 } // 5 minutes
+  )
+}
+
+// Cross-Platform hooks
+export function useCrossPlatformMatches(params?: Parameters<typeof api.getCrossPlatformMatches>[0]) {
+  return useSWR(
+    ['crossPlatformMatches', params ? JSON.stringify(params) : ''].join('|'),
+    fetcher<Awaited<ReturnType<typeof api.getCrossPlatformMatches>>>,
+    { refreshInterval: 60000 }
+  )
+}
+
+export function useCrossPlatformSpotlight(matchId: string | null) {
+  return useSWR(
+    matchId ? `crossPlatformSpotlight|${matchId}` : null,
+    fetcher<Awaited<ReturnType<typeof api.getCrossPlatformSpotlight>>>
+  )
+}
+
+export function useCrossPlatformSpotlights(limit: number = 10) {
+  return useSWR(
+    `crossPlatformSpotlights|${limit}`,
+    fetcher<Awaited<ReturnType<typeof api.getCrossPlatformSpotlights>>>,
+    { refreshInterval: 60000 }
+  )
+}
+
+export function useCrossPlatformStats() {
+  return useSWR(
+    'crossPlatformStats',
+    fetcher<Awaited<ReturnType<typeof api.getCrossPlatformStats>>>,
+    { refreshInterval: 60000 }
   )
 }

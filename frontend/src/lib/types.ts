@@ -97,3 +97,89 @@ export const PATTERN_COLORS: Record<PatternType, string> = {
   cross_platform_arbitrage: 'bg-emerald-100 text-emerald-800',
   related_market_arbitrage: 'bg-teal-100 text-teal-800',
 }
+
+// AI Insights types
+export interface AIInsight {
+  id: number
+  market_id: string
+  market_title: string
+  platform: string
+  category: string
+  summary: string
+  current_odds?: { yes: number; no: number }
+  implied_probability?: string
+  volume_note?: string
+  recent_movement?: string
+  movement_context?: string
+  upcoming_catalyst?: string
+  analyst_note?: string
+  created_at: string
+}
+
+export interface AIInsightsResponse {
+  insights: AIInsight[]
+  count: number
+  tier: string
+  refresh: string
+  upgrade_prompt?: string
+}
+
+// Cross-Platform types
+export interface CrossPlatformMatch {
+  match_id: string
+  topic: string
+  category?: string
+  kalshi_market_id?: string
+  kalshi_title?: string
+  kalshi_yes_price?: number
+  kalshi_volume?: number
+  polymarket_market_id?: string
+  polymarket_title?: string
+  polymarket_yes_price?: number
+  polymarket_volume?: number
+  price_gap_cents: number
+  gap_direction: string
+  combined_volume: number
+  similarity_score?: number
+}
+
+export interface CrossPlatformSpotlight extends CrossPlatformMatch {
+  ai_analysis?: string
+  gap_explanation?: string
+  momentum_summary?: string
+  key_risks?: string
+  news_headlines?: { title: string; source?: string; date?: string }[]
+  kalshi_url?: string
+  polymarket_url?: string
+  last_updated: string
+}
+
+// Daily Digest types
+export interface DailyDigest {
+  headline?: string
+  generated_at?: string
+  top_movers?: Array<{ market_id: string; title: string; change: number }>
+  most_active?: Array<{ market_id: string; title: string; volume: number }>
+  category_snapshots?: Record<string, string>
+  upcoming_catalysts?: Array<{ date: string; description: string }>
+  cross_platform_watch?: {
+    matches: Array<{
+      topic: string
+      kalshi_price: number
+      polymarket_price: number
+      gap_cents: number
+      combined_volume: number
+      summary: string
+    }>
+    total_matches: number
+    total_volume: number
+  }
+}
+
+export interface InsightStats {
+  active_highlights: number
+  categories_covered: number
+  price_gap_findings: number
+  highlights_by_category: Record<string, number>
+  last_updated: string
+}

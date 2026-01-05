@@ -10,13 +10,15 @@ import {
   Bell,
   BarChart3,
   Settings,
-  Zap,
+  Sparkles,
+  Scale,
 } from 'lucide-react'
 import { useAuth } from './AuthProvider'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Opportunities', href: '/opportunities', icon: Zap },
+  { name: 'AI Highlights', href: '/opportunities', icon: Sparkles },
+  { name: 'Cross-Platform', href: '/cross-platform', icon: Scale },
   { name: 'Markets', href: '/markets', icon: TrendingUp },
   { name: 'Alerts', href: '/alerts', icon: Bell },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },

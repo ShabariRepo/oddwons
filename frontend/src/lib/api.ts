@@ -105,3 +105,53 @@ export async function triggerCollection() {
     method: 'POST',
   })
 }
+
+// AI Insights
+export async function getAIInsights(params?: { category?: string; limit?: number }) {
+  const searchParams = new URLSearchParams()
+  if (params?.category) searchParams.set('category', params.category)
+  if (params?.limit) searchParams.set('limit', params.limit.toString())
+
+  return fetchAPI<import('./types').AIInsightsResponse>(`/insights/ai?${searchParams}`)
+}
+
+export async function getInsightStats() {
+  return fetchAPI<import('./types').InsightStats>('/insights/stats')
+}
+
+export async function getDailyDigest() {
+  return fetchAPI<{ digest: import('./types').DailyDigest | null; tier: string; message?: string }>('/insights/digest')
+}
+
+// Cross-Platform
+export async function getCrossPlatformMatches(params?: { limit?: number; min_volume?: number }) {
+  const searchParams = new URLSearchParams()
+  if (params?.limit) searchParams.set('limit', params.limit.toString())
+  if (params?.min_volume) searchParams.set('min_volume', params.min_volume.toString())
+
+  return fetchAPI<{
+    matches: import('./types').CrossPlatformMatch[]
+    total: number
+    total_volume: number
+  }>(`/cross-platform/matches?${searchParams}`)
+}
+
+export async function getCrossPlatformSpotlight(matchId: string) {
+  return fetchAPI<import('./types').CrossPlatformSpotlight>(`/cross-platform/spotlight/${matchId}`)
+}
+
+export async function getCrossPlatformSpotlights(limit: number = 10) {
+  return fetchAPI<{
+    spotlights: import('./types').CrossPlatformSpotlight[]
+    total: number
+  }>(`/cross-platform/spotlights?limit=${limit}`)
+}
+
+export async function getCrossPlatformStats() {
+  return fetchAPI<{
+    total_matches: number
+    total_volume: number
+    avg_price_gap: number
+    categories: Record<string, number>
+  }>('/cross-platform/stats')
+}
