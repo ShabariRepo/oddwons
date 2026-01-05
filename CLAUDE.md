@@ -254,9 +254,26 @@ FROM_EMAIL=alerts@oddwons.ai
 - **Category Inference**: Automatic category detection from market titles using keyword matching
 
 ### Current Data Volume
-- Kalshi: ~5,000 active markets
-- Polymarket: ~25,000 active markets
-- Total: ~30,000 markets per collection cycle
+- Kalshi: ~35,000 markets (many zero-volume prop bets)
+- Polymarket: ~35,000 open markets (using `closed=false` API param)
+- Total: ~95,000 markets in database
+- Meaningful markets (volume >$1k): ~6,600
+
+### Polymarket Collection Fix (Jan 2026)
+- Changed API param from `active=true` to `closed=false`
+- The `active` param means "not archived", NOT "open for trading"
+- Now correctly fetches all tradeable markets
+- Added volume_24h (from event's `volume24hr`)
+- Added spread, best_ask to snapshots
+
+### Computed Fields on Markets API
+Every market response now includes (computed at query time):
+- `implied_probability`: yes_price as percentage (0-100)
+- `price_change_24h`: change vs 24h ago snapshot
+- `price_change_7d`: change vs 7d ago snapshot
+- `volume_rank`: percentile (0-100) within category
+- `spread`: bid-ask spread if available
+- `has_ai_highlight`: boolean flag if AI insight exists
 
 ### Companion Approach (Jan 2026)
 Major product shift from "alpha hunter" to "research companion":
