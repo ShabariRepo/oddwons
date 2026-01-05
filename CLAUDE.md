@@ -96,6 +96,7 @@ app/                          # Python backend
 │   ├── markets.py            # Market endpoints
 │   ├── patterns.py           # Pattern detection endpoints
 │   ├── insights.py           # AI insights endpoints (tier-gated)
+│   ├── cross_platform.py     # Cross-platform spotlight endpoints
 │   ├── auth.py               # Authentication endpoints
 │   └── billing.py            # Stripe billing endpoints
 ├── core/database.py          # PostgreSQL + Redis
@@ -108,8 +109,9 @@ app/                          # Python backend
 │   └── user.py               # User + auth schemas
 └── services/
     ├── ai_agent.py           # Groq-powered MarketAnalysisAgent
-    ├── kalshi_client.py
-    ├── polymarket_client.py
+    ├── kalshi_client.py      # Kalshi API (events + markets endpoints)
+    ├── polymarket_client.py  # Polymarket API (gamma + clob)
+    ├── cross_platform.py     # Cross-platform matching and spotlight
     ├── data_collector.py
     ├── alerts.py
     ├── auth.py               # JWT authentication
@@ -291,3 +293,66 @@ Major product shift from "alpha hunter" to "research companion":
 - Free tier now gets 3 preview highlights (was blocked)
 - All tiers get progressively more context instead of more "betting tips"
 - Stats endpoint shows highlights_by_category instead of strong_bets_24h
+
+### Cross-Platform Spotlight Feature (Jan 2026)
+**KEY VALUE PROP:** Show users when the same event is priced differently on Kalshi vs Polymarket.
+
+**New API Endpoints:**
+- `GET /api/v1/cross-platform/matches` - List all matched markets (public)
+- `GET /api/v1/cross-platform/spotlight/{match_id}` - Rich spotlight with full context (auth required)
+- `GET /api/v1/cross-platform/spotlights` - Top N spotlights by volume (auth required)
+- `GET /api/v1/cross-platform/watch` - Daily digest section (Premium+ in digest)
+- `GET /api/v1/cross-platform/stats` - Match statistics (public)
+
+**CrossPlatformSpotlight Response Contains:**
+```json
+{
+  "match_id": "fed-chair-warsh",
+  "topic": "Trump nominates Kevin Warsh as Fed Chair",
+  "category": "Politics",
+  "kalshi": {"market_id": "...", "yes_price": 41.0, "volume": 3291774},
+  "polymarket": {"market_id": "...", "yes_price": 38.5, "volume": 3575507},
+  "price_gap_cents": 2.5,
+  "gap_direction": "kalshi_higher",
+  "news_headlines": [
+    {"title": "WSJ: Warsh met with Trump transition team", "date": "Jan 3"},
+    {"title": "Bessent reportedly favors Warsh for Fed Chair", "date": "Jan 2"}
+  ],
+  "kalshi_history": {"current_price": 41.0, "price_7d_ago": 35.0, "trend": "up"},
+  "polymarket_history": {"current_price": 38.5, "price_7d_ago": 32.0, "trend": "up"},
+  "key_dates": [
+    {"date": "Jan 20, 2025", "description": "Inauguration Day"},
+    {"date": "Late Jan 2025", "description": "Expected Fed Chair announcement"}
+  ],
+  "ai_analysis": "3-4 sentences explaining the market...",
+  "gap_explanation": "Why the gap might exist...",
+  "related_markets": [...],
+  "combined_volume": 6867281
+}
+```
+
+**Matching Patterns (25+):**
+- Fed Chair nominations: Warsh, Hassett, Waller, Shelton
+- 2028 Democratic nominees: Newsom, Shapiro, Buttigieg, Whitmer
+- Cabinet confirmations: Hegseth, Bondi, Patel
+- Economic indicators: recession, inflation, fed rate
+- Crypto: Bitcoin/Ethereum price targets
+- Policy: TikTok, tariffs
+- Sports: Super Bowl outcomes
+
+**Files:**
+- `app/services/cross_platform.py` - CrossPlatformService class
+- `app/api/routes/cross_platform.py` - API endpoints
+- `app/schemas/market.py` - CrossPlatformSpotlight schema
+
+### Kalshi Events Endpoint Fix (Jan 2026)
+- `/markets` endpoint returns sports parlays only
+- `/events` endpoint returns political/economic prediction markets
+- Now fetch from BOTH endpoints to get comprehensive coverage
+- Prices in cents (0-100) converted to decimal (0-1) to match Polymarket
+- Result: 6,786 Kalshi markets with volume > $1k (was 360)
+
+### Pattern Analysis Scope Expansion (Jan 2026)
+- Changed from limit=500 to analyzing ALL markets with volume > $1k
+- Now covers ~6,600 meaningful markets instead of top 500
+- min_volume parameter added to load_market_data()
