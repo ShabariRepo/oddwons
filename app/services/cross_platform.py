@@ -183,57 +183,58 @@ class CrossPlatformService:
         return self._ai_agent
 
     async def find_all_matches(self, min_volume: float = 1000) -> List[MatchedMarket]:
-        """Find all cross-platform matches with minimum volume."""
-        matches = []
-
-        # Get all active markets
+        """
+        Find all cross-platform matches from the database.
+        Uses dynamically discovered matches from MarketMatcher service.
+        """
+        # Query matches from database (populated by MarketMatcher)
         result = await self.db.execute(text("""
-            SELECT id, platform, title, yes_price, volume, close_time
-            FROM markets
-            WHERE volume >= :min_vol
-              AND status IN ('active', 'open')
-              AND yes_price > 0.02 AND yes_price < 0.98
-            ORDER BY volume DESC
+            SELECT
+                match_id,
+                topic,
+                category,
+                kalshi_market_id,
+                kalshi_title,
+                kalshi_yes_price,
+                kalshi_volume,
+                kalshi_close_time,
+                polymarket_market_id,
+                polymarket_title,
+                polymarket_yes_price,
+                polymarket_volume,
+                polymarket_close_time,
+                similarity_score
+            FROM cross_platform_matches
+            WHERE is_active = TRUE
+              AND combined_volume >= :min_vol
+            ORDER BY combined_volume DESC
         """), {"min_vol": min_volume})
 
-        markets = result.fetchall()
-        kalshi = [(m[0], m[2], m[3], m[4], m[5]) for m in markets if m[1] == 'KALSHI']
-        poly = [(m[0], m[2], m[3], m[4], m[5]) for m in markets if m[1] == 'POLYMARKET']
+        rows = result.fetchall()
+        matches = []
 
-        for match_id, topic, k_pattern, p_pattern, category, search_terms in CROSS_PLATFORM_PATTERNS:
+        for row in rows:
+            # Extract search terms from topic (first 3 significant words)
+            topic_words = [w for w in row[1].split() if len(w) > 3][:3]
+
             matched = MatchedMarket(
-                match_id=match_id,
-                topic=topic,
-                category=category,
-                search_terms=search_terms,
+                match_id=row[0],
+                topic=row[1],
+                category=row[2] or "Other",
+                search_terms=topic_words,
+                kalshi_id=row[3],
+                kalshi_title=row[4],
+                kalshi_price=row[5],
+                kalshi_volume=row[6],
+                kalshi_close_time=row[7],
+                poly_id=row[8],
+                poly_title=row[9],
+                poly_price=row[10],
+                poly_volume=row[11],
+                poly_close_time=row[12],
             )
+            matches.append(matched)
 
-            # Find Kalshi match
-            for id, title, price, vol, close_time in kalshi:
-                if re.search(k_pattern, title.lower()):
-                    if matched.kalshi_id is None or vol > matched.kalshi_volume:
-                        matched.kalshi_id = id
-                        matched.kalshi_title = title
-                        matched.kalshi_price = price
-                        matched.kalshi_volume = vol
-                        matched.kalshi_close_time = close_time
-
-            # Find Polymarket match
-            for id, title, price, vol, close_time in poly:
-                if re.search(p_pattern, title.lower()):
-                    if matched.poly_id is None or vol > matched.poly_volume:
-                        matched.poly_id = id
-                        matched.poly_title = title
-                        matched.poly_price = price
-                        matched.poly_volume = vol
-                        matched.poly_close_time = close_time
-
-            # Only include if found on BOTH platforms
-            if matched.kalshi_id and matched.poly_id:
-                matches.append(matched)
-
-        # Sort by combined volume
-        matches.sort(key=lambda m: (m.kalshi_volume or 0) + (m.poly_volume or 0), reverse=True)
         return matches
 
     async def get_price_history(

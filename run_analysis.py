@@ -32,7 +32,7 @@ logger = logging.getLogger("run_analysis")
 
 
 async def main():
-    """Run pattern detection and AI analysis, then exit."""
+    """Run pattern detection, AI analysis, and cross-platform matching, then exit."""
     try:
         logger.info("Starting analysis run...")
 
@@ -46,6 +46,7 @@ async def main():
 
         # Import here to avoid issues with missing env vars at module level
         from app.services.patterns.engine import pattern_engine
+        from app.services.market_matcher import run_market_matching
 
         # Run full analysis (pattern detection + AI analysis)
         results = await pattern_engine.run_full_analysis(with_ai=ai_enabled)
@@ -61,6 +62,18 @@ async def main():
             f"Analyzed {markets} markets, "
             f"detected {patterns} patterns, "
             f"generated {ai_insights} AI insights"
+        )
+
+        # Run cross-platform market matching
+        logger.info("Running cross-platform market matching...")
+        match_results = await run_market_matching(min_volume=1000)
+        matches_found = match_results.get("matches_found", 0)
+        new_matches = match_results.get("new_matches", 0)
+        updated_matches = match_results.get("updated_matches", 0)
+
+        logger.info(
+            f"Cross-platform matching: {matches_found} matches found "
+            f"({new_matches} new, {updated_matches} updated)"
         )
 
         # Exit cleanly - required for Railway cron
