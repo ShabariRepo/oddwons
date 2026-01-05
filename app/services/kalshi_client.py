@@ -103,16 +103,27 @@ class KalshiClient:
             raise
 
     def parse_market(self, data: Dict[str, Any]) -> KalshiMarketData:
-        """Parse raw API response into structured data."""
+        """Parse raw API response into structured data.
+
+        Note: Kalshi API returns prices in cents (0-100), we convert to decimal (0-1)
+        to match Polymarket format.
+        """
         market = data.get("market", data)
+
+        # Convert cents to decimal (divide by 100)
+        def cents_to_decimal(val):
+            if val is None:
+                return None
+            return val / 100.0
+
         return KalshiMarketData(
             ticker=market.get("ticker", ""),
             title=market.get("title", ""),
             subtitle=market.get("subtitle"),
-            yes_bid=market.get("yes_bid"),
-            yes_ask=market.get("yes_ask"),
-            no_bid=market.get("no_bid"),
-            no_ask=market.get("no_ask"),
+            yes_bid=cents_to_decimal(market.get("yes_bid")),
+            yes_ask=cents_to_decimal(market.get("yes_ask")),
+            no_bid=cents_to_decimal(market.get("no_bid")),
+            no_ask=cents_to_decimal(market.get("no_ask")),
             volume=market.get("volume"),
             open_interest=market.get("open_interest"),
             status=market.get("status", "unknown"),
