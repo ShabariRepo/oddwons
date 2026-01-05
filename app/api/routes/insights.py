@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.models.user import User, SubscriptionTier
 from app.models.ai_insight import AIInsight, ArbitrageOpportunity, DailyDigest
+from app.models.market import Market
 from app.services.auth import get_current_user, require_subscription
 from app.services.patterns.engine import pattern_engine
 from app.services.cross_platform import CrossPlatformService
@@ -54,11 +55,21 @@ async def get_ai_insights(
         tier_limit = limit
         refresh_interval = "real-time"
 
-    # Build query
+    # Build query - join with markets to filter out resolved/closed
     query = (
         select(AIInsight)
+        .join(Market, AIInsight.market_id == Market.id, isouter=True)
         .where(AIInsight.status == "active")
         .where(AIInsight.expires_at > datetime.utcnow())
+        # Filter out resolved markets (price at 0% or 100%)
+        .where(
+            (Market.id == None) |  # Allow if market not found (edge case)
+            (
+                (Market.status == 'active') &
+                (Market.yes_price > 0.02) &
+                (Market.yes_price < 0.98)
+            )
+        )
     )
 
     if category:

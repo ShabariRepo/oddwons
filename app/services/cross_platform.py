@@ -188,6 +188,7 @@ class CrossPlatformService:
         Uses dynamically discovered matches from MarketMatcher service.
         """
         # Query matches from database (populated by MarketMatcher)
+        # Filter out resolved markets (prices at 0% or 100%)
         result = await self.db.execute(text("""
             SELECT
                 match_id,
@@ -207,6 +208,8 @@ class CrossPlatformService:
             FROM cross_platform_matches
             WHERE is_active = TRUE
               AND combined_volume >= :min_vol
+              AND kalshi_yes_price > 0.02 AND kalshi_yes_price < 0.98
+              AND polymarket_yes_price > 0.02 AND polymarket_yes_price < 0.98
             ORDER BY combined_volume DESC
         """), {"min_vol": min_volume})
 

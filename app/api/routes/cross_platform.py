@@ -21,8 +21,9 @@ from app.models.user import User
 router = APIRouter(prefix="/cross-platform", tags=["cross-platform"])
 
 
-@router.get("/matches", response_model=List[dict])
+@router.get("/matches")
 async def list_cross_platform_matches(
+    limit: int = Query(100, description="Max matches to return"),
     min_volume: float = Query(1000, description="Minimum combined volume"),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
@@ -36,18 +37,40 @@ async def list_cross_platform_matches(
     service = CrossPlatformService(db)
     matches = await service.find_all_matches(min_volume=min_volume)
 
-    return [
+    # Apply limit
+    matches = matches[:limit] if limit else matches
+
+    kalshi_price = lambda m: (m.kalshi_yes_price if hasattr(m, 'kalshi_yes_price') else m.kalshi_price) or 0
+    poly_price = lambda m: (m.polymarket_yes_price if hasattr(m, 'polymarket_yes_price') else m.poly_price) or 0
+
+    match_list = [
         {
             "match_id": m.match_id,
             "topic": m.topic,
             "category": m.category,
-            "kalshi_price": (m.kalshi_price or 0) * 100,
-            "polymarket_price": (m.poly_price or 0) * 100,
-            "gap_cents": abs((m.kalshi_price or 0) * 100 - (m.poly_price or 0) * 100),
-            "combined_volume": (m.kalshi_volume or 0) + (m.poly_volume or 0),
+            "kalshi_market_id": getattr(m, 'kalshi_market_id', None),
+            "kalshi_title": getattr(m, 'kalshi_title', None),
+            "kalshi_yes_price": kalshi_price(m) * 100,
+            "kalshi_volume": m.kalshi_volume or 0,
+            "polymarket_market_id": getattr(m, 'polymarket_market_id', None),
+            "polymarket_title": getattr(m, 'polymarket_title', None),
+            "polymarket_yes_price": poly_price(m) * 100,
+            "polymarket_volume": getattr(m, 'polymarket_volume', m.poly_volume) or 0,
+            "price_gap_cents": abs(kalshi_price(m) * 100 - poly_price(m) * 100),
+            "gap_direction": "kalshi_higher" if kalshi_price(m) > poly_price(m) else "polymarket_higher",
+            "combined_volume": (m.kalshi_volume or 0) + (getattr(m, 'polymarket_volume', m.poly_volume) or 0),
+            "similarity_score": getattr(m, 'similarity_score', None),
         }
         for m in matches
     ]
+
+    total_volume = sum(m["combined_volume"] for m in match_list)
+
+    return {
+        "matches": match_list,
+        "total": len(match_list),
+        "total_volume": total_volume,
+    }
 
 
 @router.get("/spotlight/{match_id}", response_model=CrossPlatformSpotlight)
@@ -125,24 +148,26 @@ async def get_cross_platform_stats(
     service = CrossPlatformService(db)
     matches = await service.find_all_matches()
 
-    total_volume = sum((m.kalshi_volume or 0) + (m.poly_volume or 0) for m in matches)
+    kalshi_price = lambda m: (m.kalshi_yes_price if hasattr(m, 'kalshi_yes_price') else m.kalshi_price) or 0
+    poly_price = lambda m: (m.polymarket_yes_price if hasattr(m, 'polymarket_yes_price') else m.poly_price) or 0
+    poly_volume = lambda m: getattr(m, 'polymarket_volume', m.poly_volume) or 0
+
+    total_volume = sum((m.kalshi_volume or 0) + poly_volume(m) for m in matches)
     avg_gap = (
-        sum(abs((m.kalshi_price or 0) - (m.poly_price or 0)) * 100 for m in matches) / len(matches)
+        sum(abs(kalshi_price(m) - poly_price(m)) * 100 for m in matches) / len(matches)
         if matches else 0
     )
 
-    # Categorize gaps
-    gaps_over_5 = len([m for m in matches if abs((m.kalshi_price or 0) - (m.poly_price or 0)) * 100 >= 5])
-    gaps_2_to_5 = len([m for m in matches if 2 <= abs((m.kalshi_price or 0) - (m.poly_price or 0)) * 100 < 5])
-    gaps_under_2 = len([m for m in matches if abs((m.kalshi_price or 0) - (m.poly_price or 0)) * 100 < 2])
+    # Count by category
+    categories = {}
+    for m in matches:
+        cat = m.category or "other"
+        categories[cat] = categories.get(cat, 0) + 1
 
     return {
         "total_matches": len(matches),
-        "total_combined_volume": total_volume,
-        "average_gap_cents": round(avg_gap, 2),
-        "gaps_over_5_cents": gaps_over_5,
-        "gaps_2_to_5_cents": gaps_2_to_5,
-        "gaps_under_2_cents": gaps_under_2,
-        "categories": list(set(m.category for m in matches)),
+        "total_volume": total_volume,
+        "avg_price_gap": round(avg_gap, 2),
+        "categories": categories,
         "last_updated": datetime.utcnow().isoformat(),
     }

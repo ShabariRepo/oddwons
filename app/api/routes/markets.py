@@ -179,6 +179,9 @@ async def list_markets(
     if status:
         query = query.where(Market.status == status)
 
+    # Always filter out resolved markets (price at 0% or 100%)
+    query = query.where(Market.yes_price > 0.02).where(Market.yes_price < 0.98)
+
     # Count total
     count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query)
