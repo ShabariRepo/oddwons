@@ -45,7 +45,7 @@ OddWons is a subscription-based prediction market analysis app that analyzes Kal
 - **Backend**: Python + FastAPI
 - **Frontend**: Next.js 14 + TypeScript + Tailwind CSS
 - **Database**: PostgreSQL + Redis
-- **AI**: Groq (gpt-oss-20b-128k default)
+- **AI**: Groq (openai/gpt-oss-20b default)
 - **Background Jobs**: Railway Cron (production) / APScheduler (local)
 - **HTTP Client**: httpx (async)
 - **Email**: SendGrid
@@ -199,7 +199,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=10080  # 7 days
 # AI Analysis (Groq)
 GROQ_API_KEY=gsk_...
 AI_ANALYSIS_ENABLED=true
-AI_MODEL=gpt-oss-20b-128k
+AI_MODEL=openai/gpt-oss-20b
 
 # Stripe Billing
 STRIPE_SECRET_KEY=sk_test_...

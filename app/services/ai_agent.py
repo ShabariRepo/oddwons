@@ -260,12 +260,12 @@ class MarketAnalysisAgent:
         else:
             self.client = Groq(api_key=api_key)
 
-        # Model options by priority:
-        # 1. gpt-oss-20b-128k     - 1000 TPS, $0.075 in / $0.30 out  (DEFAULT - fastest, cheapest)
-        # 2. qwen3-32b-131k       - 662 TPS,  $0.29 in / $0.59 out   (good balance)
-        # 3. llama-4-scout-17bx16e-128k - 594 TPS, $0.11 in / $0.34 out (newer llama)
-        # 4. llama-3.3-70b-versatile - 394 TPS, $0.59 in / $0.79 out (slowest, most expensive)
-        self.model = os.environ.get("AI_MODEL", "gpt-oss-20b-128k")
+        # Model options by priority (Groq):
+        # 1. openai/gpt-oss-20b      - 1000 TPS, $0.075/$0.30, 131k ctx (DEFAULT - fastest, cheapest)
+        # 2. openai/gpt-oss-120b     - 500 TPS, $0.15/$0.60, 131k ctx (larger, smarter)
+        # 3. llama-3.3-70b-versatile - 280 TPS, $0.59/$0.79, 131k ctx (Meta's best)
+        # 4. llama-3.1-8b-instant    - 560 TPS, $0.05/$0.08, 131k ctx (fastest, least smart)
+        self.model = os.environ.get("AI_MODEL", "openai/gpt-oss-20b")
 
     def is_enabled(self) -> bool:
         """Check if AI analysis is enabled."""
