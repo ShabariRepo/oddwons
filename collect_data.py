@@ -15,6 +15,10 @@ import asyncio
 import sys
 import os
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Setup logging before imports
 logging.basicConfig(
