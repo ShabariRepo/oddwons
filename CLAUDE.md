@@ -356,3 +356,10 @@ Major product shift from "alpha hunter" to "research companion":
 - Changed from limit=500 to analyzing ALL markets with volume > $1k
 - Now covers ~6,600 meaningful markets instead of top 500
 - min_volume parameter added to load_market_data()
+
+### AI Content Generation for Spotlights (Jan 2026)
+- News headlines now AI-generated via Groq (not templates)
+- AI analysis includes: summary, gap explanation, momentum summary, key risks
+- Price history passed to AI for momentum context
+- Fallback methods available when Groq is unavailable
+- IMPORTANT: Server must load GROQ_API_KEY from .env (`set -a && source .env && set +a`)
