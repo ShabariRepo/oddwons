@@ -16,6 +16,7 @@ from app.models.user import User, SubscriptionTier
 from app.models.ai_insight import AIInsight, ArbitrageOpportunity, DailyDigest
 from app.services.auth import get_current_user, require_subscription
 from app.services.patterns.engine import pattern_engine
+from app.services.cross_platform import CrossPlatformService
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 
@@ -235,7 +236,31 @@ async def get_daily_digest(
         response_digest["most_active"] = digest.most_active or []
         response_digest["upcoming_catalysts"] = digest.upcoming_catalysts or []
 
-    # Pro gets price gap analysis
+    # Premium+ get cross-platform watch (live data)
+    if tier in [SubscriptionTier.PREMIUM, SubscriptionTier.PRO]:
+        try:
+            cross_platform_service = CrossPlatformService(db)
+            watch_limit = 5 if tier == SubscriptionTier.PRO else 3
+            cross_platform_watch = await cross_platform_service.get_cross_platform_watch(limit=watch_limit)
+            response_digest["cross_platform_watch"] = {
+                "matches": [
+                    {
+                        "topic": m.topic,
+                        "kalshi_price": m.kalshi_price,
+                        "polymarket_price": m.polymarket_price,
+                        "gap_cents": m.gap_cents,
+                        "combined_volume": m.combined_volume,
+                        "summary": m.summary,
+                    }
+                    for m in cross_platform_watch.matches
+                ],
+                "total_matches": cross_platform_watch.total_matches,
+                "total_volume": cross_platform_watch.total_volume,
+            }
+        except Exception as e:
+            response_digest["cross_platform_watch"] = {"error": str(e)}
+
+    # Pro gets price gap analysis (legacy)
     if tier == SubscriptionTier.PRO:
         response_digest["notable_price_gaps"] = digest.notable_price_gaps or []
 

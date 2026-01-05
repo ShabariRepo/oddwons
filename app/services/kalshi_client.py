@@ -91,15 +91,35 @@ class KalshiClient:
             logger.error(f"Kalshi client error: {e}")
             raise
 
-    async def get_events(self, limit: int = 100) -> Dict[str, Any]:
-        """Fetch events (groupings of markets)."""
+    async def get_events(
+        self,
+        limit: int = 100,
+        cursor: Optional[str] = None,
+        status: str = "open",
+    ) -> Dict[str, Any]:
+        """Fetch events (groupings of markets) - these contain the political/economic markets."""
         client = await self._get_client()
+        params = {"limit": limit, "status": status}
+        if cursor:
+            params["cursor"] = cursor
         try:
-            response = await client.get("/events", params={"limit": limit})
+            response = await client.get("/events", params=params)
             response.raise_for_status()
             return response.json()
         except Exception as e:
             logger.error(f"Kalshi events error: {e}")
+            raise
+
+    async def get_event_markets(self, event_ticker: str) -> Dict[str, Any]:
+        """Fetch event details including its markets."""
+        client = await self._get_client()
+        try:
+            # The /events/{ticker} endpoint returns {'event': {...}, 'markets': [...]}
+            response = await client.get(f"/events/{event_ticker}")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Kalshi event markets error for {event_ticker}: {e}")
             raise
 
     def parse_market(self, data: Dict[str, Any]) -> KalshiMarketData:
@@ -132,17 +152,86 @@ class KalshiClient:
         )
 
     async def fetch_all_markets(self, max_pages: int = 50) -> List[KalshiMarketData]:
-        """Fetch all open markets with pagination and rate limiting."""
+        """Fetch all open markets from both /markets and /events endpoints.
+
+        The /markets endpoint returns sports parlays.
+        The /events endpoint returns political/economic prediction markets.
+        We fetch from both to get comprehensive coverage.
+        """
         all_markets = []
+        seen_tickers = set()
+
+        # 1. Fetch from /events endpoint (political/economic markets)
+        logger.info("Fetching Kalshi events (political/economic markets)...")
         cursor = None
         page = 0
 
         while page < max_pages:
             try:
+                result = await self.get_events(limit=100, cursor=cursor)
+                events = result.get("events", [])
+
+                for event in events:
+                    event_ticker = event.get("event_ticker") or event.get("ticker")
+                    if not event_ticker:
+                        continue
+
+                    # Get markets for this event
+                    try:
+                        event_markets = await self.get_event_markets(event_ticker)
+                        markets = event_markets.get("markets", [])
+
+                        for m in markets:
+                            ticker = m.get("ticker", "")
+                            if ticker in seen_tickers:
+                                continue
+                            seen_tickers.add(ticker)
+
+                            try:
+                                parsed = self.parse_market(m)
+                                # Add category from event
+                                parsed.category = event.get("category")
+                                all_markets.append(parsed)
+                            except Exception as e:
+                                logger.warning(f"Failed to parse market: {e}")
+
+                        await asyncio.sleep(0.2)  # Rate limit between event market fetches
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch markets for event {event_ticker}: {e}")
+
+                cursor = result.get("cursor")
+                if not cursor or not events:
+                    break
+
+                page += 1
+                await asyncio.sleep(0.5)
+
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    logger.warning("Kalshi rate limited, waiting 5 seconds...")
+                    await asyncio.sleep(5)
+                    continue
+                raise
+
+        event_count = len(all_markets)
+        logger.info(f"Fetched {event_count} markets from Kalshi events")
+
+        # 2. Fetch from /markets endpoint (sports parlays) - limit to avoid duplicates
+        logger.info("Fetching Kalshi markets (sports)...")
+        cursor = None
+        page = 0
+
+        while page < min(max_pages, 10):  # Limit sports to 10 pages
+            try:
                 result = await self.get_markets(limit=100, cursor=cursor)
                 markets = result.get("markets", [])
 
                 for m in markets:
+                    ticker = m.get("ticker", "")
+                    if ticker in seen_tickers:
+                        continue
+                    seen_tickers.add(ticker)
+
                     try:
                         all_markets.append(self.parse_market(m))
                     except Exception as e:
@@ -153,18 +242,16 @@ class KalshiClient:
                     break
 
                 page += 1
-                # Rate limiting: 0.5 second delay between requests to avoid 429
                 await asyncio.sleep(0.5)
 
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429:
-                    # Rate limited - wait and retry
                     logger.warning("Kalshi rate limited, waiting 5 seconds...")
                     await asyncio.sleep(5)
                     continue
                 raise
 
-        logger.info(f"Fetched {len(all_markets)} markets from Kalshi ({page} pages)")
+        logger.info(f"Fetched {len(all_markets)} total markets from Kalshi ({event_count} from events)")
         return all_markets
 
 

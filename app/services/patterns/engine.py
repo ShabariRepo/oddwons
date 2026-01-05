@@ -37,14 +37,22 @@ class PatternEngine:
     async def load_market_data(
         self,
         session: AsyncSession,
-        limit: int = 500,
-        history_points: int = 20
+        limit: int = 10000,
+        history_points: int = 20,
+        min_volume: float = 1000
     ) -> List[MarketData]:
-        """Load market data with history from database."""
-        # Get active markets
+        """Load market data with history from database.
+
+        Args:
+            limit: Max number of markets to load (default 10,000)
+            history_points: Number of historical snapshots per market
+            min_volume: Minimum volume threshold (default $1,000)
+        """
+        # Get active markets with minimum volume
         result = await session.execute(
             select(Market)
             .where(Market.status == "active")
+            .where(Market.volume >= min_volume)
             .order_by(Market.volume.desc().nullslast())
             .limit(limit)
         )
@@ -180,11 +188,16 @@ class PatternEngine:
         logger.info(f"Saved {saved} patterns to database")
         return saved
 
-    async def run_full_analysis(self, with_ai: bool = True) -> Dict[str, Any]:
-        """Run complete analysis cycle: load, detect, AI analyze, save."""
+    async def run_full_analysis(self, with_ai: bool = True, min_volume: float = 1000) -> Dict[str, Any]:
+        """Run complete analysis cycle: load, detect, AI analyze, save.
+
+        Args:
+            with_ai: Whether to run AI analysis (default True)
+            min_volume: Minimum volume threshold for markets (default $1,000)
+        """
         async with AsyncSessionLocal() as session:
-            # Load market data
-            markets = await self.load_market_data(session)
+            # Load ALL markets with volume > min_volume (default $1k)
+            markets = await self.load_market_data(session, min_volume=min_volume)
 
             # Run rule-based detection
             patterns = await self.run_detection(markets, session)
