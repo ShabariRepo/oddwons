@@ -330,11 +330,147 @@ CREATE TABLE arbitrage_opportunities (
 
 ## Performance Architecture
 
-The database won't be your bottleneck - these will be (in order):
-1. **API Rate Limits** - Kalshi/Polymarket throttle before PostgreSQL sweats
-2. **Groq API Latency** - 100-500ms per AI call, way slower than any DB query
-3. **Network I/O** - Fetching external API data
-4. **Database** - Last on the list if set up properly
+**Where performance actually matters for USER experience:**
+1. **API response time** - How fast users get insights (solved by Redis cache)
+2. **Database query speed** - Fallback when cache misses (solved by proper indexing)
+
+**What does NOT affect user experience:**
+- Groq/AI inference latency - Runs in background, users pull pre-computed results
+- Data collection speed - Background job, not user-facing
+- External API rate limits - Background job problem, not user problem
+
+Users never wait for AI inference. They fetch pre-computed insights from DB/cache.
+
+---
+
+## Hybrid Architecture: Home Server + Railway
+
+Run background jobs (data collection + Groq API calls) from a home machine. Railway only hosts the API and database. Saves ~$10-15/mo in Railway compute.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              YOUR HOME SERVER (Jetson/PC/anything)          │
+│                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │ Cron: Data  │───▶│ Cron: Call  │───▶│ Push to     │     │
+│  │ Collection  │    │ Groq API    │    │ Railway DB  │     │
+│  │ (15 min)    │    │ (15 min)    │    │             │     │
+│  └─────────────┘    └─────────────┘    └──────┬──────┘     │
+│        │                   │                   │            │
+│        ▼                   ▼                   │            │
+│  Kalshi/Poly APIs     Groq Cloud              │            │
+└───────────────────────────────────────────────┼────────────┘
+                                                │
+                                                ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    RAILWAY (Production)                     │
+│                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │ PostgreSQL  │◀───│ API Server  │───▶│ Redis       │     │
+│  │ + Timescale │    │ (FastAPI)   │    │ Cache       │     │
+│  └─────────────┘    └─────────────┘    └─────────────┘     │
+│                            │                                │
+└────────────────────────────┼────────────────────────────────┘
+                             │
+                             ▼
+                         Users/App
+```
+
+### Cost Comparison
+
+| Setup | Monthly Cost |
+|-------|--------------|
+| **Full Railway** (API + DB + Redis + 2 cron services + Groq) | ~$40-55/mo |
+| **Hybrid** (Railway API + DB + Redis, home server runs jobs + Groq) | ~$25-35/mo |
+
+### Home Server Setup
+
+Any machine that stays on - old laptop, Raspberry Pi 4, Jetson, mini PC, NAS, whatever.
+
+**1. Clone repo and install:**
+```bash
+git clone https://github.com/yourrepo/oddwons-jobs.git
+cd oddwons-jobs
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+**2. Environment variables (`.env`):**
+```bash
+# Railway PostgreSQL - use PUBLIC URL (TCP proxy)
+DATABASE_URL=postgresql://postgres:xxxxx@roundhouse.proxy.rlwy.net:12345/railway
+
+# Groq
+GROQ_API_KEY=gsk_xxxxxxxxxxxx
+AI_MODEL=gpt-oss-20b-128k
+
+# Optional: Redis for cache invalidation
+REDIS_URL=redis://default:xxxxx@roundhouse.proxy.rlwy.net:23456
+```
+
+**3. Set up cron (`crontab -e`):**
+```bash
+# Data collection - every 15 minutes
+*/15 * * * * cd /home/user/oddwons-jobs && ./venv/bin/python collect_data.py >> /var/log/oddwons/collect.log 2>&1
+
+# AI analysis - every 15 minutes, offset by 5 min (runs after data is collected)
+5,20,35,50 * * * * cd /home/user/oddwons-jobs && ./venv/bin/python run_analysis.py >> /var/log/oddwons/analysis.log 2>&1
+```
+
+**4. Or use systemd timer (more robust):**
+```bash
+# /etc/systemd/system/oddwons-collect.service
+[Unit]
+Description=Oddwons Data Collection
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/user/oddwons-jobs
+ExecStart=/home/user/oddwons-jobs/venv/bin/python collect_data.py
+EnvironmentFile=/home/user/oddwons-jobs/.env
+```
+
+```bash
+# /etc/systemd/system/oddwons-collect.timer
+[Unit]
+Description=Run data collection every 15 min
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl enable --now oddwons-collect.timer
+```
+
+### Database Connection: Home vs Railway
+
+**From Railway services (private network, no egress cost):**
+```
+DATABASE_URL=postgresql://postgres:xxx@postgres.railway.internal:5432/railway
+```
+
+**From home server (public TCP proxy, small egress cost):**
+```
+DATABASE_URL=postgresql://postgres:xxx@roundhouse.proxy.rlwy.net:12345/railway
+```
+
+Egress is $0.05/GB. Pushing insights is ~KB per run = pennies/month.
+
+### Failover Options
+
+| Option | Setup | Cost |
+|--------|-------|------|
+| Railway cron as backup | Keep services deployed but scaled to 0, enable if home fails | $0 until used |
+| Cheap VPS fallback | Hetzner/DigitalOcean $5/mo droplet | $5/mo |
+| Just accept gaps | Miss a few 15-min windows, users won't notice | $0 |
+
+---
 
 ### TimescaleDB (Use This)
 
@@ -709,6 +845,179 @@ THAT is what people pay for.
 
 ---
 
+## LOCAL DEV SETUP
+
+Everything runs on your machine. No Railway needed until you ship.
+
+### Docker Compose
+
+Create `docker-compose.yml` in project root:
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: oddwons-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: oddwons
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: oddwons-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+### Environment Variables
+
+Create `.env` in project root:
+
+```bash
+# Database (local Docker)
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/oddwons
+
+# Redis (local Docker)
+REDIS_URL=redis://localhost:6379
+
+# Groq (get key from console.groq.com)
+GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx
+AI_MODEL=gpt-oss-20b-128k
+AI_ANALYSIS_ENABLED=true
+
+# App
+ENVIRONMENT=development
+LOG_LEVEL=DEBUG
+SECRET_KEY=dev-secret-key-change-in-prod
+
+# Stripe (test mode keys)
+STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxx
+STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxx
+```
+
+### Start Everything
+
+```bash
+# 1. Start Postgres + Redis
+docker-compose up -d
+
+# 2. Verify containers running
+docker-compose ps
+
+# 3. Run database migrations
+alembic upgrade head
+
+# 4. Start API server
+uvicorn app.main:app --reload --port 8000
+
+# 5. (In another terminal) Run data collection manually
+python collect_data.py
+
+# 6. (In another terminal) Run AI analysis manually
+python run_analysis.py
+```
+
+### Test the Flow
+
+```bash
+# 1. Check API is running
+curl http://localhost:8000/health
+
+# 2. Trigger data collection
+python collect_data.py
+
+# 3. Verify data in DB
+docker exec -it oddwons-postgres psql -U postgres -d oddwons -c "SELECT COUNT(*) FROM market_snapshots;"
+
+# 4. Run AI analysis
+python run_analysis.py
+
+# 5. Verify insights generated
+docker exec -it oddwons-postgres psql -U postgres -d oddwons -c "SELECT * FROM ai_insights LIMIT 5;"
+
+# 6. Test API endpoint (need valid JWT token)
+curl http://localhost:8000/api/v1/insights/ai \
+  -H "Authorization: Bearer <your_test_token>"
+```
+
+### Quick DB Access
+
+```bash
+# Connect to Postgres
+docker exec -it oddwons-postgres psql -U postgres -d oddwons
+
+# Useful queries:
+\dt                                    # List tables
+SELECT COUNT(*) FROM market_snapshots; # Count snapshots
+SELECT * FROM ai_insights LIMIT 5;     # View insights
+SELECT * FROM arbitrage_opportunities WHERE status = 'active';
+```
+
+### Reset Everything
+
+```bash
+# Stop containers
+docker-compose down
+
+# Stop AND delete data
+docker-compose down -v
+
+# Start fresh
+docker-compose up -d
+alembic upgrade head
+```
+
+### Run Background Jobs Locally
+
+For dev, just run manually or use a simple loop:
+
+```bash
+# Manual (run when needed)
+python collect_data.py
+python run_analysis.py
+
+# Or: Simple watch loop (runs every 60 seconds)
+watch -n 60 'python collect_data.py && python run_analysis.py'
+
+# Or: Proper local cron (crontab -e)
+* * * * * cd /path/to/project && /path/to/venv/bin/python collect_data.py
+```
+
+### Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `connection refused` on Postgres | `docker-compose up -d` - container not running |
+| `relation does not exist` | `alembic upgrade head` - migrations not run |
+| `GROQ_API_KEY not set` | Check `.env` file, restart terminal |
+| `redis connection error` | Check Redis container: `docker-compose logs redis` |
+| Port 5432 already in use | Stop local Postgres or change port in docker-compose |
+
+---
+
 ## PRODUCTION DEPLOYMENT ON RAILWAY
 
 This is NOT a local hero app. It ships to production properly. Here's the comprehensive Railway deployment guide.
@@ -734,23 +1043,33 @@ This is NOT a local hero app. It ships to production properly. Here's the compre
 
 ### Multi-Service Architecture
 
-oddwons.ai requires multiple services in ONE Railway project:
+Railway services needed (depends on your setup):
 
+**Option A: Full Railway (everything on Railway)**
 ```
 Railway Project: oddwons-production
-├── api-server          (FastAPI - main API)
-├── data-collector      (Cron job - collects market data)
-├── ai-analyzer         (Cron job - runs AI analysis)
-├── postgres            (Database)
-├── redis               (Cache + job queue)
-└── frontend            (Next.js/React - optional, can use Vercel)
+├── api-server          (FastAPI - main API)          REQUIRED
+├── data-collector      (Cron job - collects data)    REQUIRED
+├── ai-analyzer         (Cron job - Groq analysis)    REQUIRED
+├── postgres            (Database)                     REQUIRED
+├── redis               (Cache)                        REQUIRED
+└── frontend            (Next.js - optional, can use Vercel)
 ```
 
-**Why separate services?**
-- Railway cron jobs must EXIT after completion (no long-running processes)
-- API server runs 24/7, cron jobs run on schedule
-- Separate scaling and restart policies
-- Better cost control (cron jobs only bill when running)
+**Option B: Hybrid (home server runs background jobs)**
+```
+Railway Project: oddwons-production
+├── api-server          (FastAPI - main API)          REQUIRED
+├── postgres            (Database)                     REQUIRED
+├── redis               (Cache)                        REQUIRED
+└── frontend            (optional)
+
+Home Server:
+├── collect_data.py     (Cron - every 15 min)
+└── run_analysis.py     (Cron - every 15 min, offset)
+```
+
+**Option B is cheaper** - saves ~$10-15/mo by not running cron services on Railway.
 
 ---
 
@@ -1179,12 +1498,9 @@ oddwons-production/
 
 ---
 
-### Cost Estimate (Railway Pro)
+### Cost Estimate
 
-**Fixed Costs:**
-- Pro subscription: $20/month (includes $20 credit)
-
-**Variable Costs (estimated for oddwons.ai):**
+**Option A: Full Railway**
 
 | Service | RAM | CPU | Hours/Month | Cost |
 |---------|-----|-----|-------------|------|
@@ -1193,13 +1509,27 @@ oddwons-production/
 | Redis | 128MB | 0.1 vCPU | 730 | ~$2 |
 | Data Collector (cron) | 256MB | 0.5 vCPU | ~50 | ~$1 |
 | AI Analyzer (cron) | 512MB | 0.5 vCPU | ~50 | ~$2 |
-| **Subtotal** | | | | **~$25** |
+| **Railway Subtotal** | | | | **~$25** |
 | Network Egress (~10GB) | | | | ~$0.50 |
-| Volume Storage (5GB) | | | | ~$0.75 |
-| **Total Railway** | | | | **~$26/month** |
+| Groq AI | | | | ~$5-15 |
+| **Total** | | | | **~$35-45/month** |
 
-**Other Costs:**
-- Groq AI (GPT OSS 20B): ~$5-15/month
+**Option B: Hybrid (Home Server runs jobs)**
+
+| Service | RAM | CPU | Hours/Month | Cost |
+|---------|-----|-----|-------------|------|
+| API Server (2 replicas) | 512MB × 2 | 0.5 vCPU × 2 | 730 | ~$15 |
+| PostgreSQL | 256MB | 0.25 vCPU | 730 | ~$5 |
+| Redis | 128MB | 0.1 vCPU | 730 | ~$2 |
+| **Railway Subtotal** | | | | **~$22** |
+| Network Egress (~10GB) | | | | ~$0.50 |
+| Groq AI | | | | ~$5-15 |
+| Home server electricity | | | | ~$2-5 |
+| **Total** | | | | **~$25-40/month** |
+
+**Savings with Hybrid: ~$5-10/month** (more if you scale up cron frequency)
+
+**Other Costs (both options):**
 - Domain (oddwons.ai): ~$15/year
 - Stripe fees: 2.9% + $0.30 per transaction
 

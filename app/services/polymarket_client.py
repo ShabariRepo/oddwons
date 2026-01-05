@@ -1,4 +1,5 @@
 import httpx
+import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
@@ -119,13 +120,38 @@ class PolymarketClient:
                 outcomes = []
                 prices = []
 
-                # Extract outcomes and prices
+                # Extract outcomes - API returns JSON strings like "[\"Yes\", \"No\"]"
                 if "outcomes" in market:
-                    outcomes = market["outcomes"]
+                    raw_outcomes = market["outcomes"]
+                    if isinstance(raw_outcomes, str):
+                        try:
+                            outcomes = json.loads(raw_outcomes)
+                        except json.JSONDecodeError:
+                            outcomes = [raw_outcomes]
+                    elif isinstance(raw_outcomes, list):
+                        outcomes = raw_outcomes
+
+                # Extract prices - API returns JSON strings like "[\"0.65\", \"0.35\"]"
                 if "outcomePrices" in market:
-                    prices = [float(p) for p in market["outcomePrices"]]
+                    raw_prices = market["outcomePrices"]
+                    if isinstance(raw_prices, str):
+                        try:
+                            parsed = json.loads(raw_prices)
+                            prices = [float(p) for p in parsed]
+                        except (json.JSONDecodeError, ValueError):
+                            prices = []
+                    elif isinstance(raw_prices, list):
+                        prices = [float(p) for p in raw_prices]
                 elif "outcome_prices" in market:
-                    prices = [float(p) for p in market["outcome_prices"]]
+                    raw_prices = market["outcome_prices"]
+                    if isinstance(raw_prices, str):
+                        try:
+                            parsed = json.loads(raw_prices)
+                            prices = [float(p) for p in parsed]
+                        except (json.JSONDecodeError, ValueError):
+                            prices = []
+                    elif isinstance(raw_prices, list):
+                        prices = [float(p) for p in raw_prices]
 
                 markets.append(PolymarketMarketData(
                     condition_id=market.get("conditionId", market.get("condition_id", "")),

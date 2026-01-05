@@ -215,6 +215,28 @@ class PatternEngine:
                 "timestamp": datetime.utcnow().isoformat(),
             }
 
+    def _infer_category(self, title: str) -> str:
+        """Infer category from market title using keywords."""
+        title_lower = title.lower()
+
+        # Category keyword mappings
+        categories = {
+            "politics": ["trump", "biden", "election", "president", "senate", "congress", "vote", "governor", "democrat", "republican", "gop", "political", "white house"],
+            "sports": ["nfl", "nba", "mlb", "nhl", "soccer", "football", "basketball", "baseball", "hockey", "tennis", "golf", "ufc", "boxing", "game", "match", "championship", "super bowl", "playoffs"],
+            "crypto": ["bitcoin", "btc", "ethereum", "eth", "crypto", "solana", "sol", "xrp", "dogecoin", "blockchain"],
+            "finance": ["stock", "s&p", "nasdaq", "fed", "interest rate", "inflation", "gdp", "unemployment", "market cap", "ipo"],
+            "entertainment": ["oscar", "grammy", "emmy", "movie", "film", "tv show", "celebrity", "netflix", "streaming"],
+            "tech": ["ai", "apple", "google", "microsoft", "amazon", "meta", "openai", "chatgpt", "tesla", "spacex"],
+            "weather": ["hurricane", "temperature", "weather", "climate", "storm", "flood"],
+            "world": ["ukraine", "russia", "china", "war", "nato", "un", "europe", "asia"],
+        }
+
+        for category, keywords in categories.items():
+            if any(kw in title_lower for kw in keywords):
+                return category
+
+        return "other"
+
     async def run_ai_analysis(
         self,
         patterns: List[PatternResult],
@@ -222,8 +244,8 @@ class PatternEngine:
         session: AsyncSession
     ) -> int:
         """
-        Run AI analysis on detected patterns.
-        This is where the REAL value is created.
+        Run AI analysis on detected patterns, grouped by category.
+        This keeps AI context focused for better analysis quality.
         """
         if not ai_agent.is_enabled():
             logger.warning("AI agent not enabled - skipping AI analysis")
@@ -231,48 +253,84 @@ class PatternEngine:
 
         saved = 0
 
-        # Analyze top patterns (those worth looking at)
+        # Group markets by category
+        market_by_category: Dict[str, List[Dict[str, Any]]] = {}
+        pattern_by_category: Dict[str, List[Dict[str, Any]]] = {}
+
+        for market in markets:
+            category = self._infer_category(market.title or "")
+            if category not in market_by_category:
+                market_by_category[category] = []
+
+            market_by_category[category].append({
+                "market_id": market.market_id,
+                "platform": market.platform,
+                "title": market.title,
+                "yes_price": market.yes_price,
+                "no_price": market.no_price,
+                "volume": market.volume,
+                "price_history": market.price_history[-5:] if market.price_history else [],
+            })
+
+        # Group patterns by category
         promising_patterns = [p for p in patterns if p.confidence_score and p.confidence_score > 50]
-        logger.info(f"Running AI analysis on {len(promising_patterns)} promising patterns")
+        for pattern in promising_patterns:
+            # Find the market title for this pattern
+            market = next((m for m in markets if m.market_id == pattern.market_id), None)
+            title = market.title if market else ""
+            category = self._infer_category(title)
 
-        for pattern in promising_patterns[:20]:  # Limit to avoid API overload
+            if category not in pattern_by_category:
+                pattern_by_category[category] = []
+
+            pattern_by_category[category].append({
+                "market_id": pattern.market_id,
+                "pattern_type": pattern.pattern_type.value,
+                "description": pattern.description,
+                "confidence_score": pattern.confidence_score,
+                "profit_potential": pattern.profit_potential,
+            })
+
+        # Analyze each category separately (better context = better analysis)
+        categories_analyzed = 0
+        for category, category_markets in market_by_category.items():
+            if not category_markets:
+                continue
+
+            # Only analyze categories with patterns or high volume
+            category_patterns = pattern_by_category.get(category, [])
+            if not category_patterns and len(category_markets) < 5:
+                continue
+
             try:
-                # Find the market data for this pattern
-                market_data = next(
-                    (m for m in markets if m.market_id == pattern.market_id),
-                    None
+                logger.info(f"Analyzing category '{category}': {len(category_markets)} markets, {len(category_patterns)} patterns")
+
+                result = await ai_agent.analyze_category_batch(
+                    category=category,
+                    markets=category_markets,
+                    patterns=category_patterns
                 )
-                if not market_data:
-                    continue
 
-                # Convert to dict for AI
-                market_dict = {
-                    "market_id": market_data.market_id,
-                    "platform": market_data.platform,
-                    "title": market_data.title,
-                    "yes_price": market_data.yes_price,
-                    "no_price": market_data.no_price,
-                    "volume": market_data.volume,
-                    "price_history": market_data.price_history[-5:] if market_data.price_history else [],
-                }
+                if result and result.get("opportunities"):
+                    for opp in result["opportunities"]:
+                        if opp.get("confidence_score", 0) > 40:
+                            # Find the pattern for this market if any
+                            pattern = next(
+                                (p for p in promising_patterns if p.market_id == opp.get("market_id")),
+                                None
+                            )
+                            if pattern:
+                                await self.save_ai_insight(opp, pattern, session)
+                                saved += 1
+                            else:
+                                # Create a synthetic insight even without pattern match
+                                await self.save_category_insight(opp, category, session)
+                                saved += 1
 
-                pattern_dict = {
-                    "pattern_type": pattern.pattern_type.value,
-                    "description": pattern.description,
-                    "confidence_score": pattern.confidence_score,
-                    "profit_potential": pattern.profit_potential,
-                }
-
-                # Get AI analysis
-                ai_insight = await ai_agent.analyze_opportunity(market_dict, [pattern_dict])
-
-                if ai_insight and ai_insight.get("confidence_score", 0) > 40:
-                    # Save to database
-                    await self.save_ai_insight(ai_insight, pattern, session)
-                    saved += 1
+                categories_analyzed += 1
 
             except Exception as e:
-                logger.error(f"AI analysis failed for {pattern.market_id}: {e}")
+                logger.error(f"Category analysis failed for {category}: {e}")
 
         # Run cross-platform arbitrage analysis
         try:
@@ -292,7 +350,7 @@ class PatternEngine:
             logger.error(f"Arbitrage analysis failed: {e}")
 
         await session.commit()
-        logger.info(f"AI analysis complete: {saved} insights saved")
+        logger.info(f"AI analysis complete: {saved} insights saved across {categories_analyzed} categories")
         return saved
 
     async def save_ai_insight(
@@ -322,6 +380,34 @@ class PatternEngine:
             logger.debug(f"Saved AI insight for {pattern.market_id}")
         except Exception as e:
             logger.error(f"Failed to save AI insight: {e}")
+
+    async def save_category_insight(
+        self,
+        opp: Dict[str, Any],
+        category: str,
+        session: AsyncSession
+    ) -> None:
+        """Save an AI insight from category analysis (no pattern required)."""
+        try:
+            insight = AIInsight(
+                market_id=opp.get("market_id", "unknown"),
+                platform="unknown",  # Will be determined from market lookup
+                pattern_type=f"category_{category}",
+                recommendation=opp.get("recommendation", "CAUTION"),
+                confidence_score=opp.get("confidence_score", 0),
+                one_liner=opp.get("one_liner", ""),
+                reasoning=opp.get("reasoning", ""),
+                risk_factors=opp.get("risk_factors", []),
+                suggested_position=opp.get("suggested_position", "WAIT"),
+                edge_explanation=opp.get("edge_explanation", ""),
+                time_sensitivity=opp.get("time_sensitivity", "DAYS"),
+                expires_at=datetime.utcnow() + timedelta(hours=24),
+                status="active"
+            )
+            session.add(insight)
+            logger.debug(f"Saved category insight for {opp.get('market_id')} ({category})")
+        except Exception as e:
+            logger.error(f"Failed to save category insight: {e}")
 
     async def save_arbitrage_opportunities(
         self,

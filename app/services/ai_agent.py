@@ -175,6 +175,89 @@ Be ruthless. Only include REAL opportunities. Subscribers are paying for alpha, 
             logger.error(f"Daily digest generation failed: {e}")
             return None
 
+    async def analyze_category_batch(
+        self,
+        category: str,
+        markets: List[Dict[str, Any]],
+        patterns: List[Dict[str, Any]]
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Analyze a batch of markets within the same category.
+        Keeps context focused for better analysis quality.
+
+        Instead of analyzing 100 random markets, we analyze 10-20 markets
+        in the same category (politics, sports, crypto, etc.) so the AI
+        can identify cross-market patterns and correlations.
+        """
+        if not self.is_enabled():
+            return None
+
+        if not markets:
+            return []
+
+        # Limit batch size to keep context manageable
+        markets_batch = markets[:15]
+        patterns_batch = patterns[:20]
+
+        prompt = f"""You are an expert prediction market analyst. Analyze this batch of {category.upper()} markets and identify the BEST opportunities.
+
+CATEGORY: {category}
+
+MARKETS IN THIS CATEGORY:
+{json.dumps(markets_batch, indent=2, default=str)}
+
+DETECTED PATTERNS FOR THESE MARKETS:
+{json.dumps(patterns_batch, indent=2, default=str)}
+
+For each market worth analyzing, provide insights. Focus on:
+1. Cross-market correlations within this category
+2. Mispriced markets relative to others in the category
+3. Timing patterns specific to {category} events
+4. Category-specific edge opportunities
+
+Return a JSON object with this structure:
+{{
+    "category": "{category}",
+    "category_outlook": "Brief 1-2 sentence summary of this category's current state",
+    "opportunities": [
+        {{
+            "market_id": "id",
+            "market_title": "title",
+            "recommendation": "STRONG_BET" | "GOOD_BET" | "CAUTION" | "AVOID",
+            "confidence_score": 0-100,
+            "one_liner": "Single actionable sentence",
+            "reasoning": "Why this is an opportunity in the context of other {category} markets",
+            "suggested_position": "YES" | "NO" | "WAIT",
+            "edge_explanation": "What edge exists here",
+            "time_sensitivity": "ACT_NOW" | "HOURS" | "DAYS" | "WEEKS",
+            "related_markets": ["other market IDs this correlates with"]
+        }}
+    ],
+    "category_patterns": ["Notable pattern across multiple markets in this category"]
+}}
+
+Only include markets with REAL alpha. Be ruthless - quality over quantity."""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=2500,
+                response_format={"type": "json_object"}
+            )
+
+            result = json.loads(response.choices[0].message.content)
+            result["analyzed_at"] = datetime.utcnow().isoformat()
+
+            opportunities = result.get("opportunities", [])
+            logger.info(f"Category '{category}' analysis: {len(opportunities)} opportunities found")
+            return result
+
+        except Exception as e:
+            logger.error(f"Category batch analysis failed for {category}: {e}")
+            return None
+
     async def analyze_cross_platform_arbitrage(
         self,
         kalshi_markets: List[Dict[str, Any]],
