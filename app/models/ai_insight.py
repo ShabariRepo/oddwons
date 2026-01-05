@@ -1,6 +1,7 @@
 """
-Database models for AI-powered insights and arbitrage opportunities.
-This is where the actual value lives - actionable AI analysis.
+Database models for AI-powered insights and market highlights.
+COMPANION APP: We inform and contextualize, NOT recommend bets.
+Users pay for curated market summaries, context on price movements, and time savings.
 """
 from sqlalchemy import Column, String, Integer, Text, DateTime, Numeric, JSON, Index
 from sqlalchemy.sql import func
@@ -8,20 +9,6 @@ from datetime import datetime
 import enum
 
 from app.core.database import Base
-
-
-class RecommendationType(str, enum.Enum):
-    STRONG_BET = "STRONG_BET"
-    GOOD_BET = "GOOD_BET"
-    CAUTION = "CAUTION"
-    AVOID = "AVOID"
-
-
-class TimeSensitivity(str, enum.Enum):
-    ACT_NOW = "ACT_NOW"
-    HOURS = "HOURS"
-    DAYS = "DAYS"
-    WEEKS = "WEEKS"
 
 
 class ArbitrageType(str, enum.Enum):
@@ -33,25 +20,37 @@ class ArbitrageType(str, enum.Enum):
 
 class AIInsight(Base):
     """
-    AI-generated market insights.
-    This is what users pay for - not "volume spike detected".
+    AI-generated market highlights and context.
+    COMPANION APPROACH: We inform and summarize, not recommend bets.
+
+    Think Bloomberg Terminal for prediction markets, NOT a tipster.
     """
     __tablename__ = "ai_insights"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     market_id = Column(String(255), nullable=False, index=True)
+    market_title = Column(Text)  # Store title for display
     platform = Column(String(50), nullable=False)
-    pattern_type = Column(String(100))
+    category = Column(String(50))  # politics, sports, crypto, etc.
 
-    # AI Analysis Results
-    recommendation = Column(String(50), nullable=False)  # STRONG_BET, GOOD_BET, CAUTION, AVOID
-    confidence_score = Column(Integer, nullable=False)  # 0-100
-    one_liner = Column(Text, nullable=False)  # Single actionable sentence
-    reasoning = Column(Text)  # 2-3 sentences explaining WHY
-    risk_factors = Column(JSON)  # ["risk1", "risk2"]
-    suggested_position = Column(String(20))  # YES, NO, WAIT
-    edge_explanation = Column(Text)  # What edge does the bettor have
-    time_sensitivity = Column(String(20))  # ACT_NOW, HOURS, DAYS, WEEKS
+    # Market Summary (COMPANION STYLE)
+    summary = Column(Text, nullable=False)  # What this market is about
+    current_odds = Column(JSON)  # {"yes": 0.62, "no": 0.38}
+    implied_probability = Column(Text)  # "62% chance of X happening"
+
+    # Activity & Movement
+    volume_note = Column(String(100))  # "High volume", "Moderate", "Low liquidity"
+    recent_movement = Column(String(100))  # "+5% this week", "Stable", "Down 3%"
+    movement_context = Column(Text)  # Why it moved or "No significant changes"
+
+    # Upcoming Events
+    upcoming_catalyst = Column(Text)  # "Key event date" or "None scheduled"
+
+    # Analyst Context
+    analyst_note = Column(Text)  # One sentence of helpful context
+
+    # Ranking (for display order, NOT betting confidence)
+    interest_score = Column(Integer)  # 0-100, how interesting/notable this market is
 
     # Metadata
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
@@ -60,10 +59,9 @@ class AIInsight(Base):
 
     # Indexes for fast queries
     __table_args__ = (
-        Index('idx_insights_actionable', 'confidence_score', 'created_at',
-              postgresql_where=(confidence_score > 60)),
+        Index('idx_insights_category_recent', 'category', 'created_at'),
         Index('idx_insights_platform_recent', 'platform', 'created_at'),
-        Index('idx_insights_recommendation', 'recommendation', 'created_at'),
+        Index('idx_insights_interest', 'interest_score', 'created_at'),
     )
 
 
@@ -105,7 +103,7 @@ class ArbitrageOpportunity(Base):
 class DailyDigest(Base):
     """
     Pre-generated daily digest for each tier.
-    Cached to avoid repeated AI calls.
+    COMPANION APPROACH: News briefing, not betting tips.
     """
     __tablename__ = "daily_digests"
 
@@ -113,12 +111,13 @@ class DailyDigest(Base):
     digest_date = Column(DateTime, nullable=False, index=True)
     tier = Column(String(20), nullable=False)  # basic, premium, pro
 
-    # Digest content (JSON blob from AI)
-    top_picks = Column(JSON)
-    avoid_list = Column(JSON)
-    market_sentiment = Column(Text)
-    arbitrage_opportunities = Column(JSON)
-    watchlist = Column(JSON)
+    # Digest content (COMPANION STYLE - news briefing)
+    headline = Column(Text)  # One sentence summary of today's landscape
+    top_movers = Column(JSON)  # Markets with notable price movements
+    most_active = Column(JSON)  # High volume markets
+    upcoming_catalysts = Column(JSON)  # Events that could move markets
+    category_snapshots = Column(JSON)  # {"politics": "summary", "sports": "summary"}
+    notable_price_gaps = Column(JSON)  # Cross-platform price differences
 
     # Metadata
     created_at = Column(DateTime, server_default=func.now())

@@ -13,237 +13,110 @@ from groq import Groq
 logger = logging.getLogger(__name__)
 
 
-# Category-specific prompt templates with domain knowledge
-CATEGORY_PROMPTS = {
-    "politics": {
-        "context": """You are an expert political analyst specializing in prediction markets.
+# =============================================================================
+# COMPANION APP APPROACH - We inform and contextualize, NOT recommend bets
+# =============================================================================
+# oddwons.ai is a research companion for prediction market users.
+# Think: Bloomberg Terminal for prediction markets, NOT a tipster.
+#
+# Users pay for:
+# - Curated market summaries
+# - Context on price movements
+# - Time savings (we do the research)
+# - Cross-platform visibility
+# - Alerts when markets move
+# - Understanding what odds imply
+#
+# The AI should NEVER return 0 results - there's always something to report.
+# =============================================================================
 
-DOMAIN KNOWLEDGE TO APPLY:
-- Polling aggregates vs individual polls (RCP, 538, Polymarket consensus)
-- Electoral college math - not just popular vote
-- Swing state dynamics (PA, MI, WI, AZ, GA, NV, NC)
-- Incumbency advantage (~3-5 points historically)
-- Primary vs general election dynamics
-- Debate effects typically fade within 1-2 weeks
-- October surprise patterns - late breaks often go to challenger
-- Early voting and mail-in ballot patterns
+# Category-specific context for analysis (domain knowledge to apply)
+CATEGORY_CONTEXT = {
+    "politics": """
+DOMAIN CONTEXT:
+- Polling aggregates (RCP, 538, Polymarket consensus) vs individual polls
+- Electoral college math - popular vote ≠ winner
+- Key swing states: PA, MI, WI, AZ, GA, NV, NC
+- Primary calendar and caucus dates
+- Debate schedules and their typical short-term effects
+- Approval ratings and historical trends
 - Senate/House correlation with presidential races
-- Gubernatorial races as bellwethers
-
-EDGE OPPORTUNITIES TO LOOK FOR:
-- Markets not reflecting recent polling shifts
-- Correlated races mispriced (if X wins, Y likely wins)
-- Time decay on event-specific markets (debate, speech, endorsement)
-- State-level vs national polling divergence
-- Primary momentum not priced into general election markets""",
-        "focus": "polling trends, electoral math, state-by-state correlations, timing relative to key events"
-    },
-
-    "sports": {
-        "context": """You are an expert sports betting analyst specializing in prediction markets.
-
-DOMAIN KNOWLEDGE TO APPLY:
-- Injury reports and their actual impact (star players vs role players)
-- Rest days and back-to-back game fatigue
-- Home court/field advantage varies by sport (NBA ~3pts, NFL ~2.5pts, MLB minimal)
-- Momentum and winning/losing streaks - often overvalued
-- Playoff experience and pressure situations
-- Weather impact (outdoor sports, especially NFL, golf)
-- Travel and timezone effects (West Coast teams traveling East)
-- Referee/umpire tendencies for totals
-- Line movement and sharp money indicators
-- Divisional/rivalry game intensity
-- Late-season motivation (tank mode, playoff positioning)
-
-EDGE OPPORTUNITIES TO LOOK FOR:
-- Public overreaction to recent results (recency bias)
-- Star player returns not fully priced in
-- Weather changes after line is set
-- Back-to-back situations undervalued
-- Playoff seeding implications not reflected
-- Prop markets with informational lag vs main lines""",
-        "focus": "injury impact, situational factors, public vs sharp money, line movement, rest advantages"
-    },
-
-    "crypto": {
-        "context": """You are an expert crypto analyst specializing in prediction markets.
-
-DOMAIN KNOWLEDGE TO APPLY:
-- Bitcoin dominance and altcoin correlation (BTC moves, alts follow 2-3x)
-- On-chain metrics: exchange inflows/outflows, whale wallets, miner behavior
-- Macro correlation: BTC increasingly correlated with risk assets (NASDAQ, SPY)
-- Halving cycles and supply dynamics
-- ETF flows (spot Bitcoin ETFs, futures ETFs)
-- Regulatory calendar: SEC deadlines, CFTC rulings, Congressional hearings
-- Stablecoin flows (USDT/USDC minting = dry powder entering)
-- Funding rates on perpetuals (positive = overleveraged longs)
-- Fear & Greed index extremes often mark local tops/bottoms
-- DeFi TVL trends and protocol-specific catalysts
-- Airdrop and unlock schedules (token supply events)
-
-EDGE OPPORTUNITIES TO LOOK FOR:
-- Price targets set before major regulatory news
-- Correlation breakdown opportunities (BTC vs specific alts)
-- Token unlocks not priced into short-term markets
-- ETF decision dates with binary outcomes
-- Stablecoin reserves signaling institutional interest
-- On-chain data diverging from price action""",
-        "focus": "on-chain signals, regulatory catalysts, correlation patterns, supply events, institutional flows"
-    },
-
-    "finance": {
-        "context": """You are an expert financial markets analyst specializing in prediction markets.
-
-DOMAIN KNOWLEDGE TO APPLY:
-- Fed meeting calendar and dot plot projections
-- Inflation data (CPI, PCE, PPI) release schedule and expectations
-- Employment data (NFP, unemployment, jobless claims)
-- Earnings season timing and sector rotation
-- Treasury yield curve dynamics (2y-10y spread)
+""",
+    "sports": """
+DOMAIN CONTEXT:
+- Injury report implications (star vs role players)
+- Rest days and back-to-back fatigue
+- Home court/field advantage by sport
+- Playoff seeding implications
+- Weather for outdoor events
+- Historical head-to-head records
+- Line movements from opening
+""",
+    "crypto": """
+DOMAIN CONTEXT:
+- ETF flow data and institutional interest
+- Halving cycle timing
+- Regulatory calendar (SEC deadlines, hearings)
+- Major protocol upgrades and forks
+- On-chain metrics like exchange reserves
+- Correlation with traditional risk assets
+- Major conference and announcement dates
+""",
+    "finance": """
+DOMAIN CONTEXT:
+- Fed meeting calendar and rate expectations
+- CPI/PCE/NFP release dates
+- Earnings season timing by sector
+- Yield curve status (inverted, steepening)
 - VIX levels and volatility regime
-- Dollar strength (DXY) impact on multinational earnings
-- Sector correlations (tech vs rates, energy vs oil)
-- Year-end window dressing and tax-loss selling
-- Options expiration (OPEX) effects on index levels
-- Buyback blackout periods
-
-EDGE OPPORTUNITIES TO LOOK FOR:
-- Fed funds futures vs market pricing disconnect
-- Earnings expectations vs actual guidance trends
-- Macro data surprises (actual vs consensus)
-- Sector rotation signals not reflected in index bets
-- Rate cut/hike probabilities mispriced vs Fed rhetoric
-- Seasonal patterns (Santa rally, January effect, sell in May)""",
-        "focus": "Fed policy expectations, earnings catalysts, macro data releases, rate sensitivity, seasonal patterns"
-    },
-
-    "entertainment": {
-        "context": """You are an expert entertainment industry analyst specializing in prediction markets.
-
-DOMAIN KNOWLEDGE TO APPLY:
-- Awards season calendar (Guild awards → Critics Choice → Globes → Oscars)
-- Guild awards (SAG, DGA, WGA, PGA) are strong Oscar predictors
-- Box office opening weekend vs legs (multiplier patterns)
-- Streaming vs theatrical release dynamics
-- Critic scores (Rotten Tomatoes, Metacritic) impact on awards
-- Category fraud (lead vs supporting placement)
-- Campaign spending and "For Your Consideration" timing
-- International markets and foreign language categories
-- Documentary and short film specialized predictors
-- TV ratings and streaming viewership metrics
-- Celebrity news cycle impact on projects
-
-EDGE OPPORTUNITIES TO LOOK FOR:
-- Guild award results not fully priced into Oscar markets
-- Late-breaking scandals affecting campaigns
-- International film momentum (Festival circuit → Oscars)
-- Box office overperformance signaling broader appeal
-- Category placement changes affecting odds
-- Preferential ballot dynamics for Best Picture""",
-        "focus": "precursor awards, campaign momentum, guild voting patterns, category dynamics, critical reception"
-    },
-
-    "tech": {
-        "context": """You are an expert technology analyst specializing in prediction markets.
-
-DOMAIN KNOWLEDGE TO APPLY:
-- Product launch calendars (Apple events, Google I/O, CES)
-- Antitrust and regulatory proceedings timeline
-- AI development milestones and benchmarks
-- Chip supply and semiconductor cycle
-- Big Tech earnings as market bellwethers
-- Startup funding rounds and valuation trends
-- Patent filings and litigation outcomes
-- Executive changes and their market impact
-- Platform policy changes (App Store, Google Play)
-- Cloud infrastructure market share shifts
+- Historical seasonal patterns (January effect, etc.)
+""",
+    "entertainment": """
+DOMAIN CONTEXT:
+- Awards season calendar (Guilds → Globes → Oscars)
+- Guild awards as Oscar predictors
+- Box office performance metrics
+- Critical consensus (RT, Metacritic)
+- Streaming vs theatrical dynamics
+- Festival circuit momentum
+""",
+    "tech": """
+DOMAIN CONTEXT:
+- Product launch schedules (Apple events, Google I/O)
+- Antitrust proceeding timelines
+- AI benchmark releases and milestones
+- Earnings dates for major tech
 - M&A regulatory approval timelines
-
-EDGE OPPORTUNITIES TO LOOK FOR:
-- Product launch dates with binary outcomes
-- Regulatory ruling deadlines
-- AI capability milestones (benchmarks, releases)
-- Antitrust case rulings with predictable timelines
-- Earnings guidance vs whisper numbers
-- Executive departure/hiring patterns""",
-        "focus": "product launches, regulatory rulings, AI milestones, antitrust outcomes, earnings catalysts"
-    },
-
-    "weather": {
-        "context": """You are an expert meteorologist specializing in prediction markets.
-
-DOMAIN KNOWLEDGE TO APPLY:
-- Model consensus (GFS, Euro, Canadian, NAM)
-- European model generally more accurate for medium-range
-- Ensemble spread indicates uncertainty
-- Tropical storm/hurricane models (NHC cone of uncertainty)
-- Seasonal patterns and climate normals
-- El Niño/La Niña effects on regional weather
-- Record temperature context (daily vs monthly vs all-time)
-- Urban heat island effect for city records
-- Measurement station locations and biases
-- Lead time accuracy degradation (Day 1 vs Day 7)
-
-EDGE OPPORTUNITIES TO LOOK FOR:
-- Model divergence creating uncertainty not priced in
-- Records that require specific conditions (not just hot/cold)
-- Hurricane intensity forecasts typically underestimate rapid intensification
-- Seasonal forecasts vs actual pattern evolution
-- Climate trend adjustments to historical comparisons""",
-        "focus": "model consensus, ensemble uncertainty, historical context, seasonal patterns, measurement specifics"
-    },
-
-    "world": {
-        "context": """You are an expert geopolitical analyst specializing in prediction markets.
-
-DOMAIN KNOWLEDGE TO APPLY:
-- Conflict escalation/de-escalation patterns
-- Diplomatic calendar (summits, UN sessions, treaty deadlines)
-- Sanctions regimes and enforcement mechanisms
-- Military capability assessments
-- Economic pressure points and trade dependencies
-- Leadership stability and succession dynamics
-- Alliance structures (NATO, EU, BRICS, etc.)
-- Historical precedents for similar situations
-- Intelligence community assessments (when public)
-- NGO and think tank analysis
-- Local election impacts on foreign policy
-
-EDGE OPPORTUNITIES TO LOOK FOR:
-- Summit outcomes with binary possibilities
-- Treaty/agreement deadline resolutions
-- Sanctions implementation timelines
-- Military exercise conclusions
-- Leadership health/succession speculation
-- Economic data releases from key countries""",
-        "focus": "diplomatic timelines, escalation signals, leadership stability, economic pressures, alliance dynamics"
-    },
-
-    "other": {
-        "context": """You are an expert analyst specializing in prediction markets across various domains.
-
-GENERAL ANALYSIS FRAMEWORK:
-- Identify the key drivers of the outcome
-- Assess probability vs current market pricing
-- Look for informational edges (timing, expertise, data sources)
-- Consider liquidity and market efficiency
-- Evaluate time decay and event timing
-- Check for correlated markets that may be mispriced
-
-EDGE OPPORTUNITIES TO LOOK FOR:
-- Information asymmetry (specialized knowledge)
-- Timing edges (knowing when resolution data arrives)
-- Correlation arbitrage (related outcomes priced inconsistently)
-- Liquidity imbalances creating temporary mispricings
-- Public sentiment overreaction to recent news""",
-        "focus": "information edges, timing, correlation, liquidity dynamics, sentiment analysis"
-    }
+""",
+    "weather": """
+DOMAIN CONTEXT:
+- Model consensus (GFS vs Euro)
+- Ensemble spread and uncertainty
+- Historical climate patterns
+- El Niño/La Niña status
+- Record-setting context (daily vs all-time)
+""",
+    "world": """
+DOMAIN CONTEXT:
+- Diplomatic calendar (summits, UN sessions)
+- Sanctions regimes and deadlines
+- Alliance structures (NATO, EU, BRICS)
+- Leadership stability indicators
+- Historical precedents
+""",
+    "other": """
+DOMAIN CONTEXT:
+- Key drivers of the outcome
+- Timeline to resolution
+- Data sources that will determine outcome
+- Related markets on same topic
+"""
 }
 
 
-def get_category_prompt(category: str) -> Dict[str, str]:
-    """Get category-specific prompt components."""
-    return CATEGORY_PROMPTS.get(category.lower(), CATEGORY_PROMPTS["other"])
+def get_category_context(category: str) -> str:
+    """Get category-specific context for analysis."""
+    return CATEGORY_CONTEXT.get(category.lower(), CATEGORY_CONTEXT["other"])
 
 
 class MarketAnalysisAgent:
@@ -329,72 +202,97 @@ Be specific. Be actionable. If there's no real edge, say so. Don't hype garbage 
 
     async def generate_daily_digest(
         self,
-        all_opportunities: List[Dict[str, Any]]
+        all_markets: List[Dict[str, Any]]
     ) -> Optional[Dict[str, Any]]:
         """
-        Generate the daily analysis digest for subscribers.
-        Ranks opportunities and provides portfolio-level insights.
+        Generate the daily briefing for subscribers.
+        COMPANION APPROACH: Summarize and inform, don't recommend bets.
         """
         if not self.is_enabled():
             return None
 
-        if not all_opportunities:
+        if not all_markets:
             return {
-                "top_picks": [],
-                "avoid_list": [],
-                "market_sentiment": "Insufficient data for analysis",
-                "arbitrage_opportunities": [],
-                "watchlist": [],
+                "headline": "No market data available for today's digest",
+                "top_movers": [],
+                "most_active": [],
+                "upcoming_catalysts": [],
+                "category_snapshots": {},
+                "notable_price_gaps": [],
                 "generated_at": datetime.utcnow().isoformat()
             }
 
-        prompt = f"""You are an expert prediction market analyst creating a daily briefing for paying subscribers.
+        prompt = f"""You are creating a daily briefing for oddwons.ai subscribers who want to stay informed about prediction markets.
 
-TODAY'S DETECTED OPPORTUNITIES:
-{json.dumps(all_opportunities[:50], indent=2, default=str)}
+TODAY'S MARKET DATA:
+{json.dumps(all_markets[:50], indent=2, default=str)}
 
-Create a daily digest in this exact JSON format:
+Create a daily digest that a busy professional can scan in 2 minutes:
+
 {{
-    "top_picks": [
+    "headline": "One sentence summary of today's prediction market landscape",
+
+    "top_movers": [
         {{
-            "market_id": "id",
-            "market_title": "title",
-            "recommendation": "STRONG_BET" | "GOOD_BET",
-            "one_liner": "Why this is today's top pick",
-            "confidence": 0-100
+            "market_title": "...",
+            "platform": "kalshi|polymarket",
+            "movement": "+12% today",
+            "current_price": 0.65,
+            "context": "Brief explanation of why it moved"
         }}
     ],
-    "avoid_list": [
+
+    "most_active": [
         {{
-            "market_id": "id",
-            "market_title": "title",
-            "reason": "Why to stay away"
+            "market_title": "...",
+            "platform": "...",
+            "volume_note": "High volume today",
+            "current_odds": {{"yes": 0.72, "no": 0.28}},
+            "what_it_means": "Brief explanation"
         }}
     ],
-    "market_sentiment": "Brief overview of overall market conditions",
-    "arbitrage_opportunities": [
+
+    "upcoming_catalysts": [
         {{
-            "description": "Cross-platform or related market arb",
-            "potential_edge": "X%"
+            "event": "Fed Rate Decision",
+            "date": "Jan 15",
+            "affected_categories": ["finance", "crypto"],
+            "what_to_watch": "Brief explanation"
         }}
     ],
-    "watchlist": [
+
+    "category_snapshots": {{
+        "politics": "1-2 sentence summary of political markets",
+        "sports": "1-2 sentence summary",
+        "crypto": "1-2 sentence summary",
+        "finance": "1-2 sentence summary"
+    }},
+
+    "notable_price_gaps": [
         {{
-            "market_id": "id",
-            "market_title": "title",
-            "trigger": "What would make this actionable"
+            "topic": "Same event on both platforms",
+            "kalshi_price": 0.55,
+            "polymarket_price": 0.62,
+            "note": "7 cent difference between platforms"
         }}
     ]
 }}
 
-Be ruthless. Only include REAL opportunities. Subscribers are paying for alpha, not noise."""
+GUIDELINES:
+- This is a NEWS BRIEFING, not betting advice
+- Focus on WHAT'S HAPPENING, not what to bet on
+- Explain movements, don't exploit them
+- Help users understand the market landscape
+- Be concise and scannable
+- DO NOT use words like "BET", "EDGE", "ALPHA", "RECOMMENDATION"
+- DO NOT suggest positions or confidence scores"""
 
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=2000,
+                max_tokens=3000,
                 response_format={"type": "json_object"}
             )
 
@@ -413,83 +311,74 @@ Be ruthless. Only include REAL opportunities. Subscribers are paying for alpha, 
         category: str,
         markets: List[Dict[str, Any]],
         patterns: List[Dict[str, Any]]
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Optional[Dict[str, Any]]:
         """
-        Analyze a batch of markets within the same category using specialized prompts.
+        Analyze a batch of markets within the same category.
 
-        Each category gets domain-specific context and expertise:
-        - Politics: polling, electoral math, swing states
-        - Sports: injuries, rest, home advantage, line movement
-        - Crypto: on-chain, regulatory, correlation patterns
-        - Finance: Fed, earnings, macro data
-        - etc.
+        COMPANION APPROACH: We summarize and contextualize, NOT recommend bets.
+        This should ALWAYS return highlights - there's always something to report.
         """
         if not self.is_enabled():
             return None
 
         if not markets:
-            return []
+            return {"category": category, "highlights": [], "category_summary": "No markets in this category."}
 
-        # Get category-specific prompt components
-        category_config = get_category_prompt(category)
-        category_context = category_config["context"]
-        category_focus = category_config["focus"]
+        # Get category-specific context
+        domain_context = get_category_context(category)
 
         # Limit batch size to keep context manageable
-        # Reduce batch for categories with many markets to avoid token limits
         max_markets = 10 if len(markets) > 50 else 15
         markets_batch = markets[:max_markets]
-        patterns_batch = patterns[:15]
 
-        prompt = f"""{category_context}
+        prompt = f"""You are a prediction market analyst for oddwons.ai, a subscription service that helps users stay informed about prediction markets.
 
-=== ANALYSIS TASK ===
+Your job is to INFORM and CONTEXTUALIZE, not to find "alpha" or recommend bets.
 
-Analyze these {category.upper()} markets and identify the BEST betting opportunities.
+{domain_context}
 
-MARKETS TO ANALYZE:
+MARKETS TO ANALYZE ({category.upper()}):
 {json.dumps(markets_batch, indent=2, default=str)}
 
-DETECTED PATTERNS (rule-based signals):
-{json.dumps(patterns_batch, indent=2, default=str)}
+For each interesting market, provide:
+1. SUMMARY: What is this market about? (1 sentence)
+2. CURRENT ODDS: Yes/No prices and what probability this implies
+3. RECENT ACTIVITY: Note if volume or movement is notable
+4. CONTEXT: Why might the price be where it is?
+5. UPCOMING CATALYSTS: Any scheduled events that could move this market
 
-YOUR ANALYSIS SHOULD FOCUS ON:
-{category_focus}
-
-INSTRUCTIONS:
-1. Apply your domain knowledge to each market
-2. Look for edges the rule-based patterns might miss
-3. Identify cross-market correlations within this category
-4. Be specific about WHY there's an edge - generic reasoning is worthless
-5. Only recommend markets where you see REAL alpha
-
-Return a JSON object:
+Return your analysis as JSON:
 {{
     "category": "{category}",
-    "category_outlook": "1-2 sentence assessment of this category right now",
-    "opportunities": [
+    "market_count": {len(markets_batch)},
+    "highlights": [
         {{
-            "market_id": "exact market ID from input",
-            "market_title": "market title",
-            "recommendation": "STRONG_BET" | "GOOD_BET" | "CAUTION" | "AVOID",
-            "confidence_score": 0-100,
-            "one_liner": "Single actionable sentence a trader can act on",
-            "reasoning": "Specific reasoning using domain knowledge - cite specific factors",
-            "suggested_position": "YES" | "NO" | "WAIT",
-            "edge_explanation": "What specific edge exists (be concrete)",
-            "time_sensitivity": "ACT_NOW" | "HOURS" | "DAYS" | "WEEKS",
-            "related_markets": ["IDs of correlated markets from this batch"],
-            "key_factors": ["Factor 1", "Factor 2"]
+            "market_id": "exact ID from input",
+            "market_title": "title",
+            "platform": "kalshi or polymarket",
+            "summary": "Brief explanation of what this market is about",
+            "current_odds": {{"yes": 0.62, "no": 0.38}},
+            "implied_probability": "62% chance of X happening",
+            "volume_note": "High volume" | "Moderate" | "Low liquidity",
+            "recent_movement": "+5% this week" | "Stable" | "Down 3%",
+            "movement_context": "Why it moved or 'No significant changes'",
+            "upcoming_catalyst": "Key event date" | "None scheduled",
+            "analyst_note": "One sentence of helpful context for the user"
         }}
     ],
-    "category_insights": [
-        "Cross-cutting insight about this category",
-        "Pattern noticed across multiple markets"
-    ],
-    "watch_for": ["Upcoming event/data that could move these markets"]
+    "category_summary": "2-3 sentence overview of this category today",
+    "upcoming_events": ["List of upcoming events relevant to this category"]
 }}
 
-Quality over quantity. If there's nothing good, say so. Subscribers pay for alpha, not noise."""
+CRITICAL GUIDELINES:
+- ALWAYS return 3-5+ highlights (there's always something worth noting)
+- DO NOT use words like "BET", "EDGE", "ALPHA", "OPPORTUNITY", "STRONG_BET"
+- DO NOT recommend positions (YES/NO) or give betting confidence scores
+- DO explain what the odds MEAN and provide helpful context
+- DO note interesting movements and explain possible reasons
+- DO mention upcoming events that could affect markets
+- BE HELPFUL like a financial news analyst, not a tipster
+- Users want to UNDERSTAND markets, not be told what to bet on"""
 
         try:
             response = self.client.chat.completions.create(
@@ -502,10 +391,10 @@ Quality over quantity. If there's nothing good, say so. Subscribers pay for alph
 
             result = json.loads(response.choices[0].message.content)
             result["analyzed_at"] = datetime.utcnow().isoformat()
-            result["prompt_category"] = category  # Track which prompt was used
+            result["category"] = category
 
-            opportunities = result.get("opportunities", [])
-            logger.info(f"Category '{category}' analysis: {len(opportunities)} opportunities found")
+            highlights = result.get("highlights", [])
+            logger.info(f"Category '{category}' analysis: {len(highlights)} highlights generated")
             return result
 
         except Exception as e:

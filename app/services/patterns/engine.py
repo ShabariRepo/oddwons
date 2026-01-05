@@ -244,8 +244,8 @@ class PatternEngine:
         session: AsyncSession
     ) -> int:
         """
-        Run AI analysis on detected patterns, grouped by category.
-        This keeps AI context focused for better analysis quality.
+        Run AI analysis on markets, grouped by category.
+        COMPANION APPROACH: Generate market highlights, not betting recommendations.
         """
         if not ai_agent.is_enabled():
             logger.warning("AI agent not enabled - skipping AI analysis")
@@ -272,10 +272,9 @@ class PatternEngine:
                 "price_history": market.price_history[-5:] if market.price_history else [],
             })
 
-        # Group patterns by category
+        # Group patterns by category (for additional context)
         promising_patterns = [p for p in patterns if p.confidence_score and p.confidence_score > 50]
         for pattern in promising_patterns:
-            # Find the market title for this pattern
             market = next((m for m in markets if m.market_id == pattern.market_id), None)
             title = market.title if market else ""
             category = self._infer_category(title)
@@ -287,8 +286,6 @@ class PatternEngine:
                 "market_id": pattern.market_id,
                 "pattern_type": pattern.pattern_type.value,
                 "description": pattern.description,
-                "confidence_score": pattern.confidence_score,
-                "profit_potential": pattern.profit_potential,
             })
 
         # Analyze each category separately (better context = better analysis)
@@ -297,42 +294,32 @@ class PatternEngine:
             if not category_markets:
                 continue
 
-            # Only analyze categories with patterns or high volume
-            category_patterns = pattern_by_category.get(category, [])
-            if not category_patterns and len(category_markets) < 5:
+            # Analyze any category with at least 3 markets
+            if len(category_markets) < 3:
                 continue
 
             try:
-                logger.info(f"Analyzing category '{category}': {len(category_markets)} markets, {len(category_patterns)} patterns")
+                logger.info(f"Analyzing category '{category}': {len(category_markets)} markets")
 
                 result = await ai_agent.analyze_category_batch(
                     category=category,
                     markets=category_markets,
-                    patterns=category_patterns
+                    patterns=pattern_by_category.get(category, [])
                 )
 
-                if result and result.get("opportunities"):
-                    for opp in result["opportunities"]:
-                        if opp.get("confidence_score", 0) > 40:
-                            # Find the pattern for this market if any
-                            pattern = next(
-                                (p for p in promising_patterns if p.market_id == opp.get("market_id")),
-                                None
-                            )
-                            if pattern:
-                                await self.save_ai_insight(opp, pattern, session)
-                                saved += 1
-                            else:
-                                # Create a synthetic insight even without pattern match
-                                await self.save_category_insight(opp, category, session)
-                                saved += 1
+                # COMPANION: Save highlights (not opportunities)
+                if result and result.get("highlights"):
+                    for highlight in result["highlights"]:
+                        await self.save_market_highlight(highlight, category, session)
+                        saved += 1
 
                 categories_analyzed += 1
+                logger.info(f"Category '{category}' analysis: {len(result.get('highlights', []))} highlights found")
 
             except Exception as e:
                 logger.error(f"Category analysis failed for {category}: {e}")
 
-        # Run cross-platform arbitrage analysis
+        # Run cross-platform price gap analysis (informational, not arbitrage hunting)
         try:
             kalshi_markets = [m for m in markets if m.platform == "kalshi"]
             poly_markets = [m for m in markets if m.platform == "polymarket"]
@@ -344,70 +331,66 @@ class PatternEngine:
                 arb_result = await ai_agent.analyze_cross_platform_arbitrage(kalshi_dicts, poly_dicts)
                 if arb_result:
                     arb_saved = await self.save_arbitrage_opportunities(arb_result, session)
-                    logger.info(f"Saved {arb_saved} arbitrage opportunities")
+                    logger.info(f"Saved {arb_saved} price gap findings")
 
         except Exception as e:
-            logger.error(f"Arbitrage analysis failed: {e}")
+            logger.error(f"Price gap analysis failed: {e}")
 
         await session.commit()
         logger.info(f"AI analysis complete: {saved} insights saved across {categories_analyzed} categories")
         return saved
 
-    async def save_ai_insight(
+    async def save_market_highlight(
         self,
-        ai_insight: Dict[str, Any],
-        pattern: PatternResult,
-        session: AsyncSession
-    ) -> None:
-        """Save an AI insight to the database."""
-        try:
-            insight = AIInsight(
-                market_id=pattern.market_id,
-                platform=pattern.data.get("platform", "unknown") if pattern.data else "unknown",
-                pattern_type=pattern.pattern_type.value,
-                recommendation=ai_insight.get("recommendation", "CAUTION"),
-                confidence_score=ai_insight.get("confidence_score", 0),
-                one_liner=ai_insight.get("one_liner", ""),
-                reasoning=ai_insight.get("reasoning", ""),
-                risk_factors=ai_insight.get("risk_factors", []),
-                suggested_position=ai_insight.get("suggested_position", "WAIT"),
-                edge_explanation=ai_insight.get("edge_explanation", ""),
-                time_sensitivity=ai_insight.get("time_sensitivity", "DAYS"),
-                expires_at=datetime.utcnow() + timedelta(hours=24),
-                status="active"
-            )
-            session.add(insight)
-            logger.debug(f"Saved AI insight for {pattern.market_id}")
-        except Exception as e:
-            logger.error(f"Failed to save AI insight: {e}")
-
-    async def save_category_insight(
-        self,
-        opp: Dict[str, Any],
+        highlight: Dict[str, Any],
         category: str,
         session: AsyncSession
     ) -> None:
-        """Save an AI insight from category analysis (no pattern required)."""
+        """
+        Save a market highlight to the database.
+        COMPANION APPROACH: We inform and contextualize, not recommend bets.
+        """
         try:
+            # Extract current odds from various possible formats
+            current_odds = highlight.get("current_odds", {})
+            if not current_odds and highlight.get("yes_price"):
+                current_odds = {
+                    "yes": highlight.get("yes_price"),
+                    "no": highlight.get("no_price")
+                }
+
             insight = AIInsight(
-                market_id=opp.get("market_id", "unknown"),
-                platform="unknown",  # Will be determined from market lookup
-                pattern_type=f"category_{category}",
-                recommendation=opp.get("recommendation", "CAUTION"),
-                confidence_score=opp.get("confidence_score", 0),
-                one_liner=opp.get("one_liner", ""),
-                reasoning=opp.get("reasoning", ""),
-                risk_factors=opp.get("risk_factors", []),
-                suggested_position=opp.get("suggested_position", "WAIT"),
-                edge_explanation=opp.get("edge_explanation", ""),
-                time_sensitivity=opp.get("time_sensitivity", "DAYS"),
+                market_id=highlight.get("market_id", "unknown"),
+                market_title=highlight.get("market_title", ""),
+                platform=highlight.get("platform", "unknown"),
+                category=category,
+
+                # Market summary (COMPANION STYLE)
+                summary=highlight.get("summary", "Market analysis pending"),
+                current_odds=current_odds,
+                implied_probability=highlight.get("implied_probability", ""),
+
+                # Activity & movement
+                volume_note=highlight.get("volume_note", ""),
+                recent_movement=highlight.get("recent_movement", ""),
+                movement_context=highlight.get("movement_context", ""),
+
+                # Upcoming events
+                upcoming_catalyst=highlight.get("upcoming_catalyst", ""),
+
+                # Analyst context
+                analyst_note=highlight.get("analyst_note", ""),
+
+                # Interest score for ranking (NOT betting confidence)
+                interest_score=50,  # Default; could be enhanced later
+
                 expires_at=datetime.utcnow() + timedelta(hours=24),
                 status="active"
             )
             session.add(insight)
-            logger.debug(f"Saved category insight for {opp.get('market_id')} ({category})")
+            logger.debug(f"Saved highlight for {highlight.get('market_id')} ({category})")
         except Exception as e:
-            logger.error(f"Failed to save category insight: {e}")
+            logger.error(f"Failed to save market highlight: {e}")
 
     async def save_arbitrage_opportunities(
         self,
@@ -440,17 +423,20 @@ class PatternEngine:
         return saved
 
     async def generate_daily_digest(self, tier: str = "basic") -> Optional[Dict[str, Any]]:
-        """Generate daily digest using AI agent."""
+        """
+        Generate daily digest using AI agent.
+        COMPANION APPROACH: News briefing, not betting tips.
+        """
         if not ai_agent.is_enabled():
             return None
 
         async with AsyncSessionLocal() as session:
-            # Get recent AI insights
+            # Get recent market highlights
             result = await session.execute(
                 select(AIInsight)
                 .where(AIInsight.status == "active")
                 .where(AIInsight.created_at > datetime.utcnow() - timedelta(hours=24))
-                .order_by(AIInsight.confidence_score.desc())
+                .order_by(AIInsight.interest_score.desc().nullslast())
                 .limit(50)
             )
             insights = result.scalars().all()
@@ -459,32 +445,37 @@ class PatternEngine:
                 logger.info("No recent insights for digest")
                 return None
 
-            # Convert to dicts for AI
-            opportunities = []
+            # Convert to dicts for AI (COMPANION STYLE)
+            market_highlights = []
             for i in insights:
-                opportunities.append({
+                market_highlights.append({
                     "market_id": i.market_id,
+                    "market_title": i.market_title,
                     "platform": i.platform,
-                    "recommendation": i.recommendation,
-                    "confidence_score": i.confidence_score,
-                    "one_liner": i.one_liner,
-                    "reasoning": i.reasoning,
-                    "time_sensitivity": i.time_sensitivity,
+                    "category": i.category,
+                    "summary": i.summary,
+                    "current_odds": i.current_odds,
+                    "implied_probability": i.implied_probability,
+                    "volume_note": i.volume_note,
+                    "recent_movement": i.recent_movement,
+                    "upcoming_catalyst": i.upcoming_catalyst,
+                    "analyst_note": i.analyst_note,
                 })
 
-            # Generate digest with AI
-            digest = await ai_agent.generate_daily_digest(opportunities)
+            # Generate digest with AI (COMPANION STYLE - news briefing)
+            digest = await ai_agent.generate_daily_digest(market_highlights)
 
             if digest:
-                # Save digest
+                # Save digest with COMPANION fields
                 daily = DailyDigest(
                     digest_date=datetime.utcnow().date(),
                     tier=tier,
-                    top_picks=digest.get("top_picks", []),
-                    avoid_list=digest.get("avoid_list", []),
-                    market_sentiment=digest.get("market_sentiment", ""),
-                    arbitrage_opportunities=digest.get("arbitrage_opportunities", []),
-                    watchlist=digest.get("watchlist", []),
+                    headline=digest.get("headline", ""),
+                    top_movers=digest.get("top_movers", []),
+                    most_active=digest.get("most_active", []),
+                    upcoming_catalysts=digest.get("upcoming_catalysts", []),
+                    category_snapshots=digest.get("category_snapshots", {}),
+                    notable_price_gaps=digest.get("notable_price_gaps", []),
                 )
                 session.add(daily)
                 await session.commit()

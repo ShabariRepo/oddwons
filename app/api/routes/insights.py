@@ -1,8 +1,9 @@
 """
 AI Insights API Routes.
 
-This is where the VALUE is delivered - AI-powered actionable insights.
-Tier-gated access based on subscription level.
+COMPANION APP: We inform and contextualize, NOT recommend bets.
+This is where value is delivered - curated market summaries, context on price movements,
+and time savings. Think Bloomberg Terminal for prediction markets, NOT a tipster.
 """
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,31 +22,38 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 
 @router.get("/ai")
 async def get_ai_insights(
-    category: Optional[str] = Query(None, description="Filter by pattern type"),
+    category: Optional[str] = Query(None, description="Filter by category (politics, sports, crypto, etc.)"),
     limit: int = Query(20, ge=1, le=50),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Get AI-powered insights based on subscription tier.
+    Get AI-powered market highlights based on subscription tier.
 
-    - FREE: No access (upgrade prompt)
-    - BASIC: Daily digest only, top 5 picks
-    - PREMIUM: All insights + arbitrage, hourly refresh
-    - PRO: Everything + deep analysis, real-time
+    COMPANION APPROACH: We inform and contextualize, NOT recommend bets.
+
+    - FREE: Preview (top 3 highlights, summaries only)
+    - BASIC: Top highlights with context
+    - PREMIUM: All highlights + movement analysis + catalysts
+    - PRO: Everything + full analyst notes + price gaps
     """
     tier = user.subscription_tier
 
-    # FREE tier - no access
+    # FREE tier - limited preview
     if tier == SubscriptionTier.FREE or tier is None:
-        return {
-            "insights": [],
-            "message": "Upgrade to Basic to access AI-powered insights",
-            "upgrade_url": "/pricing",
-            "tier": "free"
-        }
+        tier_limit = 3
+        refresh_interval = "daily"
+    elif tier == SubscriptionTier.BASIC:
+        tier_limit = min(limit, 10)
+        refresh_interval = "daily"
+    elif tier == SubscriptionTier.PREMIUM:
+        tier_limit = min(limit, 30)
+        refresh_interval = "hourly"
+    else:  # PRO
+        tier_limit = limit
+        refresh_interval = "real-time"
 
-    # Build query based on tier
+    # Build query
     query = (
         select(AIInsight)
         .where(AIInsight.status == "active")
@@ -53,55 +61,45 @@ async def get_ai_insights(
     )
 
     if category:
-        query = query.where(AIInsight.pattern_type == category)
-
-    # Tier-based filtering
-    if tier == SubscriptionTier.BASIC:
-        # Basic: Only high-confidence insights (score > 70)
-        query = query.where(AIInsight.confidence_score >= 70)
-        tier_limit = min(limit, 5)
-        refresh_interval = "daily"
-    elif tier == SubscriptionTier.PREMIUM:
-        # Premium: Medium+ confidence (score > 50)
-        query = query.where(AIInsight.confidence_score >= 50)
-        tier_limit = min(limit, 20)
-        refresh_interval = "hourly"
-    else:  # PRO
-        # Pro: All insights
-        tier_limit = limit
-        refresh_interval = "real-time"
+        query = query.where(AIInsight.category == category)
 
     query = query.order_by(
-        AIInsight.confidence_score.desc(),
+        AIInsight.interest_score.desc().nullslast(),
         AIInsight.created_at.desc()
     ).limit(tier_limit)
 
     result = await db.execute(query)
     insights = result.scalars().all()
 
-    # Format response
+    # Format response (COMPANION STYLE - informative, not betting advice)
     response_insights = []
     for i in insights:
+        # Base data - all tiers see this
         insight_data = {
             "id": i.id,
             "market_id": i.market_id,
+            "market_title": i.market_title,
             "platform": i.platform,
-            "recommendation": i.recommendation,
-            "confidence_score": i.confidence_score,
-            "one_liner": i.one_liner,
-            "time_sensitivity": i.time_sensitivity,
+            "category": i.category,
+            "summary": i.summary,
+            "current_odds": i.current_odds,
+            "implied_probability": i.implied_probability,
             "created_at": i.created_at.isoformat() if i.created_at else None,
         }
 
-        # Premium+ get full reasoning
-        if tier in [SubscriptionTier.PREMIUM, SubscriptionTier.PRO]:
-            insight_data["reasoning"] = i.reasoning
-            insight_data["risk_factors"] = i.risk_factors
-            insight_data["suggested_position"] = i.suggested_position
+        # Basic+ get volume and movement info
+        if tier and tier != SubscriptionTier.FREE:
+            insight_data["volume_note"] = i.volume_note
+            insight_data["recent_movement"] = i.recent_movement
 
-        # Pro gets edge explanation
+        # Premium+ get full context
+        if tier in [SubscriptionTier.PREMIUM, SubscriptionTier.PRO]:
+            insight_data["movement_context"] = i.movement_context
+            insight_data["upcoming_catalyst"] = i.upcoming_catalyst
+
+        # Pro gets analyst notes
         if tier == SubscriptionTier.PRO:
-            insight_data["edge_explanation"] = i.edge_explanation
+            insight_data["analyst_note"] = i.analyst_note
 
         response_insights.append(insight_data)
 
@@ -112,11 +110,13 @@ async def get_ai_insights(
         "refresh": refresh_interval,
     }
 
-    # Add upgrade prompts for non-Pro users
-    if tier == SubscriptionTier.BASIC:
-        response["upgrade_prompt"] = "Upgrade to Premium for full reasoning and arbitrage alerts"
+    # Add helpful upgrade prompts
+    if tier == SubscriptionTier.FREE or tier is None:
+        response["upgrade_prompt"] = "Upgrade to Basic for full market context and more highlights"
+    elif tier == SubscriptionTier.BASIC:
+        response["upgrade_prompt"] = "Upgrade to Premium for movement analysis and upcoming catalysts"
     elif tier == SubscriptionTier.PREMIUM:
-        response["upgrade_prompt"] = "Upgrade to Pro for edge explanations and real-time alerts"
+        response["upgrade_prompt"] = "Upgrade to Pro for full analyst notes and real-time updates"
 
     return response
 
@@ -178,14 +178,15 @@ async def get_daily_digest(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Get the daily digest based on subscription tier.
+    Get the daily market briefing based on subscription tier.
+    COMPANION APPROACH: News briefing, not betting tips.
     """
     tier = user.subscription_tier
 
     if tier == SubscriptionTier.FREE or tier is None:
         return {
             "digest": None,
-            "message": "Upgrade to Basic to access daily digests",
+            "message": "Upgrade to Basic to access daily market briefings",
             "upgrade_url": "/pricing"
         }
 
@@ -215,27 +216,28 @@ async def get_daily_digest(
 
         return {
             "digest": None,
-            "message": "Daily digest not yet available. Check back soon.",
+            "message": "Daily briefing not yet available. Check back soon.",
             "tier": tier.value
         }
 
-    # Build response based on tier
+    # Build response based on tier (COMPANION STYLE - news briefing)
     response_digest = {
-        "market_sentiment": digest.market_sentiment,
+        "headline": digest.headline,
         "generated_at": digest.created_at.isoformat() if digest.created_at else None,
     }
 
-    # All tiers get top picks
-    response_digest["top_picks"] = digest.top_picks or []
+    # All paid tiers get top movers and category snapshots
+    response_digest["top_movers"] = digest.top_movers or []
+    response_digest["category_snapshots"] = digest.category_snapshots or {}
 
-    # Premium+ get avoid list and watchlist
+    # Premium+ get most active markets and upcoming catalysts
     if tier in [SubscriptionTier.PREMIUM, SubscriptionTier.PRO]:
-        response_digest["avoid_list"] = digest.avoid_list or []
-        response_digest["watchlist"] = digest.watchlist or []
+        response_digest["most_active"] = digest.most_active or []
+        response_digest["upcoming_catalysts"] = digest.upcoming_catalysts or []
 
-    # Pro gets arbitrage opportunities
+    # Pro gets price gap analysis
     if tier == SubscriptionTier.PRO:
-        response_digest["arbitrage_opportunities"] = digest.arbitrage_opportunities or []
+        response_digest["notable_price_gaps"] = digest.notable_price_gaps or []
 
     return {
         "digest": response_digest,
@@ -248,45 +250,67 @@ async def get_insight_stats(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get statistics about available insights."""
+    """
+    Get statistics about available market highlights.
+    COMPANION APPROACH: Informational stats, not betting metrics.
+    """
     now = datetime.utcnow()
     day_ago = now - timedelta(days=1)
 
-    # Count active insights
+    # Count active highlights
     total_active = await db.scalar(
         select(func.count())
+        .select_from(AIInsight)
         .where(AIInsight.status == "active")
         .where(AIInsight.expires_at > now)
     )
 
-    # Count by recommendation
-    strong_bets = await db.scalar(
-        select(func.count())
+    # Count by category
+    categories_covered = await db.scalar(
+        select(func.count(func.distinct(AIInsight.category)))
         .where(AIInsight.status == "active")
-        .where(AIInsight.recommendation == "STRONG_BET")
         .where(AIInsight.created_at > day_ago)
     )
 
-    # Count arbitrage opportunities
-    arb_count = await db.scalar(
+    # Count price gap findings
+    price_gap_count = await db.scalar(
         select(func.count())
+        .select_from(ArbitrageOpportunity)
         .where(ArbitrageOpportunity.status == "active")
         .where(ArbitrageOpportunity.expires_at > now)
     )
 
-    # Average confidence
-    avg_confidence = await db.scalar(
-        select(func.avg(AIInsight.confidence_score))
-        .where(AIInsight.status == "active")
+    # Count highlights by category (last 24h)
+    from sqlalchemy import case
+    politics_count = await db.scalar(
+        select(func.count())
+        .select_from(AIInsight)
+        .where(AIInsight.category == "politics")
+        .where(AIInsight.created_at > day_ago)
+    )
+    sports_count = await db.scalar(
+        select(func.count())
+        .select_from(AIInsight)
+        .where(AIInsight.category == "sports")
+        .where(AIInsight.created_at > day_ago)
+    )
+    crypto_count = await db.scalar(
+        select(func.count())
+        .select_from(AIInsight)
+        .where(AIInsight.category == "crypto")
         .where(AIInsight.created_at > day_ago)
     )
 
     return {
-        "active_insights": total_active or 0,
-        "strong_bets_24h": strong_bets or 0,
-        "arbitrage_opportunities": arb_count or 0,
-        "avg_confidence_24h": round(avg_confidence or 0, 2),
-        "timestamp": now.isoformat(),
+        "active_highlights": total_active or 0,
+        "categories_covered": categories_covered or 0,
+        "price_gap_findings": price_gap_count or 0,
+        "highlights_by_category": {
+            "politics": politics_count or 0,
+            "sports": sports_count or 0,
+            "crypto": crypto_count or 0,
+        },
+        "last_updated": now.isoformat(),
     }
 
 
