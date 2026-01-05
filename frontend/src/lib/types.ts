@@ -82,8 +82,8 @@ export const PATTERN_LABELS: Record<PatternType, string> = {
   trend_reversal: 'Trend Reversal',
   support_break: 'Support Break',
   resistance_break: 'Resistance Break',
-  cross_platform_arbitrage: 'Cross-Platform Arb',
-  related_market_arbitrage: 'Related Market Arb',
+  cross_platform_arbitrage: 'Cross-Platform Gap',
+  related_market_arbitrage: 'Related Market Gap',
 }
 
 export const PATTERN_COLORS: Record<PatternType, string> = {

@@ -7,28 +7,28 @@ import { TrendingUp, Bell, BarChart3, Shield, Clock, Check, Zap } from 'lucide-r
 const features = [
   {
     icon: TrendingUp,
-    title: 'Cross-Platform Analysis',
-    description: 'Monitor Kalshi and Polymarket markets in one place with real-time price tracking.',
+    title: 'Cross-Platform Comparison',
+    description: 'Compare the same markets on Kalshi and Polymarket to see how prices differ.',
   },
   {
     icon: Zap,
-    title: 'Pattern Detection',
-    description: 'AI-powered detection of volume spikes, price movements, and arbitrage opportunities.',
+    title: 'AI Market Highlights',
+    description: 'AI-powered summaries of notable markets, price movements, and market context.',
   },
   {
     icon: Bell,
     title: 'Smart Alerts',
-    description: 'Get notified instantly when high-value opportunities match your criteria.',
+    description: 'Get notified when markets you care about have significant price changes.',
   },
   {
     icon: BarChart3,
-    title: 'Advanced Analytics',
-    description: 'Historical data analysis and performance tracking for informed decisions.',
+    title: 'Market Analytics',
+    description: 'Historical data and volume trends to understand market dynamics.',
   },
   {
     icon: Shield,
-    title: 'Risk Assessment',
-    description: 'Confidence scores and risk ratings for every detected opportunity.',
+    title: 'Research Tools',
+    description: 'Context and analysis for every market to inform your decisions.',
   },
   {
     icon: Clock,
@@ -43,9 +43,9 @@ const tiers = [
     price: 9.99,
     features: [
       'Daily market digest',
-      'Top 5 opportunities',
+      'Top 10 market highlights',
       'Email notifications',
-      'Basic pattern alerts',
+      'Price movement alerts',
       '7-day free trial',
     ],
   },
@@ -112,13 +112,13 @@ export default function LandingPage() {
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 leading-tight">
-            Find Profitable{' '}
+            Your{' '}
             <span className="text-primary-600">Prediction Market</span>{' '}
-            Opportunities
+            Research Companion
           </h1>
           <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto">
-            AI-powered analysis for Kalshi and Polymarket. Detect patterns, spot arbitrage,
-            and get alerts for high-value opportunities before everyone else.
+            AI-powered insights for Kalshi and Polymarket. Compare prices across platforms,
+            get market highlights, and save hours of research.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
@@ -142,9 +142,9 @@ export default function LandingPage() {
       <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900">Everything You Need to Win</h2>
+            <h2 className="text-3xl font-bold text-gray-900">Everything You Need to Research Markets</h2>
             <p className="mt-4 text-lg text-gray-600">
-              Powerful tools to analyze prediction markets and find profitable opportunities.
+              Powerful tools to understand prediction markets and make informed decisions.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -219,9 +219,9 @@ export default function LandingPage() {
       {/* CTA */}
       <section className="py-20 bg-primary-600">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold text-white">Ready to Find Your Edge?</h2>
+          <h2 className="text-3xl font-bold text-white">Ready to Save Time on Research?</h2>
           <p className="mt-4 text-lg text-primary-100">
-            Join traders using OddWons to discover profitable prediction market opportunities.
+            Join prediction market enthusiasts using OddWons for AI-powered market insights.
           </p>
           <Link
             href="/register"

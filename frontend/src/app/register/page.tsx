@@ -9,9 +9,9 @@ import { register } from '@/lib/auth'
 import { useAuth } from '@/components/AuthProvider'
 
 const features = [
-  'AI-powered market analysis',
-  'Real-time pattern detection',
-  'Cross-platform arbitrage alerts',
+  'AI-powered market highlights',
+  'Cross-platform price comparisons',
+  'Daily market briefings',
   '7-day free trial on all plans',
 ]
 
@@ -164,7 +164,7 @@ export default function RegisterPage() {
       <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-primary-600 to-primary-800 items-center justify-center p-12">
         <div className="max-w-md text-white">
           <h3 className="text-2xl font-bold mb-8">
-            Start finding profitable opportunities today
+            Your prediction market research companion
           </h3>
           <ul className="space-y-4">
             {features.map((feature) => (
@@ -178,7 +178,7 @@ export default function RegisterPage() {
           </ul>
           <div className="mt-12 p-6 bg-white/10 rounded-xl">
             <p className="text-lg font-medium">
-              "OddWons helped me spot arbitrage opportunities I would have never found on my own."
+              "OddWons saves me hours of research every week comparing markets across platforms."
             </p>
             <p className="mt-4 text-sm text-white/80">
               - Early Beta User
