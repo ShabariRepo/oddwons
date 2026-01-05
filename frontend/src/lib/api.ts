@@ -1,10 +1,21 @@
+import { getToken } from './auth'
+
 const API_BASE = '/api/v1'
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const token = getToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...headers,
       ...options?.headers,
     },
   })
