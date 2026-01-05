@@ -4,7 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OddWons is a subscription-based prediction market analysis app that analyzes Kalshi and Polymarket markets using AI agents to identify betting opportunities, patterns, and market inefficiencies.
+OddWons is a subscription-based **research companion** for prediction market enthusiasts. We inform and contextualize prediction markets using AI - think Bloomberg Terminal for prediction markets, NOT a tipster.
+
+**CRITICAL PRODUCT PHILOSOPHY:**
+- We INFORM and CONTEXTUALIZE, not recommend bets
+- We NEVER use words like "BET", "EDGE", "ALPHA", "STRONG_BET"
+- We focus on WHAT'S HAPPENING, not what to bet on
+- We ALWAYS return results (never 0 highlights)
+
+Users pay for:
+- Curated market summaries
+- Context on price movements
+- Time savings (we do the research)
+- Cross-platform visibility
+- Alerts when markets move
+- Understanding what odds imply
 
 ## API Integration
 
@@ -36,9 +50,10 @@ OddWons is a subscription-based prediction market analysis app that analyzes Kal
 - **Alert System**: Tier-based thresholds, multi-channel delivery (email, SMS, push, webhooks)
 
 ### Subscription Tiers (all with 7-day free trial)
-- Basic ($9.99/mo): Daily digest, top 5 opportunities, email notifications
-- Premium ($19.99/mo): Real-time alerts, custom parameters, SMS, Discord/Slack
-- Pro ($29.99/mo): Custom analysis, advanced patterns, API access, priority support
+- **Free**: Preview (top 3 highlights, summaries only)
+- **Basic ($9.99/mo)**: Top highlights with context, daily briefings
+- **Premium ($19.99/mo)**: All highlights + movement analysis + upcoming catalysts
+- **Pro ($29.99/mo)**: Full analyst notes + price gap analysis + real-time updates
 
 ## Tech Stack
 
@@ -146,11 +161,11 @@ frontend/                     # Next.js frontend
 - `GET /api/v1/patterns/alerts` - Get alerts by tier
 - `GET /api/v1/patterns/alerts/stats` - Alert statistics
 
-### AI Insights (Tier-Gated)
-- `GET /api/v1/insights/ai` - Get AI-powered recommendations (FREE: none, BASIC: top 5, PREMIUM: all+arbitrage, PRO: everything)
-- `GET /api/v1/insights/arbitrage` - Cross-platform arbitrage opportunities (Premium+)
-- `GET /api/v1/insights/digest` - Daily market digest (Basic+)
-- `GET /api/v1/insights/stats` - Insight statistics
+### AI Insights (Tier-Gated) - COMPANION STYLE
+- `GET /api/v1/insights/ai` - Get market highlights (FREE: 3 preview, BASIC: 10 with context, PREMIUM: 30+catalysts, PRO: all+analyst notes)
+- `GET /api/v1/insights/arbitrage` - Cross-platform price gap analysis (Premium+)
+- `GET /api/v1/insights/digest` - Daily market briefing (Basic+)
+- `GET /api/v1/insights/stats` - Highlight statistics by category
 - `POST /api/v1/insights/refresh` - Trigger manual AI analysis (Pro only)
 
 ### Authentication
@@ -242,3 +257,20 @@ FROM_EMAIL=alerts@oddwons.ai
 - Kalshi: ~5,000 active markets
 - Polymarket: ~25,000 active markets
 - Total: ~30,000 markets per collection cycle
+
+### Companion Approach (Jan 2026)
+Major product shift from "alpha hunter" to "research companion":
+
+**Database Schema Changes:**
+- `AIInsight` model now stores: summary, current_odds, implied_probability, volume_note, recent_movement, movement_context, upcoming_catalyst, analyst_note, interest_score
+- `DailyDigest` model now stores: headline, top_movers, most_active, upcoming_catalysts, category_snapshots, notable_price_gaps
+
+**AI Prompts:**
+- `CATEGORY_CONTEXT` dict provides domain knowledge per category (politics, sports, crypto, finance, tech, entertainment, weather, world)
+- Prompts instruct AI to ALWAYS return 3-5+ highlights per category
+- No betting advice language allowed in responses
+
+**API Response Changes:**
+- Free tier now gets 3 preview highlights (was blocked)
+- All tiers get progressively more context instead of more "betting tips"
+- Stats endpoint shows highlights_by_category instead of strong_bets_24h
