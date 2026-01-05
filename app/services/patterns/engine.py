@@ -48,11 +48,13 @@ class PatternEngine:
             history_points: Number of historical snapshots per market
             min_volume: Minimum volume threshold (default $1,000)
         """
-        # Get active markets with minimum volume
+        # Get active markets with minimum volume AND valid prices (not resolved)
         result = await session.execute(
             select(Market)
             .where(Market.status == "active")
             .where(Market.volume >= min_volume)
+            .where(Market.yes_price > 0.02)   # Filter out resolved (0%)
+            .where(Market.yes_price < 0.98)   # Filter out resolved (100%)
             .order_by(Market.volume.desc().nullslast())
             .limit(limit)
         )

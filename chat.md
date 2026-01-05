@@ -1,136 +1,124 @@
-# PRIORITY FIX: AI Highlights Not Showing
+# FIX: AI Analysis Generating Insights for Resolved Markets
 
-## The Problem
+## Root Cause Found
 
-- Dashboard shows **167 AI Highlights** (from `/insights/stats`)
-- AI Highlights page shows **0 highlights** (from `/insights/ai`)
+The issue is **upstream** - `run_analysis.py` is generating insights for already-resolved markets.
 
-## Root Cause
-
-The `/insights/ai` endpoint has an aggressive filter that joins with the Markets table:
+In `app/services/patterns/engine.py`, the `load_market_data()` function doesn't filter by price:
 
 ```python
-# In app/api/routes/insights.py, line ~45
-.join(Market, AIInsight.market_id == Market.id, isouter=True)
-.where(
-    (Market.id == None) |  # Allow if market not found
-    (
-        (Market.status == 'active') &
-        (Market.yes_price > 0.02) &
-        (Market.yes_price < 0.98)
-    )
+# Current code (BROKEN)
+result = await session.execute(
+    select(Market)
+    .where(Market.status == "active")
+    .where(Market.volume >= min_volume)  # No price filter!
+    ...
 )
 ```
 
-The AI insights have `market_id` values that either:
-1. Don't exist in the `markets` table
-2. Are now resolved/closed
-3. Have prices at 0% or 100%
-
-So ALL insights get filtered out.
+So markets at 100% or 0% (like "Trump inauguration") are being analyzed and getting insights generated.
 
 ## The Fix
 
-**Option A: Remove the market join filter (quick fix)**
+### Step 1: Add price filter to `load_market_data()`
 
-In `app/api/routes/insights.py`, change the query to NOT join with markets:
-
-```python
-# Build query - just get active insights
-query = (
-    select(AIInsight)
-    .where(AIInsight.status == "active")
-    .where(AIInsight.expires_at > datetime.utcnow())
-)
-
-if category:
-    query = query.where(AIInsight.category == category)
-
-query = query.order_by(
-    AIInsight.interest_score.desc().nullslast(),
-    AIInsight.created_at.desc()
-).limit(tier_limit)
-```
-
-**Option B: Fix the join condition (better but more complex)**
-
-Use a LEFT OUTER JOIN and allow insights even if market is missing:
+In `app/services/patterns/engine.py`, update the `load_market_data` method (~line 45):
 
 ```python
-from sqlalchemy.orm import aliased
-
-# Build query with proper outer join
-query = (
-    select(AIInsight)
-    .outerjoin(Market, AIInsight.market_id == Market.id)
-    .where(AIInsight.status == "active")
-    .where(AIInsight.expires_at > datetime.utcnow())
-    .where(
-        # Include if: no matching market OR market is active with good price
-        (Market.id.is_(None)) | 
-        (
-            (Market.status == 'active') &
-            (Market.yes_price > 0.02) &
-            (Market.yes_price < 0.98)
-        )
+async def load_market_data(
+    self,
+    session: AsyncSession,
+    limit: int = 10000,
+    history_points: int = 20,
+    min_volume: float = 1000
+) -> List[MarketData]:
+    """Load market data with history from database."""
+    
+    # Get active markets with minimum volume AND valid prices
+    result = await session.execute(
+        select(Market)
+        .where(Market.status == "active")
+        .where(Market.volume >= min_volume)
+        .where(Market.yes_price > 0.02)   # ADD: Filter out resolved (0%)
+        .where(Market.yes_price < 0.98)   # ADD: Filter out resolved (100%)
+        .order_by(Market.volume.desc().nullslast())
+        .limit(limit)
     )
-)
+    markets = result.scalars().all()
+    # ... rest of method
 ```
 
-**Option C: Regenerate insights with valid market_ids**
+### Step 2: Clear stale insights from database
 
-Run `python run_analysis.py` to create fresh insights linked to current active markets.
+```sql
+-- Delete insights for resolved markets
+DELETE FROM ai_insights 
+WHERE (current_odds->>'yes')::float < 0.02 
+   OR (current_odds->>'yes')::float > 0.98
+   OR (current_odds->>'yes')::float IS NULL;
 
----
-
-## Secondary Issues
-
-### Dashboard Cross-Platform Count Wrong
-- Dashboard shows "4" cross-platform matches
-- Cross-Platform page shows "390"
-- Check: Dashboard calls `useCrossPlatformMatches({ limit: 4 })` but displays `crossPlatform?.total`
-- The total should reflect ALL matches, not just the limited result
-
-**Fix in dashboard:** The stats card should use a separate stats call:
-```typescript
-// Dashboard should use stats endpoint for the count
-<StatsCard
-  title="Cross-Platform"
-  value={crossPlatformStats?.total_matches || crossPlatform?.total || 0}
-  ...
-/>
+-- Or just delete all and regenerate
+DELETE FROM ai_insights;
 ```
 
-Or the API should return total regardless of limit (it already does, but frontend reads from limited result).
+### Step 3: Re-run analysis to generate fresh insights
 
-### Language Cleanup Needed
-- Analytics page: "Avg Confidence" → "Avg Relevance Score"
-- Analytics page: "Related Market Arb" → "Related Market Analysis"
-- Run: `grep -rn 'Confidence\|Arb' frontend/src/`
+```bash
+cd ~/Desktop/code/oddwons
+source venv/bin/activate
+set -a && source .env && set +a
+python run_analysis.py
+```
+
+## Why This Is Better Than Filtering at Display Time
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Filter in `load_market_data()` | Prevents bad data at source | Need to re-run analysis |
+| Filter in API endpoint | Quick fix | Still storing useless data |
+| Shorter expiry time | Helps freshness | Doesn't prevent resolved markets |
+
+**Fixing at the source is the right approach** - don't generate insights for resolved markets in the first place.
+
+## Optional: Also Shorten Expiry Time
+
+In `save_market_highlight()` (~line 280), consider reducing expiry from 24h to 8h:
+
+```python
+expires_at=datetime.utcnow() + timedelta(hours=8),  # Was 24
+```
+
+This ensures insights refresh more frequently, but the real fix is the price filter above.
 
 ---
 
 ## Commands to Run
 
 ```bash
-# Check AI insights in database
-psql -c "SELECT COUNT(*) FROM ai_insights WHERE status='active' AND expires_at > NOW();"
+# 1. Edit app/services/patterns/engine.py
+# Add .where(Market.yes_price > 0.02).where(Market.yes_price < 0.98)
+# to the load_market_data query
 
-# Check if market_ids in insights exist in markets table
-psql -c "
-SELECT COUNT(*) as total_insights,
-       COUNT(m.id) as with_valid_market
-FROM ai_insights ai
-LEFT JOIN markets m ON ai.market_id = m.id
-WHERE ai.status = 'active';
-"
+# 2. Clear old insights
+psql -c "DELETE FROM ai_insights;"
 
-# If market_ids don't match, regenerate insights
+# 3. Regenerate with fix in place
+cd ~/Desktop/code/oddwons
+source venv/bin/activate
+set -a && source .env && set +a
 python run_analysis.py
+
+# 4. Verify new insights have valid prices
+psql -c "
+SELECT market_title, current_odds->>'yes' as yes_price 
+FROM ai_insights 
+WHERE status = 'active' 
+ORDER BY created_at DESC 
+LIMIT 10;
+"
 ```
 
 ## Files to Edit
 
-1. `app/api/routes/insights.py` - Fix the query filter (lines 45-55)
-2. `frontend/src/app/(app)/analytics/page.tsx` - Fix language
-3. `frontend/src/lib/types.ts` - Check PATTERN_LABELS for "Arb" text
+1. **`app/services/patterns/engine.py`** - Add price filter to `load_market_data()` (~line 45)
+2. Optionally: Reduce `expires_at` from 24h to 8h (~line 280)
