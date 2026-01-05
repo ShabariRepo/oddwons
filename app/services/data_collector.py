@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import json
 
@@ -14,6 +14,16 @@ from app.services.kalshi_client import kalshi_client
 from app.services.polymarket_client import polymarket_client
 
 logger = logging.getLogger(__name__)
+
+
+def to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Convert timezone-aware datetime to naive UTC datetime for database storage."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        # Convert to UTC and strip timezone info
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 class DataCollector:
@@ -49,7 +59,7 @@ class DataCollector:
                     no_price=no_price,
                     volume=market_data.volume,
                     status=market_data.status,
-                    close_time=market_data.close_time,
+                    close_time=to_naive_utc(market_data.close_time),
                 )
                 stmt = stmt.on_conflict_do_update(
                     index_elements=["id"],
@@ -131,7 +141,7 @@ class DataCollector:
                     volume=market_data.volume,
                     liquidity=market_data.liquidity,
                     status="active",
-                    close_time=market_data.end_date,
+                    close_time=to_naive_utc(market_data.end_date),
                 )
                 stmt = stmt.on_conflict_do_update(
                     index_elements=["id"],
