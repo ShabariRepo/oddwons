@@ -222,3 +222,23 @@ FROM_EMAIL=alerts@oddwons.ai
 - Keep 6-12 months of historical data for pattern detection
 - JWT tokens are stored in localStorage on frontend
 - Protected routes redirect to /login if not authenticated
+
+## Recent Updates (Jan 2026)
+
+### Data Collection Improvements
+- **Rate Limiting**: 0.5s delay for Kalshi, 0.2s for Polymarket to avoid 429 errors
+- **Page Limits**: Max 50 pages Kalshi (~5000 markets), 100 pages Polymarket (~25000 markets)
+- **Retry Logic**: Auto-retry on rate limit errors with 5s backoff
+- **Timezone Fix**: All datetime fields converted to naive UTC for PostgreSQL compatibility
+- **Polymarket Parsing Fix**: JSON string fields (`outcomes`, `outcomePrices`) now parsed correctly
+
+### AI Analysis Improvements
+- **Category-Based Analysis**: Markets grouped by category (politics, sports, crypto, finance, tech, etc.) for focused AI context
+- **Batch Processing**: Separate Groq calls per category instead of one massive prompt
+- **Better Insights**: Cross-market correlation detection within categories
+- **Category Inference**: Automatic category detection from market titles using keyword matching
+
+### Current Data Volume
+- Kalshi: ~5,000 active markets
+- Polymarket: ~25,000 active markets
+- Total: ~30,000 markets per collection cycle
