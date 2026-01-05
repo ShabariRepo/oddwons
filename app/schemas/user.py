@@ -5,17 +5,18 @@ from enum import Enum
 
 
 class SubscriptionTier(str, Enum):
-    BASIC = "basic"
-    PREMIUM = "premium"
-    PRO = "pro"
+    FREE = "FREE"
+    BASIC = "BASIC"
+    PREMIUM = "PREMIUM"
+    PRO = "PRO"
 
 
 class SubscriptionStatus(str, Enum):
-    ACTIVE = "active"
-    CANCELED = "canceled"
-    PAST_DUE = "past_due"
-    TRIALING = "trialing"
-    INACTIVE = "inactive"
+    ACTIVE = "ACTIVE"
+    CANCELED = "CANCELED"
+    PAST_DUE = "PAST_DUE"
+    TRIALING = "TRIALING"
+    INACTIVE = "INACTIVE"
 
 
 # Auth schemas
