@@ -49,8 +49,21 @@ class MarketResponse(MarketBase):
         from_attributes = True
 
 
+class MarketEnrichedResponse(MarketResponse):
+    """Market response with computed fields for display context."""
+    # Computed fields - available for ALL markets
+    implied_probability: Optional[float] = None  # yes_price as percentage (0-100)
+    price_change_24h: Optional[float] = None  # Change in yes_price over 24h
+    price_change_7d: Optional[float] = None  # Change in yes_price over 7d
+    volume_rank: Optional[int] = None  # Percentile rank 0-100 within category
+    spread: Optional[float] = None  # best_ask - best_bid if available
+
+    # Flag if AI highlight exists for this market
+    has_ai_highlight: bool = False
+
+
 class MarketListResponse(BaseModel):
-    markets: List[MarketResponse]
+    markets: List[MarketEnrichedResponse]
     total: int
     page: int
     page_size: int
@@ -73,7 +86,8 @@ class SnapshotResponse(BaseModel):
         from_attributes = True
 
 
-class MarketWithHistory(MarketResponse):
+class MarketWithHistory(MarketEnrichedResponse):
+    """Single market with price history and computed fields."""
     snapshots: List[SnapshotResponse] = []
 
 
@@ -131,6 +145,11 @@ class PolymarketMarketData(BaseModel):
     outcomes: List[str]
     outcome_prices: List[float]
     volume: Optional[float] = None
+    volume_24h: Optional[float] = None  # From event's volume24hr
+    volume_1wk: Optional[float] = None  # volume1wk
     liquidity: Optional[float] = None
     end_date: Optional[datetime] = None
     category: Optional[str] = None
+    spread: Optional[float] = None  # spread field from API
+    best_ask: Optional[float] = None  # bestAsk field from API
+    price_change_24h: Optional[float] = None  # oneDayPriceChange from API

@@ -155,12 +155,15 @@ class DataCollector:
                 )
                 await session.execute(stmt)
 
-                # Create snapshot
+                # Create snapshot with all available data
                 snapshot = MarketSnapshot(
                     market_id=market_id,
                     yes_price=yes_price,
                     no_price=no_price,
                     volume=market_data.volume,
+                    volume_24h=market_data.volume_24h,
+                    best_ask=market_data.best_ask,
+                    spread=market_data.spread,
                 )
                 session.add(snapshot)
 

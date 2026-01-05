@@ -57,14 +57,18 @@ class PolymarketClient:
         self,
         limit: int = 100,
         offset: int = 0,
-        active: bool = True,
+        closed: bool = False,
     ) -> List[Dict[str, Any]]:
-        """Fetch events from Gamma API."""
+        """Fetch events from Gamma API.
+
+        Note: Use closed=False to get open/tradeable markets.
+        The 'active' param means 'not archived', NOT 'open for trading'.
+        """
         client = await self._get_gamma_client()
         params = {
             "limit": limit,
             "offset": offset,
-            "active": str(active).lower(),
+            "closed": str(closed).lower(),
         }
 
         try:
@@ -116,6 +120,10 @@ class PolymarketClient:
     def parse_market(self, event: Dict[str, Any]) -> List[PolymarketMarketData]:
         """Parse event data into market data objects."""
         markets = []
+
+        # Event-level volume24hr (applies to all markets in this event)
+        event_volume_24h = float(event.get("volume24hr", 0) or 0)
+
         for market in event.get("markets", [event]):
             try:
                 outcomes = []
@@ -154,6 +162,30 @@ class PolymarketClient:
                     elif isinstance(raw_prices, list):
                         prices = [float(p) for p in raw_prices]
 
+                # Parse spread - can be a string like "0.01"
+                spread = None
+                if market.get("spread"):
+                    try:
+                        spread = float(market["spread"])
+                    except (ValueError, TypeError):
+                        pass
+
+                # Parse best ask
+                best_ask = None
+                if market.get("bestAsk"):
+                    try:
+                        best_ask = float(market["bestAsk"])
+                    except (ValueError, TypeError):
+                        pass
+
+                # Parse 24h price change (percentage)
+                price_change_24h = None
+                if market.get("oneDayPriceChange") is not None:
+                    try:
+                        price_change_24h = float(market["oneDayPriceChange"])
+                    except (ValueError, TypeError):
+                        pass
+
                 markets.append(PolymarketMarketData(
                     condition_id=market.get("conditionId", market.get("condition_id", "")),
                     question=market.get("question", event.get("title", "")),
@@ -161,9 +193,14 @@ class PolymarketClient:
                     outcomes=outcomes,
                     outcome_prices=prices,
                     volume=float(market.get("volume", 0) or 0),
+                    volume_24h=event_volume_24h,  # Event-level 24h volume
+                    volume_1wk=float(market.get("volume1wk", 0) or 0),
                     liquidity=float(market.get("liquidity", 0) or 0),
                     end_date=datetime.fromisoformat(market["endDate"].replace("Z", "+00:00")) if market.get("endDate") else None,
                     category=event.get("category"),
+                    spread=spread,
+                    best_ask=best_ask,
+                    price_change_24h=price_change_24h,
                 ))
             except Exception as e:
                 logger.warning(f"Failed to parse Polymarket market: {e}")
@@ -171,7 +208,7 @@ class PolymarketClient:
         return markets
 
     async def fetch_all_markets(self, max_pages: int = 100) -> List[PolymarketMarketData]:
-        """Fetch all active markets with pagination and rate limiting."""
+        """Fetch all open markets with pagination and rate limiting."""
         all_markets = []
         offset = 0
         limit = 100
@@ -179,7 +216,7 @@ class PolymarketClient:
 
         while page < max_pages:
             try:
-                events = await self.get_events(limit=limit, offset=offset, active=True)
+                events = await self.get_events(limit=limit, offset=offset, closed=False)
 
                 if not events:
                     break

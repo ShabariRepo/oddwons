@@ -1,14 +1,17 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_, case, literal
 from sqlalchemy.orm import selectinload
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
 import redis.asyncio as redis
 
 from app.core.database import get_db, get_redis
 from app.models.market import Market, MarketSnapshot, Platform
+from app.models.ai_insight import AIInsight
 from app.schemas.market import (
     MarketResponse,
+    MarketEnrichedResponse,
     MarketListResponse,
     MarketWithHistory,
     SnapshotResponse,
@@ -17,16 +20,156 @@ from app.schemas.market import (
 router = APIRouter(prefix="/markets", tags=["markets"])
 
 
+async def compute_enriched_fields(
+    markets: List[Market],
+    db: AsyncSession
+) -> List[MarketEnrichedResponse]:
+    """
+    Compute derived fields for all markets:
+    - implied_probability: yes_price as percentage
+    - price_change_24h: current - 24h ago
+    - price_change_7d: current - 7d ago
+    - volume_rank: percentile within category
+    - spread: best_ask - best_bid
+    - has_ai_highlight: whether AI insight exists
+    """
+    if not markets:
+        return []
+
+    market_ids = [m.id for m in markets]
+    now = datetime.utcnow()
+    day_ago = now - timedelta(hours=24)
+    week_ago = now - timedelta(days=7)
+
+    # Get latest snapshots for spread (best_bid, best_ask)
+    latest_snapshots = {}
+    snapshot_result = await db.execute(
+        select(MarketSnapshot)
+        .where(MarketSnapshot.market_id.in_(market_ids))
+        .order_by(MarketSnapshot.market_id, MarketSnapshot.timestamp.desc())
+        .distinct(MarketSnapshot.market_id)
+    )
+    for snap in snapshot_result.scalars().all():
+        latest_snapshots[snap.market_id] = snap
+
+    # Get 24h ago snapshots for price_change_24h
+    snapshots_24h = {}
+    result_24h = await db.execute(
+        select(MarketSnapshot)
+        .where(MarketSnapshot.market_id.in_(market_ids))
+        .where(MarketSnapshot.timestamp <= day_ago)
+        .order_by(MarketSnapshot.market_id, MarketSnapshot.timestamp.desc())
+        .distinct(MarketSnapshot.market_id)
+    )
+    for snap in result_24h.scalars().all():
+        snapshots_24h[snap.market_id] = snap
+
+    # Get 7d ago snapshots for price_change_7d
+    snapshots_7d = {}
+    result_7d = await db.execute(
+        select(MarketSnapshot)
+        .where(MarketSnapshot.market_id.in_(market_ids))
+        .where(MarketSnapshot.timestamp <= week_ago)
+        .order_by(MarketSnapshot.market_id, MarketSnapshot.timestamp.desc())
+        .distinct(MarketSnapshot.market_id)
+    )
+    for snap in result_7d.scalars().all():
+        snapshots_7d[snap.market_id] = snap
+
+    # Get AI insights for has_ai_highlight flag
+    ai_market_ids = set()
+    ai_result = await db.execute(
+        select(AIInsight.market_id)
+        .where(AIInsight.market_id.in_(market_ids))
+        .where(AIInsight.status == "active")
+    )
+    for row in ai_result.all():
+        ai_market_ids.add(row[0])
+
+    # Compute volume ranks within categories
+    # Group markets by category and compute percentile
+    volume_ranks = {}
+    categories = set(m.category for m in markets if m.category)
+
+    for category in categories:
+        if not category:
+            continue
+        # Get all volumes in this category for percentile calculation
+        cat_volumes_result = await db.execute(
+            select(Market.id, Market.volume)
+            .where(Market.category == category)
+            .where(Market.status == "active")
+            .order_by(Market.volume.desc().nullslast())
+        )
+        cat_markets = cat_volumes_result.all()
+        total_in_cat = len(cat_markets)
+
+        for rank, (mid, vol) in enumerate(cat_markets):
+            if mid in market_ids:
+                # Percentile: 100 = highest volume, 0 = lowest
+                percentile = int(100 * (1 - rank / max(total_in_cat, 1)))
+                volume_ranks[mid] = percentile
+
+    # Build enriched responses
+    enriched = []
+    for market in markets:
+        # Base fields from model
+        response = MarketEnrichedResponse.model_validate(market)
+
+        # Computed: implied_probability
+        if market.yes_price is not None:
+            response.implied_probability = round(market.yes_price * 100, 1)
+
+        # Computed: spread from latest snapshot
+        if market.id in latest_snapshots:
+            snap = latest_snapshots[market.id]
+            if snap.best_ask is not None and snap.best_bid is not None:
+                response.spread = round(snap.best_ask - snap.best_bid, 4)
+
+        # Computed: price_change_24h
+        if market.id in snapshots_24h and market.yes_price is not None:
+            old_price = snapshots_24h[market.id].yes_price
+            if old_price is not None:
+                response.price_change_24h = round((market.yes_price - old_price) * 100, 1)
+
+        # Computed: price_change_7d
+        if market.id in snapshots_7d and market.yes_price is not None:
+            old_price = snapshots_7d[market.id].yes_price
+            if old_price is not None:
+                response.price_change_7d = round((market.yes_price - old_price) * 100, 1)
+
+        # Computed: volume_rank
+        response.volume_rank = volume_ranks.get(market.id)
+
+        # Flag: has_ai_highlight
+        response.has_ai_highlight = market.id in ai_market_ids
+
+        enriched.append(response)
+
+    return enriched
+
+
 @router.get("", response_model=MarketListResponse)
 async def list_markets(
     platform: Optional[str] = Query(None, description="Filter by platform (kalshi, polymarket)"),
     category: Optional[str] = Query(None, description="Filter by category"),
     status: str = Query("active", description="Filter by status"),
+    sort_by: str = Query("volume", description="Sort by: volume, price_change_24h, implied_probability"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all markets with optional filters."""
+    """
+    List all markets with computed context fields.
+
+    Every market returns:
+    - implied_probability: yes_price as percentage (0-100)
+    - price_change_24h: change in probability over 24h
+    - price_change_7d: change in probability over 7d
+    - volume_rank: percentile rank (0-100) within category
+    - spread: bid-ask spread if available
+    - has_ai_highlight: whether curated AI insight exists
+    """
     query = select(Market)
 
     if platform:
@@ -40,15 +183,18 @@ async def list_markets(
     count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query)
 
-    # Paginate
+    # Sort (default by volume)
     query = query.order_by(Market.volume.desc().nullslast())
     query = query.offset((page - 1) * page_size).limit(page_size)
 
     result = await db.execute(query)
-    markets = result.scalars().all()
+    markets = list(result.scalars().all())
+
+    # Compute enriched fields for all markets in this page
+    enriched_markets = await compute_enriched_fields(markets, db)
 
     return MarketListResponse(
-        markets=[MarketResponse.model_validate(m) for m in markets],
+        markets=enriched_markets,
         total=total or 0,
         page=page,
         page_size=page_size,
@@ -61,7 +207,7 @@ async def get_market(
     history_limit: int = Query(100, ge=1, le=1000, description="Number of historical snapshots"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get market details with price history."""
+    """Get market details with price history and computed fields."""
     result = await db.execute(
         select(Market).where(Market.id == market_id)
     )
@@ -79,7 +225,9 @@ async def get_market(
     )
     snapshots = snapshot_result.scalars().all()
 
-    response = MarketWithHistory.model_validate(market)
+    # Compute enriched fields for this single market
+    enriched = await compute_enriched_fields([market], db)
+    response = MarketWithHistory.model_validate(enriched[0])
     response.snapshots = [SnapshotResponse.model_validate(s) for s in snapshots]
 
     return response
