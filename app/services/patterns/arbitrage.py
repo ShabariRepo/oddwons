@@ -24,17 +24,31 @@ class ArbitrageDetector(PatternDetector):
         """Detect arbitrage opportunities across multiple markets."""
         patterns = []
 
-        # Group markets by platform
-        kalshi_markets = [m for m in markets if m.platform == "kalshi"]
-        poly_markets = [m for m in markets if m.platform == "polymarket"]
+        # Group markets by platform - LIMIT to top 500 by volume to avoid O(n²) explosion
+        # Full cross-platform matching is done by MarketMatcher service separately
+        MAX_MARKETS_FOR_ARB = 500
+
+        kalshi_markets = sorted(
+            [m for m in markets if m.platform == "kalshi"],
+            key=lambda x: x.volume or 0,
+            reverse=True
+        )[:MAX_MARKETS_FOR_ARB]
+
+        poly_markets = sorted(
+            [m for m in markets if m.platform == "polymarket"],
+            key=lambda x: x.volume or 0,
+            reverse=True
+        )[:MAX_MARKETS_FOR_ARB]
+
+        logger.info(f"Arbitrage detection on {len(kalshi_markets)} Kalshi + {len(poly_markets)} Polymarket markets")
 
         # Cross-platform arbitrage
         cross_platform = self._detect_cross_platform_arbitrage(kalshi_markets, poly_markets)
         patterns.extend(cross_platform)
 
-        # Related market arbitrage within each platform
-        kalshi_related = self._detect_related_market_arbitrage(kalshi_markets)
-        poly_related = self._detect_related_market_arbitrage(poly_markets)
+        # Related market arbitrage within each platform (limit to top 200 each)
+        kalshi_related = self._detect_related_market_arbitrage(kalshi_markets[:200])
+        poly_related = self._detect_related_market_arbitrage(poly_markets[:200])
         patterns.extend(kalshi_related)
         patterns.extend(poly_related)
 
