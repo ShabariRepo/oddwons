@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock, User, Loader2, Check } from 'lucide-react'
@@ -17,12 +17,37 @@ const features = [
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { refreshUser } = useAuth()
+  const { refreshUser, isAuthenticated, loading: authLoading } = useAuth()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.push('/dashboard')
+    }
+  }, [authLoading, isAuthenticated, router])
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+      </div>
+    )
+  }
+
+  // Don't render form if already authenticated (will redirect)
+  if (isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

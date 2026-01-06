@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { TrendingUp, Bell, BarChart3, Shield, Clock, Check, Zap } from 'lucide-react'
+import { TrendingUp, Bell, BarChart3, Shield, Clock, Check, Zap, User, LogOut } from 'lucide-react'
+import { useAuth } from '@/components/AuthProvider'
 
 // SVG pattern for hero background - dollar bills with wings, logo, :D face
 const heroPatternSvg = `
@@ -130,6 +131,8 @@ const tiers = [
 ]
 
 export default function LandingPage() {
+  const { user, isAuthenticated, logout } = useAuth()
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -147,15 +150,32 @@ export default function LandingPage() {
               <span className="text-xl font-bold text-gray-900">OddWons</span>
             </Link>
             <div className="flex items-center gap-4">
-              <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-                Sign in
-              </Link>
-              <Link
-                href="/register"
-                className="text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 px-4 py-2 rounded-lg transition-colors"
-              >
-                Get Started
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <Link href="/dashboard" className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900">
+                    <User className="w-4 h-4" />
+                    {user?.name || user?.email?.split('@')[0] || 'Dashboard'}
+                  </Link>
+                  <button
+                    onClick={logout}
+                    className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-700"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900">
+                    Sign in
+                  </Link>
+                  <Link
+                    href="/register"
+                    className="text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
