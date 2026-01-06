@@ -180,6 +180,7 @@ frontend/                     # Next.js frontend
 - `GET /api/v1/billing/subscription` - Get current subscription
 - `POST /api/v1/billing/checkout` - Create Stripe checkout session
 - `POST /api/v1/billing/portal` - Create Stripe billing portal session
+- `POST /api/v1/billing/sync` - Sync subscription status from Stripe (manual refresh)
 - `POST /api/v1/billing/webhook` - Stripe webhook handler
 - `GET /api/v1/billing/prices` - Get available subscription prices
 
