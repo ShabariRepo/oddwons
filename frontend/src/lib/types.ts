@@ -183,3 +183,93 @@ export interface InsightStats {
   highlights_by_category: Record<string, number>
   last_updated: string
 }
+
+// Detail page types
+export interface SourceArticle {
+  title: string
+  source?: string
+  date?: string
+  relevance?: string
+  url?: string
+}
+
+export interface InsightDetailResponse {
+  insight: AIInsight
+  source_articles: SourceArticle[]
+  market: {
+    id: string
+    title: string
+    platform: string
+    yes_price?: number
+    no_price?: number
+    volume?: number
+    status: string
+    close_time?: string
+    url: string
+  } | null
+  price_history: Array<{
+    timestamp: string
+    yes_price: number
+    no_price?: number
+    volume?: number
+  }>
+  cross_platform: {
+    match_id: string
+    topic: string
+    kalshi_market_id?: string
+    polymarket_market_id?: string
+    kalshi_price?: number
+    polymarket_price?: number
+    gap_cents?: number
+    combined_volume?: number
+  } | null
+  tier: string
+}
+
+export interface MarketDetailResponse {
+  market: {
+    id: string
+    title: string
+    platform: string
+    yes_price?: number
+    no_price?: number
+    volume?: number
+    volume_24h?: number
+    status: string
+    category?: string
+    close_time?: string
+    url: string
+    implied_probability?: number
+    price_change_24h?: number
+    price_change_7d?: number
+    volume_rank?: number
+    has_ai_highlight?: boolean
+    created_at?: string
+    updated_at?: string
+  }
+  price_history: Array<{
+    timestamp: string
+    yes_price: number
+    no_price?: number
+    volume?: number
+    volume_24h?: number
+  }>
+  ai_insight: {
+    id: number
+    summary?: string
+    analyst_note?: string
+    upcoming_catalyst?: string
+    movement_context?: string
+    source_articles?: SourceArticle[]
+    created_at?: string
+  } | null
+  cross_platform: {
+    match_id: string
+    topic: string
+    kalshi_market_id?: string
+    polymarket_market_id?: string
+    kalshi_price?: number
+    polymarket_price?: number
+    price_gap?: number
+  } | null
+}

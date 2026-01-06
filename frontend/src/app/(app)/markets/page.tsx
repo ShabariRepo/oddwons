@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Filter, ExternalLink } from 'lucide-react'
+import { Search, Filter, ExternalLink, Brain } from 'lucide-react'
 import { useMarkets } from '@/hooks/useAPI'
 import { clsx } from 'clsx'
 import { Market } from '@/lib/types'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 const platforms = [
   { id: '', name: 'All Platforms' },
@@ -13,6 +15,7 @@ const platforms = [
 ]
 
 function MarketRow({ market }: { market: Market }) {
+  const router = useRouter()
   const yesPrice = market.yes_price ? (market.yes_price * 100).toFixed(1) : '-'
   const noPrice = market.no_price ? (market.no_price * 100).toFixed(1) : '-'
 
@@ -23,8 +26,20 @@ function MarketRow({ market }: { market: Market }) {
     return `$${vol.toFixed(0)}`
   }
 
+  const handleRowClick = () => {
+    router.push(`/markets/${market.id}`)
+  }
+
+  const handleExternalClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const url = market.platform === 'kalshi'
+      ? `https://kalshi.com/markets/${market.id}`
+      : `https://polymarket.com/event/${market.id}`
+    window.open(url, '_blank')
+  }
+
   return (
-    <tr className="hover:bg-gray-50">
+    <tr className="hover:bg-gray-50 cursor-pointer" onClick={handleRowClick}>
       <td className="px-4 py-4">
         <div className="flex items-start gap-3">
           <span className={clsx(
@@ -65,7 +80,11 @@ function MarketRow({ market }: { market: Market }) {
         </span>
       </td>
       <td className="px-4 py-4 text-right">
-        <button className="text-gray-400 hover:text-gray-600">
+        <button
+          className="text-gray-400 hover:text-gray-600"
+          onClick={handleExternalClick}
+          title="Open on platform"
+        >
           <ExternalLink className="w-4 h-4" />
         </button>
       </td>

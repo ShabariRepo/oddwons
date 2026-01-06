@@ -471,3 +471,54 @@ Fixed arbitrage detector that was hanging for 25+ minutes due to 16M+ string com
 - Limited arbitrage detection to top 500 markets by volume per platform
 - Full cross-platform matching handled by MarketMatcher service (uses faster rapidfuzz)
 - Analysis now runs in ~90 seconds
+
+### Clickable Detail Pages & Source Articles (Jan 2026)
+**MAJOR UI/UX IMPROVEMENT:** All cards are now clickable with rich detail pages!
+
+**New Frontend Pages:**
+- `frontend/src/app/(app)/insights/[id]/page.tsx` - AI insight detail page
+- `frontend/src/app/(app)/markets/[id]/page.tsx` - Market detail page with AI insight + cross-platform
+
+**New/Enhanced API Endpoints:**
+- `GET /api/v1/insights/ai/{id}` - Full insight detail with source articles
+- `GET /api/v1/markets/{market_id}` - Enhanced to include AI insight + cross-platform match
+
+**Source Articles Feature (THE HOMEWORK):**
+- `source_articles` and `news_context` columns added to `ai_insights` table
+- Gemini web search results stored with each insight
+- Displays sources on insight detail page (Premium+ tiers)
+- Shows title, source name, date, and relevance
+
+**Insight Detail Page Shows:**
+- Full AI summary with bro vibes
+- Current odds (Yes/No percentages)
+- Price history chart
+- Movement context (why it moved)
+- Upcoming catalyst (key dates)
+- Source articles (our homework - Gemini search results)
+- Cross-platform pricing comparison
+- Direct links to trade on Kalshi/Polymarket
+
+**Market Detail Page Shows:**
+- Market title, platform, status
+- Current prices + 24h/7d changes
+- Volume stats + category rank
+- Price history chart
+- AI insight (if exists) with sources
+- Cross-platform comparison
+- External link to platform
+
+**Clickable Navigation:**
+- Dashboard insight cards → `/insights/{id}`
+- Opportunities page cards → `/insights/{id}`
+- Markets table rows → `/markets/{market_id}`
+- Cross-platform cards → `/cross-platform`
+
+**New Types Added:**
+- `InsightDetailResponse` - Full insight with sources, market, price history
+- `MarketDetailResponse` - Full market with AI insight, cross-platform
+- `SourceArticle` - title, source, date, relevance
+
+**New Hooks Added:**
+- `useInsightDetail(id)` - Fetch single insight with all context
+- `useMarketDetail(id)` - Fetch single market with AI + cross-platform

@@ -52,6 +52,10 @@ class AIInsight(Base):
     # Ranking (for display order, NOT betting confidence)
     interest_score = Column(Integer)  # 0-100, how interesting/notable this market is
 
+    # Source Articles (THE HOMEWORK - from Gemini web search)
+    source_articles = Column(JSON)  # [{"title": "", "url": "", "source": "", "date": ""}]
+    news_context = Column(JSON)     # Full Gemini response for transparency
+
     # Metadata
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     expires_at = Column(DateTime)

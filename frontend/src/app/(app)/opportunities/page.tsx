@@ -5,6 +5,7 @@ import { Sparkles, Filter, RefreshCw, TrendingUp, TrendingDown } from 'lucide-re
 import { useAIInsights } from '@/hooks/useAPI'
 import { AIInsight } from '@/lib/types'
 import { clsx } from 'clsx'
+import Link from 'next/link'
 
 const categories = [
   { id: '', name: 'All Categories' },
@@ -28,7 +29,8 @@ function InsightCard({ insight }: { insight: AIInsight }) {
     : 'text-gray-500'
 
   return (
-    <div className="card hover:shadow-md transition-shadow">
+    <Link href={`/insights/${insight.id}`}>
+    <div className="card hover:shadow-md transition-shadow cursor-pointer">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -117,6 +119,7 @@ function InsightCard({ insight }: { insight: AIInsight }) {
         </div>
       )}
     </div>
+    </Link>
   )
 }
 

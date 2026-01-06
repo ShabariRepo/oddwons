@@ -204,13 +204,23 @@ async def list_markets(
     )
 
 
-@router.get("/{market_id}", response_model=MarketWithHistory)
+@router.get("/{market_id}")
 async def get_market(
     market_id: str,
     history_limit: int = Query(100, ge=1, le=1000, description="Number of historical snapshots"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get market details with price history and computed fields."""
+    """
+    Get full market details with price history, AI insight (if exists), and cross-platform match.
+
+    Returns:
+    - market: Full market data with computed fields
+    - price_history: Historical price/volume data
+    - ai_insight: AI-generated analysis if available
+    - cross_platform: Cross-platform match if available
+    """
+    from app.models.cross_platform_match import CrossPlatformMatch
+
     result = await db.execute(
         select(Market).where(Market.id == market_id)
     )
@@ -230,10 +240,100 @@ async def get_market(
 
     # Compute enriched fields for this single market
     enriched = await compute_enriched_fields([market], db)
-    response = MarketWithHistory.model_validate(enriched[0])
-    response.snapshots = [SnapshotResponse.model_validate(s) for s in snapshots]
 
-    return response
+    # Build price history
+    price_history = [
+        {
+            "timestamp": s.timestamp.isoformat() if s.timestamp else None,
+            "yes_price": s.yes_price,
+            "no_price": s.no_price,
+            "volume": s.volume,
+            "volume_24h": s.volume_24h,
+        }
+        for s in reversed(snapshots)
+    ]
+
+    # Check for AI insight
+    ai_insight_result = await db.execute(
+        select(AIInsight)
+        .where(AIInsight.market_id == market_id)
+        .where(AIInsight.status == "active")
+        .order_by(AIInsight.created_at.desc())
+        .limit(1)
+    )
+    ai_insight = ai_insight_result.scalar_one_or_none()
+
+    ai_insight_data = None
+    if ai_insight:
+        ai_insight_data = {
+            "id": ai_insight.id,
+            "summary": ai_insight.summary,
+            "analyst_note": ai_insight.analyst_note,
+            "upcoming_catalyst": ai_insight.upcoming_catalyst,
+            "movement_context": ai_insight.movement_context,
+            "source_articles": ai_insight.source_articles,
+            "created_at": ai_insight.created_at.isoformat() if ai_insight.created_at else None,
+        }
+
+    # Check for cross-platform match
+    cross_platform = None
+    match_result = await db.execute(
+        select(CrossPlatformMatch)
+        .where(
+            (CrossPlatformMatch.kalshi_market_id == market_id) |
+            (CrossPlatformMatch.polymarket_market_id == market_id)
+        )
+        .limit(1)
+    )
+    cross_match = match_result.scalar_one_or_none()
+    if cross_match:
+        cross_platform = {
+            "match_id": cross_match.match_id,
+            "topic": cross_match.topic,
+            "kalshi_market_id": cross_match.kalshi_market_id,
+            "polymarket_market_id": cross_match.polymarket_market_id,
+            "kalshi_price": cross_match.kalshi_yes_price,
+            "polymarket_price": cross_match.polymarket_yes_price,
+            "price_gap": abs(
+                (cross_match.kalshi_yes_price or 0) - (cross_match.polymarket_yes_price or 0)
+            ) if cross_match.kalshi_yes_price and cross_match.polymarket_yes_price else None,
+        }
+
+    # Build market URL
+    platform_value = market.platform.value if hasattr(market.platform, 'value') else market.platform
+    market_url = (
+        f"https://kalshi.com/markets/{market.id}"
+        if platform_value == "kalshi"
+        else f"https://polymarket.com/event/{market.id}"
+    )
+
+    # Build response
+    enriched_market = enriched[0]
+    return {
+        "market": {
+            "id": enriched_market.id,
+            "title": enriched_market.title,
+            "platform": enriched_market.platform.value if hasattr(enriched_market.platform, 'value') else enriched_market.platform,
+            "yes_price": enriched_market.yes_price,
+            "no_price": enriched_market.no_price,
+            "volume": enriched_market.volume,
+            "volume_24h": enriched_market.volume_24h,
+            "status": enriched_market.status,
+            "category": enriched_market.category,
+            "close_time": enriched_market.close_time.isoformat() if enriched_market.close_time else None,
+            "url": market_url,
+            "implied_probability": enriched_market.implied_probability,
+            "price_change_24h": enriched_market.price_change_24h,
+            "price_change_7d": enriched_market.price_change_7d,
+            "volume_rank": enriched_market.volume_rank,
+            "has_ai_highlight": enriched_market.has_ai_highlight,
+            "created_at": enriched_market.created_at.isoformat() if enriched_market.created_at else None,
+            "updated_at": enriched_market.updated_at.isoformat() if enriched_market.updated_at else None,
+        },
+        "price_history": price_history,
+        "ai_insight": ai_insight_data,
+        "cross_platform": cross_platform,
+    }
 
 
 @router.get("/{market_id}/snapshots", response_model=List[SnapshotResponse])

@@ -122,6 +122,153 @@ async def get_ai_insights(
     return response
 
 
+@router.get("/ai/{insight_id}")
+async def get_insight_detail(
+    insight_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get full detail for a single AI insight.
+
+    Includes:
+    - Full market info
+    - AI analysis with bro vibes
+    - Source articles (THE HOMEWORK - from Gemini web search)
+    - Price history
+    - Cross-platform comparison if available
+    """
+    from app.models.market import Market, MarketSnapshot
+    from app.models.cross_platform_match import CrossPlatformMatch
+
+    tier = user.subscription_tier
+
+    # Get the insight
+    result = await db.execute(
+        select(AIInsight).where(AIInsight.id == insight_id)
+    )
+    insight = result.scalar_one_or_none()
+
+    if not insight:
+        raise HTTPException(status_code=404, detail="Insight not found")
+
+    # Get market details
+    market_result = await db.execute(
+        select(Market).where(Market.id == insight.market_id)
+    )
+    market = market_result.scalar_one_or_none()
+
+    # Get price history
+    history_result = await db.execute(
+        select(MarketSnapshot)
+        .where(MarketSnapshot.market_id == insight.market_id)
+        .order_by(MarketSnapshot.timestamp.desc())
+        .limit(50)
+    )
+    snapshots = history_result.scalars().all()
+
+    # Check for cross-platform match
+    cross_platform = None
+    if market:
+        match_result = await db.execute(
+            select(CrossPlatformMatch)
+            .where(
+                (CrossPlatformMatch.kalshi_market_id == market.id) |
+                (CrossPlatformMatch.polymarket_market_id == market.id)
+            )
+            .limit(1)
+        )
+        cross_match = match_result.scalar_one_or_none()
+        if cross_match:
+            cross_platform = {
+                "match_id": cross_match.match_id,
+                "topic": cross_match.topic,
+                "kalshi_market_id": cross_match.kalshi_market_id,
+                "polymarket_market_id": cross_match.polymarket_market_id,
+                "kalshi_price": cross_match.kalshi_yes_price,
+                "polymarket_price": cross_match.polymarket_yes_price,
+                "gap_cents": cross_match.price_gap_cents,
+                "combined_volume": cross_match.combined_volume,
+            }
+
+    # Build insight response (tier-gated content)
+    insight_data = {
+        "id": insight.id,
+        "market_id": insight.market_id,
+        "market_title": insight.market_title,
+        "platform": insight.platform,
+        "category": insight.category,
+        "summary": insight.summary,
+        "current_odds": insight.current_odds,
+        "implied_probability": insight.implied_probability,
+        "created_at": insight.created_at.isoformat() if insight.created_at else None,
+    }
+
+    # Basic+ get volume and movement
+    if tier and tier != SubscriptionTier.FREE:
+        insight_data["volume_note"] = insight.volume_note
+        insight_data["recent_movement"] = insight.recent_movement
+
+    # Premium+ get full context
+    if tier in [SubscriptionTier.PREMIUM, SubscriptionTier.PRO]:
+        insight_data["movement_context"] = insight.movement_context
+        insight_data["upcoming_catalyst"] = insight.upcoming_catalyst
+
+    # Pro gets analyst notes
+    if tier == SubscriptionTier.PRO:
+        insight_data["analyst_note"] = insight.analyst_note
+
+    # Build market response
+    market_data = None
+    if market:
+        platform_value = market.platform.value if hasattr(market.platform, 'value') else market.platform
+        market_data = {
+            "id": market.id,
+            "title": market.title,
+            "platform": platform_value,
+            "yes_price": market.yes_price,
+            "no_price": market.no_price,
+            "volume": market.volume,
+            "status": market.status,
+            "close_time": market.close_time.isoformat() if market.close_time else None,
+            "url": _get_market_url(market),
+        }
+
+    # Price history (all tiers get this)
+    price_history = [
+        {
+            "timestamp": s.timestamp.isoformat() if s.timestamp else None,
+            "yes_price": s.yes_price,
+            "no_price": s.no_price,
+            "volume": s.volume,
+        }
+        for s in reversed(snapshots)
+    ]
+
+    # Source articles (THE HOMEWORK) - Premium+ only
+    source_articles = []
+    if tier in [SubscriptionTier.PREMIUM, SubscriptionTier.PRO]:
+        source_articles = insight.source_articles or []
+
+    return {
+        "insight": insight_data,
+        "source_articles": source_articles,
+        "market": market_data,
+        "price_history": price_history,
+        "cross_platform": cross_platform,
+        "tier": tier.value if tier else "free",
+    }
+
+
+def _get_market_url(market) -> str:
+    """Get direct link to market on platform."""
+    platform_value = market.platform.value if hasattr(market.platform, 'value') else market.platform
+    if platform_value == "kalshi":
+        return f"https://kalshi.com/markets/{market.id}"
+    else:
+        return f"https://polymarket.com/event/{market.id}"
+
+
 @router.get("/arbitrage")
 async def get_arbitrage_opportunities(
     limit: int = Query(10, ge=1, le=20),

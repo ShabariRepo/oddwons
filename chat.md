@@ -1,378 +1,1393 @@
-# FEATURE: Gemini Web Search → Groq Analysis Pipeline
+# Claude Code Instructions - Gemini + Groq Pipeline
 
-## Overview
+## SUMMARY FOR CLAUDE CODE
 
-Use **Gemini 2.5 Flash-Lite** (cheap, 1,500 free searches/day) to gather real news context for each market category, then pass enriched data to **Groq** for analysis.
+Implement a two-stage AI analysis pipeline:
+1. **Gemini** (free web search) → fetches real news for each category
+2. **Groq** (cheap inference) → analyzes markets WITH real news context + bro personality
+
+The AI should provide ACTUAL INSIGHTS (historical context, contrarian angles, value perspectives) not just restate numbers.
+
+---
+
+## PREREQUISITE FIX: Filter Resolved Markets
+
+Before implementing the pipeline, ensure `load_market_data()` in `app/services/patterns/engine.py` has price filters:
+
+```python
+result = await session.execute(
+    select(Market)
+    .where(Market.status == "active")
+    .where(Market.volume >= min_volume)
+    .where(Market.yes_price > 0.02)   # Filter out resolved (0%)
+    .where(Market.yes_price < 0.98)   # Filter out resolved (100%)
+    .order_by(Market.volume.desc().nullslast())
+    .limit(limit)
+)
+```
+
+This prevents generating insights for already-decided markets.
+
+---
+
+## ARCHITECTURE
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  CURRENT FLOW (blind analysis)                                  │
-│  Market data → Groq → "probably moved due to news" (guessing)   │
-└─────────────────────────────────────────────────────────────────┘
-
+│  Market Data (by category)                                      │
+│  - politics: 500 markets                                        │
+│  - sports: 800 markets                                          │
+│  - crypto: 200 markets                                          │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  NEW FLOW (informed analysis)                                   │
-│  Market data → Gemini web search → real headlines               │
-│       ↓                                                         │
-│  Market data + real news → Groq → informed analysis             │
+│  GEMINI 2.0 Flash-Lite (FREE - 1,500 searches/day)              │
+│  - Search recent news for each category                         │
+│  - Returns: headlines, key events, category summary             │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  GROQ (cheap/fast inference)                                    │
+│  - Receives: market data + real news context                    │
+│  - Analyzes with bro personality + actual insights              │
+│  - Returns: highlights with historical context, angles, catalysts│
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  AI Insights (saved to database)                                │
+│  - Real news-informed analysis                                  │
+│  - Bro tone: "yo", "spicy", "no cap", etc.                     │
+│  - Actual value: contrarian angles, hedge ideas, catalysts      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Why This Architecture
+---
 
-| Component | Role | Cost |
-|-----------|------|------|
-| Gemini Flash-Lite | Web search (grounding) | FREE first 1,500/day |
-| Groq | Fast inference | ~$0.05/1M tokens |
+## API KEYS
 
-64 insights × 9 categories = ~9 search queries = FREE
-
-## API Keys
-
-Keys are stored in `keys.txt` (gitignored):
+**File: `keys.txt`** (already created, gitignored)
 ```
-GEMINI_API_KEY=AIzaSy...  (already added)
-GROQ_API_KEY=gsk_...      (in .env)
+GEMINI_API_KEY=AIzaSyBzzBW46f9sMRDc66rihVTVYzJY-O75tcc
 ```
 
-## Implementation Plan
+**Also add to `.env`:**
+```
+GEMINI_API_KEY=AIzaSyBzzBW46f9sMRDc66rihVTVYzJY-O75tcc
+```
 
-### Step 1: Create Gemini Search Service
+---
 
-Create `app/services/gemini_search.py`:
+## STEP 1: Install Dependencies
+
+```bash
+pip install google-generativeai
+echo "google-generativeai" >> requirements.txt
+```
+
+---
+
+## STEP 2: Create Gemini Search Service
+
+**Create file: `app/services/gemini_search.py`**
 
 ```python
 """
 Gemini Web Search Service.
-Uses Gemini 2.5 Flash-Lite with Google Search grounding to fetch real news context.
+Uses Gemini 2.0 Flash-Lite with Google Search grounding to fetch real news context.
+FREE: 1,500 grounded searches per day.
 """
 import os
-import google.generativeai as genai
-from typing import Optional, Dict, List
+import json
 import logging
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Load API key
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# Will be imported after install
+genai = None
 
-def configure_gemini():
-    """Configure Gemini with API key."""
-    if not GEMINI_API_KEY:
-        # Try loading from keys.txt
+def _get_genai():
+    """Lazy import of google.generativeai."""
+    global genai
+    if genai is None:
         try:
-            with open("keys.txt", "r") as f:
-                for line in f:
-                    if line.startswith("GEMINI_API_KEY="):
-                        key = line.strip().split("=", 1)[1]
-                        genai.configure(api_key=key)
-                        return True
-        except FileNotFoundError:
-            pass
-        logger.warning("GEMINI_API_KEY not found")
+            import google.generativeai as _genai
+            genai = _genai
+        except ImportError:
+            logger.error("google-generativeai not installed. Run: pip install google-generativeai")
+            return None
+    return genai
+
+
+def _configure_gemini() -> bool:
+    """Configure Gemini with API key from environment or keys.txt."""
+    _genai = _get_genai()
+    if _genai is None:
         return False
     
-    genai.configure(api_key=GEMINI_API_KEY)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    
+    if not api_key:
+        # Try loading from keys.txt
+        try:
+            keys_path = os.path.join(os.path.dirname(__file__), '..', '..', 'keys.txt')
+            with open(keys_path, "r") as f:
+                for line in f:
+                    if line.startswith("GEMINI_API_KEY="):
+                        api_key = line.strip().split("=", 1)[1]
+                        break
+        except FileNotFoundError:
+            pass
+    
+    if not api_key:
+        logger.warning("GEMINI_API_KEY not found in environment or keys.txt")
+        return False
+    
+    _genai.configure(api_key=api_key)
     return True
 
 
-async def search_category_news(category: str, market_titles: List[str]) -> Dict[str, any]:
+async def search_category_news(category: str, market_titles: List[str]) -> Dict:
     """
-    Search for recent news related to a market category.
+    Search for recent news related to a market category using Gemini with Google Search.
     
     Args:
-        category: Category name (politics, sports, crypto, etc.)
+        category: Category name (politics, sports, crypto, finance, tech, etc.)
         market_titles: List of market titles for context
         
     Returns:
-        Dict with headlines, key events, and context
+        Dict with headlines, key_events, category_summary
     """
-    if not configure_gemini():
-        return {"error": "Gemini not configured", "headlines": []}
+    if not _configure_gemini():
+        return {
+            "error": "Gemini not configured",
+            "headlines": [],
+            "key_events": [],
+            "category_summary": ""
+        }
     
-    # Build search query based on category and top market titles
-    top_markets = market_titles[:5]  # Use top 5 for context
+    _genai = _get_genai()
+    
+    # Use top 5 market titles for focused search
+    top_markets = market_titles[:5]
     markets_context = "\n".join(f"- {t}" for t in top_markets)
     
-    prompt = f"""Find the most recent news (last 7 days) relevant to these {category} prediction markets:
+    prompt = f"""Search for the most recent news (last 7 days) relevant to these {category} prediction markets:
 
 {markets_context}
 
-Return a JSON object with:
+Return ONLY a JSON object (no markdown, no explanation):
 {{
     "headlines": [
-        {{"title": "...", "source": "...", "date": "...", "relevance": "which market this relates to"}}
+        {{"title": "headline text", "source": "news source", "date": "date", "relevance": "which market this relates to"}}
     ],
     "key_events": [
-        {{"event": "...", "date": "...", "impact": "how this affects the markets"}}
+        {{"event": "what happened", "date": "when", "impact": "how this affects the markets"}}
     ],
-    "category_summary": "2-3 sentence overview of current {category} landscape"
+    "category_summary": "2-3 sentence overview of the current {category} landscape"
 }}
 
-Be concise. Focus on facts that would move prediction market prices.
+Focus on facts that would move prediction market prices. Be concise.
 """
     
     try:
-        model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash-lite",
-            tools="google_search"  # Enable grounding with Google Search
+        model = _genai.GenerativeModel('gemini-2.0-flash-lite')
+        
+        response = model.generate_content(
+            prompt,
+            tools='google_search_retrieval'
         )
         
-        response = model.generate_content(prompt)
+        # Parse response - handle various formats
+        text = response.text.strip()
         
-        # Parse response
-        import json
-        text = response.text
-        # Try to extract JSON from response
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0]
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0]
-            
-        return json.loads(text)
+        # Remove markdown code blocks if present
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
         
+        result = json.loads(text)
+        logger.info(f"Gemini search for {category}: {len(result.get('headlines', []))} headlines found")
+        return result
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse Gemini response for {category}: {e}")
+        return {
+            "error": f"JSON parse error: {e}",
+            "headlines": [],
+            "key_events": [],
+            "category_summary": ""
+        }
     except Exception as e:
         logger.error(f"Gemini search failed for {category}: {e}")
         return {
             "error": str(e),
             "headlines": [],
             "key_events": [],
-            "category_summary": f"Unable to fetch recent {category} news"
+            "category_summary": ""
         }
 
 
-async def search_market_context(market_title: str) -> Dict[str, any]:
+async def search_market_news(market_title: str) -> Dict:
     """
-    Search for specific context about a single market.
-    Use sparingly - prefer batch category searches.
+    Search for news about a specific market. Use sparingly - prefer batch category searches.
     """
-    if not configure_gemini():
-        return {"error": "Gemini not configured"}
+    if not _configure_gemini():
+        return {"error": "Gemini not configured", "headlines": []}
     
-    prompt = f"""Find recent news (last 7 days) about: {market_title}
+    _genai = _get_genai()
+    
+    prompt = f"""Search for recent news (last 7 days) about: {market_title}
 
-Return JSON:
+Return ONLY a JSON object:
 {{
     "headlines": [{{"title": "...", "source": "...", "date": "..."}}],
-    "current_status": "What's the current situation?",
+    "current_status": "brief current situation",
     "upcoming_events": ["event 1", "event 2"]
 }}
-
-Be concise and factual.
 """
     
     try:
-        model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash-lite",
-            tools="google_search"
-        )
+        model = _genai.GenerativeModel('gemini-2.0-flash-lite')
+        response = model.generate_content(prompt, tools='google_search_retrieval')
         
-        response = model.generate_content(prompt)
+        text = response.text.strip()
+        if "```" in text:
+            text = text.split("```")[1] if "```json" not in text else text.split("```json")[1]
+            text = text.split("```")[0]
         
-        import json
-        text = response.text
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0]
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0]
-            
-        return json.loads(text)
+        return json.loads(text.strip())
         
     except Exception as e:
         logger.error(f"Gemini market search failed: {e}")
-        return {"error": str(e)}
+        return {"error": str(e), "headlines": []}
 ```
 
-### Step 2: Integrate into AI Agent
+---
 
-Modify `app/services/ai_agent.py` to use Gemini context:
+## STEP 3: Update AI Agent
 
+**Edit file: `app/services/ai_agent.py`**
+
+Add this import at top:
 ```python
 from app.services.gemini_search import search_category_news
+```
 
+Update `analyze_category_batch` method to accept and use news context:
+
+```python
 async def analyze_category_batch(
     self,
     category: str,
-    markets: List[Dict],
-    patterns: List[Dict]
+    markets: List[Dict[str, Any]],
+    patterns: List[Dict[str, Any]] = None,
+    news_context: Dict[str, Any] = None  # NEW PARAMETER
 ) -> Dict[str, Any]:
     """
     Analyze markets in a category with real news context.
-    
-    1. Fetch news context via Gemini (web search)
-    2. Combine with market data
-    3. Send to Groq for analysis
     """
+    if not self.is_enabled():
+        return {"highlights": [], "error": "AI not enabled"}
     
-    # Step 1: Get real news context from Gemini
-    market_titles = [m.get("title", "") for m in markets]
-    news_context = await search_category_news(category, market_titles)
-    
-    # Step 2: Build enriched prompt for Groq
+    # Build news section from Gemini results
     news_section = ""
-    if news_context.get("headlines"):
-        headlines = news_context["headlines"][:5]
-        news_section = "RECENT NEWS:\n" + "\n".join(
-            f"- {h.get('title', '')} ({h.get('source', '')}, {h.get('date', '')})"
-            for h in headlines
-        )
+    if news_context:
+        if news_context.get("headlines"):
+            headlines = news_context["headlines"][:5]
+            news_section = "RECENT NEWS (from web search):\n" + "\n".join(
+                f"- {h.get('title', '')} ({h.get('source', '')}, {h.get('date', '')})"
+                for h in headlines
+            )
+        
+        if news_context.get("category_summary"):
+            news_section += f"\n\nCURRENT LANDSCAPE: {news_context['category_summary']}"
+        
+        if news_context.get("key_events"):
+            events = news_context["key_events"][:3]
+            news_section += "\n\nKEY RECENT EVENTS:\n" + "\n".join(
+                f"- {e.get('event', '')} ({e.get('date', '')}): {e.get('impact', '')}"
+                for e in events
+            )
     
-    if news_context.get("category_summary"):
-        news_section += f"\n\nCATEGORY CONTEXT: {news_context['category_summary']}"
+    # Build the prompt with bro personality + actual insights requirement
+    prompt = self._build_analysis_prompt(category, markets, news_section)
     
-    if news_context.get("key_events"):
-        events = news_context["key_events"][:3]
-        news_section += "\n\nKEY EVENTS:\n" + "\n".join(
-            f"- {e.get('event', '')} ({e.get('date', '')}): {e.get('impact', '')}"
-            for e in events
-        )
-    
-    # Step 3: Send enriched data to Groq
-    prompt = f"""You are a prediction market analyst for oddwons.ai - but you're also a chill bro who makes finance fun.
+    # Call Groq
+    return await self._call_groq_analysis(prompt, category)
 
-Your vibe: Think smart friend who's really into prediction markets and explains things in a casual, engaging way. Use phrases like "yo", "lowkey", "no cap", "let's go", "wild", "spicy" etc naturally. Keep it fun but still informative.
+
+def _build_analysis_prompt(self, category: str, markets: List[Dict], news_section: str) -> str:
+    """Build the analysis prompt with bro personality and insight requirements."""
+    
+    markets_json = json.dumps(markets[:20], indent=2, default=str)
+    
+    return f"""You are a prediction market analyst for oddwons.ai - but you're also a chill bro who makes finance fun AND drops actual insights.
+
+YOUR PERSONALITY:
+- Smart friend who's really into prediction markets
+- Knows historical context and spots interesting angles
+- Casual and engaging: use "yo", "lowkey", "no cap", "spicy", "wild", "fam" naturally
+- NOT a formal analyst - more like explaining to a friend over beers
+
+CRITICAL - PROVIDE REAL INSIGHT:
+Don't just restate the numbers. For each market provide:
+- Historical context ("Fed's cut 3 times in a row")
+- Trend analysis ("when they start cutting, they usually keep going")  
+- Contrarian angles ("market might be underpricing this because...")
+- Value perspective ("at 36% this could be interesting if you think...")
+- Hedge ideas ("decent hedge play if you're worried about...")
+- What would make this move (specific catalysts with dates)
+
+NOT FINANCIAL ADVICE - just sharing perspectives like a smart friend would.
 
 CATEGORY: {category}
 
-{news_section}
+{news_section if news_section else "No recent news available - analyze based on market data."}
 
 MARKETS TO ANALYZE:
-{json.dumps(markets[:20], indent=2)}
+{markets_json}
 
-For each interesting market, provide analysis that incorporates the recent news above.
-Focus on WHY prices are where they are based on actual events.
+RESPONSE FORMAT - Return valid JSON:
+{{
+    "highlights": [
+        {{
+            "market_id": "the market id",
+            "market_title": "market title",
+            "platform": "kalshi or polymarket",
+            "summary": "1-2 sentence bro-style summary of what this market is",
+            "current_odds": {{"yes": 0.36, "no": 0.64}},
+            "implied_probability": "36% chance of X happening",
+            "volume_note": "High volume" or "Low liquidity" etc,
+            "recent_movement": "+5% in 24h" or "Stable" etc,
+            "movement_context": "WHY it moved - reference actual news",
+            "upcoming_catalyst": "Specific event + date that could move this",
+            "analyst_note": "YOUR ACTUAL INSIGHT - historical context, contrarian angle, value perspective, hedge idea. This is the money shot - make it good. 2-4 sentences, bro tone."
+        }}
+    ],
+    "category_summary": "2-3 sentence bro-style overview of this category right now"
+}}
 
 TONE EXAMPLES:
-- Instead of: "Market shows elevated probability due to recent polling"
-- Say: "Yo this market is heating up - recent polls got it jumping to 62%, no cap"
 
-- Instead of: "Significant price movement following news event"
-- Say: "Bro this thing moved HARD after the news dropped - we're talking +12% in like 2 hours"
+❌ BAD (boring, just restating):
+"Market shows 36% probability of a rate cut. The Fed meeting is approaching."
 
-- Instead of: "Catalyst approaching that may impact pricing"
-- Say: "Big date coming up fam - the Fed meeting on the 15th could make this spicy"
+✅ GOOD (actual insight + bro vibes):
+"Yo this Fed cut market at 36% is lowkey interesting 👀 The Fed's been on a cutting streak - they've dropped rates 3 times in a row now. Market seems to be pricing in a pause, but historically when they start cutting they keep going until something breaks. At 36% this could be decent value as a hedge if you think the trend continues. CPI data next week is the catalyst to watch - hot print = this dumps, cool print = could rip to 50%+. Just saying fam 📊"
 
-Return JSON with highlights...
-"""
-    
-    # Call Groq with enriched context
-    return await self._call_groq(prompt)
+❌ BAD:
+"Trump leads in polls with 62% probability."
+
+✅ GOOD:
+"Trump sitting at 62% but here's what's spicy - his numbers historically dip right before debates then recover after. If you think he'll do well, buying before the Jan 15 debate could be the move. Or if you're bearish, that's your window to fade. Either way, expect volatility around that date 📈"
+
+Now analyze these {category} markets and give me those insights:"""
 ```
 
-### Step 3: Update Pattern Engine
+---
 
-In `app/services/patterns/engine.py`, update `run_ai_analysis()`:
+## STEP 4: Update Pattern Engine
+
+**Edit file: `app/services/patterns/engine.py`**
+
+Update the `run_ai_analysis` method:
 
 ```python
-async def run_ai_analysis(self, patterns, markets, session):
-    """Run AI analysis with Gemini web search enrichment."""
+async def run_ai_analysis(
+    self,
+    patterns: List[PatternResult],
+    markets: List[MarketData],
+    session: AsyncSession
+) -> int:
+    """
+    Run AI analysis on markets, grouped by category.
+    NOW WITH GEMINI WEB SEARCH for real news context.
+    """
+    if not ai_agent.is_enabled():
+        logger.warning("AI agent not enabled - skipping AI analysis")
+        return 0
+
+    saved = 0
+
+    # Group markets by category
+    market_by_category: Dict[str, List[Dict[str, Any]]] = {}
     
-    # Group markets by category (existing code)
-    market_by_category = {}
     for market in markets:
         category = self._infer_category(market.title or "")
         if category not in market_by_category:
             market_by_category[category] = []
-        market_by_category[category].append({...})
-    
+
+        market_by_category[category].append({
+            "market_id": market.market_id,
+            "platform": market.platform,
+            "title": market.title,
+            "yes_price": market.yes_price,
+            "no_price": market.no_price,
+            "volume": market.volume,
+            "price_history": market.price_history[-5:] if market.price_history else [],
+        })
+
     # NEW: Fetch news context for each category via Gemini
     from app.services.gemini_search import search_category_news
     
-    category_news = {}
-    for category in market_by_category.keys():
-        if len(market_by_category[category]) >= 3:
-            titles = [m["title"] for m in market_by_category[category][:10]]
-            logger.info(f"Fetching news context for {category}...")
-            category_news[category] = await search_category_news(category, titles)
-    
-    # Pass news context to AI agent
+    category_news: Dict[str, Dict] = {}
+    for category, cat_markets in market_by_category.items():
+        if len(cat_markets) >= 3:  # Only search for categories with enough markets
+            titles = [m["title"] for m in cat_markets[:10]]
+            logger.info(f"🔍 Fetching news context for {category} via Gemini...")
+            try:
+                category_news[category] = await search_category_news(category, titles)
+                headlines_count = len(category_news[category].get("headlines", []))
+                logger.info(f"✅ Got {headlines_count} headlines for {category}")
+            except Exception as e:
+                logger.error(f"❌ Gemini search failed for {category}: {e}")
+                category_news[category] = {}
+
+    # Analyze each category with news context
     for category, category_markets in market_by_category.items():
-        news = category_news.get(category, {})
-        result = await ai_agent.analyze_category_batch(
-            category=category,
-            markets=category_markets,
-            patterns=pattern_by_category.get(category, []),
-            news_context=news  # NEW: Pass real news
-        )
-        # ... save highlights
-```
+        if len(category_markets) < 3:
+            continue
 
-### Step 4: Install Gemini SDK
+        try:
+            logger.info(f"🤖 Analyzing {category}: {len(category_markets)} markets")
+            
+            # Pass news context to AI agent
+            news = category_news.get(category, {})
+            
+            result = await ai_agent.analyze_category_batch(
+                category=category,
+                markets=category_markets,
+                patterns=[],  # Can add pattern context if needed
+                news_context=news  # NEW: Real news from Gemini
+            )
 
-```bash
-pip install google-generativeai
-# Add to requirements.txt
-echo "google-generativeai" >> requirements.txt
-```
+            # Save highlights
+            if result and result.get("highlights"):
+                for highlight in result["highlights"]:
+                    await self.save_market_highlight(highlight, category, session)
+                    saved += 1
+                    
+            logger.info(f"✅ {category}: {len(result.get('highlights', []))} insights generated")
 
-### Step 5: Add Key to Environment
+        except Exception as e:
+            logger.error(f"❌ Category analysis failed for {category}: {e}")
 
-Either:
-1. Add to `.env`: `GEMINI_API_KEY=AIzaSy...`
-2. Or load from `keys.txt` (already implemented in service)
-
----
-
-## Cost Estimate
-
-| Category searches | Cost |
-|-------------------|------|
-| 9 categories × 1 search each | FREE (under 1,500/day limit) |
-| Groq inference | ~$0.02 per run |
-| **Total per analysis run** | **~$0.02** |
-
----
-
-## Testing
-
-```bash
-# Test Gemini search
-python -c "
-import asyncio
-from app.services.gemini_search import search_category_news
-
-async def test():
-    result = await search_category_news('politics', ['Will Trump win 2024?', 'Fed rate decision'])
-    print(result)
-
-asyncio.run(test())
-"
+    await session.commit()
+    logger.info(f"🎉 AI analysis complete: {saved} insights saved")
+    return saved
 ```
 
 ---
 
-## Files to Create/Edit
-
-1. **CREATE** `app/services/gemini_search.py` - Gemini web search service
-2. **EDIT** `app/services/ai_agent.py` - Add news_context parameter
-3. **EDIT** `app/services/patterns/engine.py` - Fetch news before analysis
-4. **EDIT** `requirements.txt` - Add `google-generativeai`
-
----
-
-## Expected Result
-
-**Before (blind + corporate):**
-> "Market shows 62% probability. Movement likely due to recent developments."
-
-**After (informed + bro vibes):**
-> "Yo this Fed Chair market is getting spicy 🔥 Sitting at 62% right now after the WSJ dropped that Warsh met with the transition team on Jan 3rd. Both Kalshi and Poly jumped like +5% on that news, no cap. Big date coming up fam - announcement expected late January. This one's gonna move HARD when we get official word. Stay locked in! 📈"
-
----
-
-## Commands for Claude Code
+## STEP 5: Clear Old Insights & Test
 
 ```bash
-# 1. Install Gemini SDK
-pip install google-generativeai
+# 1. Add Gemini key to .env
+echo "GEMINI_API_KEY=AIzaSyBzzBW46f9sMRDc66rihVTVYzJY-O75tcc" >> .env
 
-# 2. Create the gemini search service
-# Create app/services/gemini_search.py with code above
+# 2. Clear old stale insights
+psql -d oddwons -c "DELETE FROM ai_insights;"
 
-# 3. Update ai_agent.py to accept news_context
-
-# 4. Update pattern engine to fetch news first
-
-# 5. Test the integration
+# 3. Run analysis with new pipeline
+cd ~/Desktop/code/oddwons
+source venv/bin/activate
+set -a && source .env && set +a
 python run_analysis.py
+
+# 4. Check new insights have bro vibes
+psql -d oddwons -c "SELECT market_title, analyst_note FROM ai_insights LIMIT 5;"
 ```
+
+---
+
+## EXPECTED OUTPUT
+
+**Before (blind + boring):**
+> "Market shows 36% probability of a rate cut. The Fed meeting is approaching."
+
+**After (informed + bro + actual insight):**
+> "Yo this Fed cut market at 36% is lowkey interesting 👀 The Fed's been on a cutting streak - they've dropped rates 3 times in a row now. Market seems to be pricing in a pause, but historically when they start cutting they keep going until something breaks. At 36% this could be decent value as a hedge if you think the trend continues. CPI data drops next week and that's gonna be the big mover - hot CPI = this dumps, cool CPI = could rip to 50%+. Something to watch fam 📊"
+
+---
+
+## FILES CHECKLIST
+
+- [ ] `app/services/gemini_search.py` - CREATE (Gemini web search service)
+- [ ] `app/services/ai_agent.py` - EDIT (add news_context param, bro prompt)
+- [ ] `app/services/patterns/engine.py` - EDIT (fetch news before analysis)
+- [ ] `requirements.txt` - ADD `google-generativeai`
+- [ ] `.env` - ADD `GEMINI_API_KEY`
+- [ ] Verify `load_market_data()` has price filters (0.02 < yes_price < 0.98)
+
+---
+
+## COST
+
+| Component | Cost |
+|-----------|------|
+| Gemini searches (9 categories) | FREE (under 1,500/day) |
+| Groq inference | ~$0.02/run |
+| **Total per analysis** | **~$0.02** |
+
+---
+
+# FEATURE: Clickable Market/Insight Cards → Detail Page
+
+## THE PROBLEM
+
+Currently market cards and insight cards are NOT clickable. Users can't:
+- See the full research behind an insight
+- View source articles (the "homework")
+- Understand WHY the AI said what it said
+- Verify the analysis themselves
+
+## THE SOLUTION
+
+Make every card clickable → opens a detail page with:
+1. **Full Market Info** - title, prices on both platforms, volume, status
+2. **AI Analysis** - the full insight with bro vibes
+3. **Source Articles** - links to news articles Gemini found (show the homework)
+4. **Price History** - chart showing movement
+5. **Key Catalysts** - upcoming events that could move this
+6. **Cross-Platform Comparison** - if exists on both Kalshi & Polymarket
+
+## IMPLEMENTATION
+
+### Step 1: Store Source Links in AI Insights
+
+Update `AIInsight` model to store news sources:
+
+**Edit `app/models/ai_insight.py`:**
+```python
+class AIInsight(Base):
+    __tablename__ = "ai_insights"
+    
+    # ... existing fields ...
+    
+    # NEW: Store source articles from Gemini search
+    source_articles = Column(JSONB, nullable=True)  # [{"title": "", "url": "", "source": "", "date": ""}]
+    news_context = Column(JSONB, nullable=True)     # Full Gemini response for transparency
+```
+
+**Run migration:**
+```bash
+alembic revision --autogenerate -m "add source_articles to ai_insights"
+alembic upgrade head
+```
+
+### Step 2: Save Sources When Generating Insights
+
+**In `app/services/patterns/engine.py` `save_market_highlight()`:**
+```python
+async def save_market_highlight(
+    self,
+    highlight: Dict[str, Any],
+    category: str,
+    session: AsyncSession,
+    news_context: Dict[str, Any] = None  # NEW: Pass news context
+) -> None:
+    insight = AIInsight(
+        # ... existing fields ...
+        
+        # NEW: Store the homework
+        source_articles=news_context.get("headlines", []) if news_context else [],
+        news_context=news_context,  # Full context for debugging
+    )
+    session.add(insight)
+```
+
+### Step 3: Create Market Detail API Endpoint
+
+**Edit `app/api/routes/insights.py`:**
+```python
+@router.get("/ai/{insight_id}")
+async def get_insight_detail(
+    insight_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get full detail for a single AI insight.
+    Includes source articles, full analysis, price history.
+    """
+    result = await db.execute(
+        select(AIInsight).where(AIInsight.id == insight_id)
+    )
+    insight = result.scalar_one_or_none()
+    
+    if not insight:
+        raise HTTPException(status_code=404, detail="Insight not found")
+    
+    # Get market details
+    market_result = await db.execute(
+        select(Market).where(Market.id == insight.market_id)
+    )
+    market = market_result.scalar_one_or_none()
+    
+    # Get price history
+    history_result = await db.execute(
+        select(MarketSnapshot)
+        .where(MarketSnapshot.market_id == insight.market_id)
+        .order_by(MarketSnapshot.timestamp.desc())
+        .limit(50)
+    )
+    snapshots = history_result.scalars().all()
+    
+    # Check for cross-platform match
+    cross_platform = None
+    if market:
+        from app.services.cross_platform import CrossPlatformService
+        cp_service = CrossPlatformService(db)
+        matches = await cp_service.find_matches_for_market(market.id)
+        if matches:
+            cross_platform = matches[0]
+    
+    return {
+        "insight": {
+            "id": insight.id,
+            "market_id": insight.market_id,
+            "market_title": insight.market_title,
+            "platform": insight.platform,
+            "category": insight.category,
+            "summary": insight.summary,
+            "current_odds": insight.current_odds,
+            "implied_probability": insight.implied_probability,
+            "volume_note": insight.volume_note,
+            "recent_movement": insight.recent_movement,
+            "movement_context": insight.movement_context,
+            "upcoming_catalyst": insight.upcoming_catalyst,
+            "analyst_note": insight.analyst_note,
+            "created_at": insight.created_at,
+        },
+        "source_articles": insight.source_articles or [],  # THE HOMEWORK
+        "market": {
+            "id": market.id,
+            "title": market.title,
+            "platform": market.platform.value,
+            "yes_price": market.yes_price,
+            "no_price": market.no_price,
+            "volume": market.volume,
+            "status": market.status,
+            "close_time": market.close_time,
+            "url": _get_market_url(market),  # Link to actual market
+        } if market else None,
+        "price_history": [
+            {"timestamp": s.timestamp, "yes_price": s.yes_price, "volume": s.volume}
+            for s in snapshots
+        ],
+        "cross_platform": cross_platform,
+    }
+
+
+def _get_market_url(market: Market) -> str:
+    """Get direct link to market on platform."""
+    if market.platform.value == "kalshi":
+        return f"https://kalshi.com/markets/{market.id}"
+    else:
+        return f"https://polymarket.com/event/{market.id}"
+```
+
+### Step 4: Create Frontend Detail Page
+
+**Create `frontend/src/app/(app)/insights/[id]/page.tsx`:**
+```tsx
+'use client'
+
+import { useParams } from 'next/navigation'
+import { ArrowLeft, ExternalLink, TrendingUp, TrendingDown, Newspaper, Calendar, Scale } from 'lucide-react'
+import Link from 'next/link'
+import { useInsightDetail } from '@/hooks/useAPI'
+
+export default function InsightDetailPage() {
+  const { id } = useParams()
+  const { data, isLoading, error } = useInsightDetail(id as string)
+
+  if (isLoading) return <div className="lg:ml-64 p-6">Loading...</div>
+  if (error) return <div className="lg:ml-64 p-6">Error loading insight</div>
+  if (!data) return <div className="lg:ml-64 p-6">Insight not found</div>
+
+  const { insight, source_articles, market, price_history, cross_platform } = data
+
+  return (
+    <div className="lg:ml-64 space-y-6 p-6">
+      {/* Back Button */}
+      <Link href="/opportunities" className="flex items-center gap-2 text-gray-500 hover:text-gray-700">
+        <ArrowLeft className="w-4 h-4" />
+        Back to Highlights
+      </Link>
+
+      {/* Header */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
+            {insight.platform}
+          </span>
+          <span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600">
+            {insight.category}
+          </span>
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{insight.market_title}</h1>
+        <p className="text-gray-600">{insight.summary}</p>
+      </div>
+
+      {/* Current Odds */}
+      {insight.current_odds && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="card bg-green-50">
+            <p className="text-sm text-green-600 font-medium">Yes</p>
+            <p className="text-3xl font-bold text-green-700">
+              {(insight.current_odds.yes * 100).toFixed(0)}%
+            </p>
+          </div>
+          <div className="card bg-red-50">
+            <p className="text-sm text-red-600 font-medium">No</p>
+            <p className="text-3xl font-bold text-red-700">
+              {(insight.current_odds.no * 100).toFixed(0)}%
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* AI Analysis - The Good Stuff */}
+      <div className="card border-l-4 border-primary-500">
+        <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          🧠 AI Analysis
+        </h2>
+        <p className="text-gray-700 whitespace-pre-wrap">{insight.analyst_note}</p>
+        
+        {insight.upcoming_catalyst && (
+          <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+            <p className="text-sm font-medium text-yellow-800 flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Upcoming Catalyst
+            </p>
+            <p className="text-yellow-700 mt-1">{insight.upcoming_catalyst}</p>
+          </div>
+        )}
+
+        {insight.movement_context && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm font-medium text-blue-800">Why It Moved</p>
+            <p className="text-blue-700 mt-1">{insight.movement_context}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Source Articles - SHOW THE HOMEWORK */}
+      {source_articles && source_articles.length > 0 && (
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Newspaper className="w-5 h-5" />
+            Source Articles
+            <span className="text-xs text-gray-500 font-normal">(our homework)</span>
+          </h2>
+          <div className="space-y-3">
+            {source_articles.map((article, i) => (
+              <a
+                key={i}
+                href={article.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-gray-900">{article.title}</p>
+                    <p className="text-sm text-gray-500">
+                      {article.source} • {article.date}
+                    </p>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Cross-Platform Comparison */}
+      {cross_platform && (
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Scale className="w-5 h-5" />
+            Cross-Platform Price
+          </h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-600 font-medium">Kalshi</p>
+              <p className="text-2xl font-bold text-blue-800">
+                {cross_platform.kalshi_price?.toFixed(0)}¢
+              </p>
+            </div>
+            <div className="p-3 bg-purple-50 rounded-lg">
+              <p className="text-sm text-purple-600 font-medium">Polymarket</p>
+              <p className="text-2xl font-bold text-purple-800">
+                {cross_platform.polymarket_price?.toFixed(0)}¢
+              </p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mt-3">
+            {cross_platform.gap_cents?.toFixed(1)}¢ gap between platforms
+          </p>
+        </div>
+      )}
+
+      {/* Trade Links */}
+      {market && (
+        <div className="card bg-gray-50">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Trade This Market</h2>
+          <div className="flex gap-3">
+            <a
+              href={market.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary flex items-center gap-2"
+            >
+              Open on {market.platform}
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+### Step 5: Add API Hook
+
+**Edit `frontend/src/hooks/useAPI.ts`:**
+```typescript
+export function useInsightDetail(id: string | null) {
+  return useSWR(
+    id ? `insightDetail|${id}` : null,
+    fetcher<Awaited<ReturnType<typeof api.getInsightDetail>>>
+  )
+}
+```
+
+**Edit `frontend/src/lib/api.ts`:**
+```typescript
+export async function getInsightDetail(id: string) {
+  return fetchAPI<{
+    insight: AIInsight
+    source_articles: Array<{title: string, url: string, source: string, date: string}>
+    market: Market | null
+    price_history: Array<{timestamp: string, yes_price: number, volume: number}>
+    cross_platform: CrossPlatformMatch | null
+  }>(`/insights/ai/${id}`)
+}
+```
+
+### Step 6: Make Cards Clickable
+
+**Edit `frontend/src/app/(app)/opportunities/page.tsx`:**
+```tsx
+// Change InsightCard to be a link
+import Link from 'next/link'
+
+function InsightCard({ insight }: { insight: AIInsight }) {
+  return (
+    <Link href={`/insights/${insight.id}`}>
+      <div className="card hover:shadow-md transition-shadow cursor-pointer">
+        {/* ... existing card content ... */}
+      </div>
+    </Link>
+  )
+}
+```
+
+**Same for dashboard and markets pages - wrap cards in `<Link>`**
+
+---
+
+## DETAIL PAGE SHOWS:
+
+| Section | Content |
+|---------|----------|
+| **Header** | Market title, platform, category |
+| **Odds** | Current Yes/No percentages |
+| **AI Analysis** | Full analyst note with bro vibes |
+| **Catalyst** | Upcoming events that could move price |
+| **Movement Context** | WHY it moved recently |
+| **Source Articles** | Links to news (THE HOMEWORK) 📰 |
+| **Cross-Platform** | Price on Kalshi vs Polymarket |
+| **Trade Links** | Direct links to trade on platforms |
+
+---
+
+## USER FLOW
+
+```
+Dashboard/Highlights Page
+    │
+    │ (click any card)
+    ▼
+┌─────────────────────────────────────┐
+│  INSIGHT DETAIL PAGE                │
+│                                     │
+│  📊 Current Odds: 36% Yes           │
+│                                     │
+│  🧠 AI Analysis:                    │
+│  "Yo this Fed cut at 36% is lowkey  │
+│  interesting..."                    │
+│                                     │
+│  📰 Source Articles (our homework): │
+│  • WSJ: Fed signals pause - Jan 3   │
+│  • Reuters: CPI data preview - Jan 5│
+│  • Bloomberg: Rate cut odds drop    │
+│                                     │
+│  📅 Catalyst: CPI data Jan 10       │
+│                                     │
+│  ⚖️ Cross-Platform:                 │
+│  Kalshi: 34¢ | Polymarket: 38¢      │
+│                                     │
+│  [Trade on Polymarket →]            │
+└─────────────────────────────────────┘
+```
+
+---
+
+## FILES TO CREATE/EDIT
+
+- [ ] `app/models/ai_insight.py` - Add `source_articles`, `news_context` columns
+- [ ] `app/api/routes/insights.py` - Add `/ai/{id}` detail endpoint
+- [ ] `app/services/patterns/engine.py` - Save news context with insights
+- [ ] `frontend/src/app/(app)/insights/[id]/page.tsx` - CREATE detail page
+- [ ] `frontend/src/hooks/useAPI.ts` - Add `useInsightDetail` hook
+- [ ] `frontend/src/lib/api.ts` - Add `getInsightDetail` function
+- [ ] `frontend/src/app/(app)/opportunities/page.tsx` - Make cards clickable
+- [ ] `frontend/src/app/(app)/dashboard/page.tsx` - Make cards clickable
+- [ ] `frontend/src/app/(app)/markets/page.tsx` - Make market cards clickable
+- [ ] Run Alembic migration for new columns
+
+---
+
+# FEATURE: Market Detail Page (for Markets Tab)
+
+## THE PROBLEM
+
+Market cards in the Markets tab are also not clickable. Users should be able to:
+- Click any market → see full details
+- View price history chart
+- See if there's an AI insight for this market
+- Check cross-platform pricing
+- Get direct trade links
+
+## IMPLEMENTATION
+
+### Step 1: Create Market Detail API Endpoint
+
+**Edit `app/api/routes/markets.py`:**
+```python
+@router.get("/{market_id}")
+async def get_market_detail(
+    market_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get full detail for a single market.
+    Includes price history, AI insights if any, cross-platform match.
+    """
+    result = await db.execute(
+        select(Market).where(Market.id == market_id)
+    )
+    market = result.scalar_one_or_none()
+    
+    if not market:
+        raise HTTPException(status_code=404, detail="Market not found")
+    
+    # Get price history
+    history_result = await db.execute(
+        select(MarketSnapshot)
+        .where(MarketSnapshot.market_id == market_id)
+        .order_by(MarketSnapshot.timestamp.desc())
+        .limit(100)
+    )
+    snapshots = history_result.scalars().all()
+    
+    # Check for AI insight
+    insight_result = await db.execute(
+        select(AIInsight)
+        .where(AIInsight.market_id == market_id)
+        .where(AIInsight.status == "active")
+        .order_by(AIInsight.created_at.desc())
+        .limit(1)
+    )
+    insight = insight_result.scalar_one_or_none()
+    
+    # Check for cross-platform match
+    from app.models.cross_platform import CrossPlatformMatch
+    match_result = await db.execute(
+        select(CrossPlatformMatch)
+        .where(
+            (CrossPlatformMatch.kalshi_market_id == market_id) |
+            (CrossPlatformMatch.polymarket_market_id == market_id)
+        )
+        .limit(1)
+    )
+    cross_match = match_result.scalar_one_or_none()
+    
+    return {
+        "market": {
+            "id": market.id,
+            "title": market.title,
+            "platform": market.platform.value,
+            "yes_price": market.yes_price,
+            "no_price": market.no_price,
+            "volume": market.volume,
+            "volume_24h": market.volume_24h,
+            "status": market.status,
+            "category": market.category,
+            "close_time": market.close_time,
+            "url": _get_market_url(market),
+            "created_at": market.created_at,
+            "updated_at": market.updated_at,
+        },
+        "price_history": [
+            {
+                "timestamp": s.timestamp.isoformat(),
+                "yes_price": s.yes_price,
+                "no_price": s.no_price,
+                "volume": s.volume,
+            }
+            for s in reversed(snapshots)  # Chronological order
+        ],
+        "ai_insight": {
+            "id": insight.id,
+            "summary": insight.summary,
+            "analyst_note": insight.analyst_note,
+            "upcoming_catalyst": insight.upcoming_catalyst,
+            "source_articles": insight.source_articles,
+            "created_at": insight.created_at,
+        } if insight else None,
+        "cross_platform": {
+            "kalshi_market_id": cross_match.kalshi_market_id,
+            "polymarket_market_id": cross_match.polymarket_market_id,
+            "kalshi_price": cross_match.kalshi_price,
+            "polymarket_price": cross_match.polymarket_price,
+            "price_gap": abs(cross_match.kalshi_price - cross_match.polymarket_price) if cross_match.kalshi_price and cross_match.polymarket_price else None,
+        } if cross_match else None,
+    }
+
+
+def _get_market_url(market: Market) -> str:
+    """Get direct link to market on platform."""
+    if market.platform.value == "kalshi":
+        # Kalshi uses ticker format
+        return f"https://kalshi.com/markets/{market.id}"
+    else:
+        # Polymarket uses slug
+        return f"https://polymarket.com/event/{market.id}"
+```
+
+### Step 2: Create Frontend Market Detail Page
+
+**Create `frontend/src/app/(app)/markets/[id]/page.tsx`:**
+```tsx
+'use client'
+
+import { useParams } from 'next/navigation'
+import { ArrowLeft, ExternalLink, TrendingUp, TrendingDown, Brain, Scale, Clock } from 'lucide-react'
+import Link from 'next/link'
+import { useMarketDetail } from '@/hooks/useAPI'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+
+export default function MarketDetailPage() {
+  const { id } = useParams()
+  const { data, isLoading, error } = useMarketDetail(id as string)
+
+  if (isLoading) return <div className="lg:ml-64 p-6">Loading...</div>
+  if (error) return <div className="lg:ml-64 p-6">Error loading market</div>
+  if (!data) return <div className="lg:ml-64 p-6">Market not found</div>
+
+  const { market, price_history, ai_insight, cross_platform } = data
+
+  return (
+    <div className="lg:ml-64 space-y-6 p-6">
+      {/* Back Button */}
+      <Link href="/markets" className="flex items-center gap-2 text-gray-500 hover:text-gray-700">
+        <ArrowLeft className="w-4 h-4" />
+        Back to Markets
+      </Link>
+
+      {/* Header */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-2">
+          <span className={`px-2 py-1 rounded text-xs font-medium ${
+            market.platform === 'kalshi' 
+              ? 'bg-blue-100 text-blue-800' 
+              : 'bg-purple-100 text-purple-800'
+          }`}>
+            {market.platform}
+          </span>
+          {market.category && (
+            <span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600">
+              {market.category}
+            </span>
+          )}
+          <span className={`px-2 py-1 rounded text-xs ${
+            market.status === 'active' 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-gray-100 text-gray-600'
+          }`}>
+            {market.status}
+          </span>
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{market.title}</h1>
+        
+        {market.close_time && (
+          <p className="text-sm text-gray-500 flex items-center gap-1">
+            <Clock className="w-4 h-4" />
+            Closes: {new Date(market.close_time).toLocaleDateString()}
+          </p>
+        )}
+      </div>
+
+      {/* Current Odds */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="card bg-green-50">
+          <p className="text-sm text-green-600 font-medium">Yes</p>
+          <p className="text-3xl font-bold text-green-700">
+            {(market.yes_price * 100).toFixed(0)}%
+          </p>
+        </div>
+        <div className="card bg-red-50">
+          <p className="text-sm text-red-600 font-medium">No</p>
+          <p className="text-3xl font-bold text-red-700">
+            {(market.no_price * 100).toFixed(0)}%
+          </p>
+        </div>
+      </div>
+
+      {/* Volume Stats */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="card">
+          <p className="text-sm text-gray-500">Total Volume</p>
+          <p className="text-xl font-bold text-gray-900">
+            ${market.volume?.toLocaleString() || '0'}
+          </p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-gray-500">24h Volume</p>
+          <p className="text-xl font-bold text-gray-900">
+            ${market.volume_24h?.toLocaleString() || '0'}
+          </p>
+        </div>
+      </div>
+
+      {/* Price History Chart */}
+      {price_history && price_history.length > 0 && (
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Price History</h2>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={price_history}>
+                <XAxis 
+                  dataKey="timestamp" 
+                  tickFormatter={(t) => new Date(t).toLocaleDateString()}
+                  fontSize={12}
+                />
+                <YAxis 
+                  domain={[0, 1]} 
+                  tickFormatter={(v) => `${(v * 100).toFixed(0)}%`}
+                  fontSize={12}
+                />
+                <Tooltip 
+                  formatter={(v: number) => `${(v * 100).toFixed(1)}%`}
+                  labelFormatter={(t) => new Date(t).toLocaleString()}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="yes_price" 
+                  stroke="#10b981" 
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* AI Insight - if exists */}
+      {ai_insight && (
+        <div className="card border-l-4 border-purple-500">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Brain className="w-5 h-5 text-purple-500" />
+            AI Analysis
+          </h2>
+          <p className="text-gray-700 whitespace-pre-wrap mb-4">{ai_insight.analyst_note}</p>
+          
+          {ai_insight.upcoming_catalyst && (
+            <div className="p-3 bg-yellow-50 rounded-lg mb-4">
+              <p className="text-sm font-medium text-yellow-800">📅 Upcoming Catalyst</p>
+              <p className="text-yellow-700 mt-1">{ai_insight.upcoming_catalyst}</p>
+            </div>
+          )}
+
+          {/* Source Articles */}
+          {ai_insight.source_articles && ai_insight.source_articles.length > 0 && (
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">📰 Sources (our homework)</p>
+              <div className="space-y-2">
+                {ai_insight.source_articles.map((article: any, i: number) => (
+                  <a
+                    key={i}
+                    href={article.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-sm text-blue-600 hover:underline"
+                  >
+                    {article.title} ({article.source})
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Link 
+            href={`/insights/${ai_insight.id}`}
+            className="text-sm text-purple-600 hover:underline mt-3 inline-block"
+          >
+            View full insight →
+          </Link>
+        </div>
+      )}
+
+      {/* Cross-Platform Comparison */}
+      {cross_platform && (
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Scale className="w-5 h-5" />
+            Cross-Platform Pricing
+          </h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-600 font-medium">Kalshi</p>
+              <p className="text-2xl font-bold text-blue-800">
+                {(cross_platform.kalshi_price * 100).toFixed(0)}%
+              </p>
+            </div>
+            <div className="p-3 bg-purple-50 rounded-lg">
+              <p className="text-sm text-purple-600 font-medium">Polymarket</p>
+              <p className="text-2xl font-bold text-purple-800">
+                {(cross_platform.polymarket_price * 100).toFixed(0)}%
+              </p>
+            </div>
+          </div>
+          {cross_platform.price_gap && (
+            <p className="text-sm text-gray-500 mt-3">
+              {(cross_platform.price_gap * 100).toFixed(1)}% gap between platforms
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Trade Links */}
+      <div className="card bg-gray-50">
+        <h2 className="text-lg font-semibold text-gray-900 mb-3">Trade This Market</h2>
+        <a
+          href={market.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-primary inline-flex items-center gap-2"
+        >
+          Open on {market.platform}
+          <ExternalLink className="w-4 h-4" />
+        </a>
+      </div>
+    </div>
+  )
+}
+```
+
+### Step 3: Add API Hook for Market Detail
+
+**Edit `frontend/src/hooks/useAPI.ts`:**
+```typescript
+export function useMarketDetail(id: string | null) {
+  return useSWR(
+    id ? `marketDetail|${id}` : null,
+    () => id ? api.getMarketDetail(id) : null
+  )
+}
+```
+
+**Edit `frontend/src/lib/api.ts`:**
+```typescript
+export async function getMarketDetail(id: string) {
+  return fetchAPI<{
+    market: Market
+    price_history: Array<{timestamp: string, yes_price: number, no_price: number, volume: number}>
+    ai_insight: AIInsight | null
+    cross_platform: CrossPlatformMatch | null
+  }>(`/markets/${id}`)
+}
+```
+
+### Step 4: Make Market Cards Clickable
+
+**Edit `frontend/src/app/(app)/markets/page.tsx`:**
+```tsx
+import Link from 'next/link'
+
+function MarketCard({ market }: { market: Market }) {
+  return (
+    <Link href={`/markets/${market.id}`}>
+      <div className="card hover:shadow-md transition-shadow cursor-pointer">
+        {/* ... existing card content ... */}
+      </div>
+    </Link>
+  )
+}
+```
+
+---
+
+## COMPLETE FILES CHECKLIST (ALL CLICKABLE CARDS)
+
+### Backend
+- [ ] `app/models/ai_insight.py` - Add `source_articles`, `news_context` columns
+- [ ] `app/api/routes/insights.py` - Add `/ai/{id}` detail endpoint
+- [ ] `app/api/routes/markets.py` - Add `/{market_id}` detail endpoint
+- [ ] `app/services/patterns/engine.py` - Save news context with insights
+- [ ] Run Alembic migration
+
+### Frontend - New Pages
+- [ ] `frontend/src/app/(app)/insights/[id]/page.tsx` - Insight detail page
+- [ ] `frontend/src/app/(app)/markets/[id]/page.tsx` - Market detail page
+
+### Frontend - API Layer
+- [ ] `frontend/src/hooks/useAPI.ts` - Add `useInsightDetail`, `useMarketDetail`
+- [ ] `frontend/src/lib/api.ts` - Add `getInsightDetail`, `getMarketDetail`
+
+### Frontend - Make Cards Clickable
+- [ ] `frontend/src/app/(app)/opportunities/page.tsx` - Insight cards → Link
+- [ ] `frontend/src/app/(app)/dashboard/page.tsx` - Insight cards → Link
+- [ ] `frontend/src/app/(app)/markets/page.tsx` - Market cards → Link
+- [ ] `frontend/src/app/(app)/cross-platform/page.tsx` - Match cards → Link (optional)
+
+---
+
+## SUMMARY FOR CLAUDE CODE
+
+Implement clickable cards throughout the app:
+
+1. **Insight cards** (dashboard, opportunities) → `/insights/[id]` detail page
+2. **Market cards** (markets tab) → `/markets/[id]` detail page
+3. Both detail pages show:
+   - Full data (prices, volume, status)
+   - Price history chart
+   - AI analysis with bro vibes
+   - **Source articles (the homework)**
+   - Cross-platform comparison
+   - Direct trade links

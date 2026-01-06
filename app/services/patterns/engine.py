@@ -352,7 +352,9 @@ class PatternEngine:
                 # COMPANION: Save highlights (not opportunities)
                 if result and result.get("highlights"):
                     for highlight in result["highlights"]:
-                        await self.save_market_highlight(highlight, category, session)
+                        await self.save_market_highlight(
+                            highlight, category, session, news_context
+                        )
                         saved += 1
 
                 categories_analyzed += 1
@@ -386,11 +388,18 @@ class PatternEngine:
         self,
         highlight: Dict[str, Any],
         category: str,
-        session: AsyncSession
+        session: AsyncSession,
+        news_context: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Save a market highlight to the database.
         COMPANION APPROACH: We inform and contextualize, not recommend bets.
+
+        Args:
+            highlight: AI-generated highlight data
+            category: Market category
+            session: Database session
+            news_context: Gemini search results (THE HOMEWORK)
         """
         try:
             # Extract current odds from various possible formats
@@ -400,6 +409,17 @@ class PatternEngine:
                     "yes": highlight.get("yes_price"),
                     "no": highlight.get("no_price")
                 }
+
+            # Extract source articles from news context (THE HOMEWORK)
+            source_articles = []
+            if news_context and news_context.get("headlines"):
+                for h in news_context["headlines"][:5]:
+                    source_articles.append({
+                        "title": h.get("title", ""),
+                        "source": h.get("source", ""),
+                        "date": h.get("date", ""),
+                        "relevance": h.get("relevance", ""),
+                    })
 
             insight = AIInsight(
                 market_id=highlight.get("market_id", "unknown"),
@@ -422,6 +442,10 @@ class PatternEngine:
 
                 # Analyst context
                 analyst_note=highlight.get("analyst_note", ""),
+
+                # Source articles (THE HOMEWORK - from Gemini web search)
+                source_articles=source_articles if source_articles else None,
+                news_context=news_context if news_context else None,
 
                 # Interest score for ranking (NOT betting confidence)
                 interest_score=50,  # Default; could be enhanced later

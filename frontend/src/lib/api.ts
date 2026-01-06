@@ -126,6 +126,14 @@ export async function getAIInsights(params?: { category?: string; limit?: number
   return fetchAPI<import('./types').AIInsightsResponse>(`/insights/ai?${searchParams}`)
 }
 
+export async function getInsightDetail(id: string) {
+  return fetchAPI<import('./types').InsightDetailResponse>(`/insights/ai/${id}`)
+}
+
+export async function getMarketDetail(id: string) {
+  return fetchAPI<import('./types').MarketDetailResponse>(`/markets/${id}`)
+}
+
 export async function getInsightStats() {
   return fetchAPI<import('./types').InsightStats>('/insights/stats')
 }

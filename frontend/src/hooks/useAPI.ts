@@ -10,6 +10,8 @@ const fetcher = async <T>(key: string): Promise<T> => {
       return api.getMarkets(params[0] ? JSON.parse(params[0]) : undefined) as Promise<T>
     case 'market':
       return api.getMarket(params[0]) as Promise<T>
+    case 'marketDetail':
+      return api.getMarketDetail(params[0]) as Promise<T>
     case 'marketStats':
       return api.getMarketStats() as Promise<T>
     case 'patterns':
@@ -22,6 +24,8 @@ const fetcher = async <T>(key: string): Promise<T> => {
       return api.getAlerts(params[0], parseInt(params[1] || '10')) as Promise<T>
     case 'aiInsights':
       return api.getAIInsights(params[0] ? JSON.parse(params[0]) : undefined) as Promise<T>
+    case 'insightDetail':
+      return api.getInsightDetail(params[0]) as Promise<T>
     case 'insightStats':
       return api.getInsightStats() as Promise<T>
     case 'dailyDigest':
@@ -148,5 +152,20 @@ export function useCrossPlatformStats() {
     'crossPlatformStats',
     fetcher<Awaited<ReturnType<typeof api.getCrossPlatformStats>>>,
     { refreshInterval: 60000 }
+  )
+}
+
+// Detail page hooks
+export function useInsightDetail(id: string | null) {
+  return useSWR(
+    id ? `insightDetail|${id}` : null,
+    fetcher<Awaited<ReturnType<typeof api.getInsightDetail>>>
+  )
+}
+
+export function useMarketDetail(id: string | null) {
+  return useSWR(
+    id ? `marketDetail|${id}` : null,
+    fetcher<Awaited<ReturnType<typeof api.getMarketDetail>>>
   )
 }

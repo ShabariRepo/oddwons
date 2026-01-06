@@ -4,6 +4,7 @@ import { TrendingUp, Zap, BarChart3, Clock, ArrowRight, Sparkles, Scale } from '
 import { StatsCard, StatsCardSkeleton } from '@/components/StatsCard'
 import { useMarketStats, usePatternStats, useAIInsights, useCrossPlatformMatches, useInsightStats } from '@/hooks/useAPI'
 import { AIInsight, CrossPlatformMatch } from '@/lib/types'
+import Link from 'next/link'
 
 function InsightCard({ insight }: { insight: AIInsight }) {
   const platformColor = insight.platform === 'kalshi'
@@ -11,7 +12,8 @@ function InsightCard({ insight }: { insight: AIInsight }) {
     : 'bg-purple-100 text-purple-800'
 
   return (
-    <div className="card hover:shadow-md transition-shadow">
+    <Link href={`/insights/${insight.id}`}>
+    <div className="card hover:shadow-md transition-shadow cursor-pointer">
       <div className="flex items-start justify-between mb-2">
         <span className={`px-2 py-0.5 rounded text-xs font-medium ${platformColor}`}>
           {insight.platform}
@@ -51,6 +53,7 @@ function InsightCard({ insight }: { insight: AIInsight }) {
         <p className="text-xs text-gray-500 mt-2">{insight.volume_note}</p>
       )}
     </div>
+    </Link>
   )
 }
 
@@ -58,7 +61,8 @@ function CrossPlatformCard({ match }: { match: CrossPlatformMatch }) {
   const gapColor = Math.abs(match.price_gap_cents) >= 3 ? 'text-green-600' : 'text-gray-600'
 
   return (
-    <div className="card hover:shadow-md transition-shadow">
+    <Link href={`/cross-platform`}>
+    <div className="card hover:shadow-md transition-shadow cursor-pointer">
       <div className="flex items-center gap-2 mb-3">
         <Scale className="w-4 h-4 text-primary-500" />
         <span className="text-xs font-medium text-primary-600 uppercase">Cross-Platform</span>
@@ -92,6 +96,7 @@ function CrossPlatformCard({ match }: { match: CrossPlatformMatch }) {
         </span>
       </div>
     </div>
+    </Link>
   )
 }
 
