@@ -1,5 +1,7 @@
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from datetime import datetime, timedelta
 
 from app.core.database import get_db
@@ -11,6 +13,8 @@ from app.schemas.user import (
     UserResponse,
     UserProfile,
     UserUpdate,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
 )
 from app.services.auth import (
     get_user_by_email,
@@ -20,6 +24,7 @@ from app.services.auth import (
     get_current_user,
     hash_password,
 )
+from app.services.notifications import notification_service
 from app.models.user import User
 
 settings = get_settings()
@@ -142,3 +147,67 @@ async def change_password(
 async def logout():
     """Logout (client should discard token)."""
     return {"message": "Logged out successfully"}
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Request password reset email."""
+    user = await get_user_by_email(db, request.email)
+
+    # Always return success to prevent email enumeration
+    if user:
+        # Generate reset token
+        token = secrets.token_urlsafe(32)
+        user.password_reset_token = token
+        user.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
+        await db.commit()
+
+        # Send email
+        await notification_service.send_password_reset_email(
+            to_email=user.email,
+            reset_token=token,
+            user_name=user.name
+        )
+
+    return {"message": "If an account exists, a reset email has been sent"}
+
+
+@router.post("/reset-password")
+async def reset_password(
+    request: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset password with token."""
+    # Find user by reset token
+    result = await db.execute(
+        select(User).where(User.password_reset_token == request.token)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+
+    # Check if token expired
+    if user.password_reset_expires < datetime.utcnow():
+        # Clear the expired token
+        user.password_reset_token = None
+        user.password_reset_expires = None
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token has expired"
+        )
+
+    # Update password
+    user.hashed_password = hash_password(request.new_password)
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    await db.commit()
+
+    return {"message": "Password reset successfully"}

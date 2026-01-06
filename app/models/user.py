@@ -48,6 +48,10 @@ class User(Base):
     subscription_end = Column(DateTime)
     trial_end = Column(DateTime)
 
+    # Password reset
+    password_reset_token = Column(String, index=True)
+    password_reset_expires = Column(DateTime)
+
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

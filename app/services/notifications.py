@@ -301,5 +301,70 @@ Top Opportunities:
         return text
 
 
+    async def send_password_reset_email(
+        self,
+        to_email: str,
+        reset_token: str,
+        user_name: Optional[str] = None
+    ) -> bool:
+        """Send password reset email."""
+        subject = "Reset Your OddWons Password"
+        reset_url = f"https://oddwons.ai/reset-password?token={reset_token}"
+
+        greeting = f"Hi {user_name}," if user_name else "Hi,"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
+                .content {{ background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }}
+                .button {{ display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
+                .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
+                .warning {{ background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px; padding: 12px; margin-top: 20px; font-size: 14px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Password Reset</h1>
+                </div>
+                <div class="content">
+                    <p>{greeting}</p>
+                    <p>We received a request to reset your password. Click the button below to create a new password:</p>
+                    <p style="text-align: center;">
+                        <a href="{reset_url}" class="button">Reset Password</a>
+                    </p>
+                    <div class="warning">
+                        <strong>This link expires in 1 hour.</strong> If you didn't request this, you can safely ignore this email.
+                    </div>
+                </div>
+                <div class="footer">
+                    <p>&copy; {datetime.utcnow().year} OddWons. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+{greeting}
+
+We received a request to reset your password.
+
+Click here to reset your password: {reset_url}
+
+This link expires in 1 hour. If you didn't request this, you can safely ignore this email.
+
+Best,
+The OddWons Team
+        """
+
+        return await self.send_email(to_email, subject, html_content, text_content)
+
+
 # Singleton instance
 notification_service = NotificationService()
