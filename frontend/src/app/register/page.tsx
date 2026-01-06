@@ -71,7 +71,7 @@ export default function RegisterPage() {
       {/* Left side - Form with Pattern Background */}
       <div className="flex-1 flex items-center justify-center bg-gray-50 relative overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
         {/* Pattern - Only on this side */}
-        <BrandPattern opacity={0.12} animated={false} />
+        <BrandPattern opacity={0.25} animated={false} />
 
         {/* Register Form - Higher z-index */}
         <div className="relative z-10 max-w-md w-full">

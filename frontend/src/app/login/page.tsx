@@ -61,7 +61,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Background Pattern */}
-      <BrandPattern opacity={0.12} animated={false} />
+      <BrandPattern opacity={0.25} animated={false} />
 
       {/* Login Form - Higher z-index */}
       <div className="relative z-10 max-w-md w-full">
