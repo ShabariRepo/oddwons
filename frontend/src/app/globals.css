@@ -76,3 +76,17 @@
 .animate-wiggle {
   animation: wiggle 0.5s ease-in-out infinite;
 }
+
+/* Brand Pattern Float Animation */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}

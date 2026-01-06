@@ -4,59 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { TrendingUp, Bell, BarChart3, Shield, Clock, Check, Zap, User, LogOut } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
-
-// SVG pattern for hero background - dollar bills with wings, logo, :D face
-const heroPatternSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-  <!-- Dollar bill with wings -->
-  <g transform="translate(20, 20)" opacity="0.15">
-    <rect x="0" y="8" width="40" height="24" rx="2" fill="%2322c55e" stroke="%2316a34a" stroke-width="1"/>
-    <text x="20" y="24" font-size="14" text-anchor="middle" fill="%23166534" font-weight="bold">$</text>
-    <!-- Left wing -->
-    <path d="M-2 12 Q-12 8 -8 20 Q-4 16 0 20" fill="%2386efac" stroke="%2322c55e"/>
-    <!-- Right wing -->
-    <path d="M42 12 Q52 8 48 20 Q44 16 40 20" fill="%2386efac" stroke="%2322c55e"/>
-  </g>
-
-  <!-- :D face -->
-  <g transform="translate(130, 30)" opacity="0.12">
-    <circle cx="15" cy="15" r="15" fill="%23fbbf24" stroke="%23f59e0b" stroke-width="1"/>
-    <circle cx="10" cy="12" r="2" fill="%2378350f"/>
-    <circle cx="20" cy="12" r="2" fill="%2378350f"/>
-    <path d="M8 18 Q15 26 22 18" fill="none" stroke="%2378350f" stroke-width="2" stroke-linecap="round"/>
-  </g>
-
-  <!-- Dollar bill with wings (offset) -->
-  <g transform="translate(100, 100)" opacity="0.15">
-    <rect x="0" y="8" width="40" height="24" rx="2" fill="%2322c55e" stroke="%2316a34a" stroke-width="1"/>
-    <text x="20" y="24" font-size="14" text-anchor="middle" fill="%23166534" font-weight="bold">$</text>
-    <!-- Left wing -->
-    <path d="M-2 12 Q-12 8 -8 20 Q-4 16 0 20" fill="%2386efac" stroke="%2322c55e"/>
-    <!-- Right wing -->
-    <path d="M42 12 Q52 8 48 20 Q44 16 40 20" fill="%2386efac" stroke="%2322c55e"/>
-  </g>
-
-  <!-- :D face (offset) -->
-  <g transform="translate(30, 120)" opacity="0.12">
-    <circle cx="15" cy="15" r="15" fill="%23fbbf24" stroke="%23f59e0b" stroke-width="1"/>
-    <circle cx="10" cy="12" r="2" fill="%2378350f"/>
-    <circle cx="20" cy="12" r="2" fill="%2378350f"/>
-    <path d="M8 18 Q15 26 22 18" fill="none" stroke="%2378350f" stroke-width="2" stroke-linecap="round"/>
-  </g>
-
-  <!-- OW logo representation -->
-  <g transform="translate(150, 140)" opacity="0.1">
-    <rect x="0" y="0" width="30" height="30" rx="6" fill="%234f46e5"/>
-    <text x="15" y="22" font-size="12" text-anchor="middle" fill="white" font-weight="bold">OW</text>
-  </g>
-
-  <!-- OW logo representation (offset) -->
-  <g transform="translate(60, 60)" opacity="0.1">
-    <rect x="0" y="0" width="30" height="30" rx="6" fill="%234f46e5"/>
-    <text x="15" y="22" font-size="12" text-anchor="middle" fill="white" font-weight="bold">OW</text>
-  </g>
-</svg>
-`
+import BrandPattern from '@/components/BrandPattern'
 
 const features = [
   {
@@ -183,25 +131,9 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-        {/* Animated scrolling pattern background */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(heroPatternSvg)}")`,
-            backgroundSize: '200px 200px',
-            animation: 'scrollPattern 8s linear infinite',
-          }}
-        />
-        <style jsx>{`
-          @keyframes scrollPattern {
-            0% {
-              background-position: 0 0;
-            }
-            100% {
-              background-position: 0 200px;
-            }
-          }
-        `}</style>
+        {/* Brand Pattern Background */}
+        <BrandPattern opacity={0.06} animated={true} />
+
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 leading-tight">
             Your{' '}
