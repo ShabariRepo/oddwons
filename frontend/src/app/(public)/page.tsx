@@ -132,7 +132,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         {/* Brand Pattern Background */}
-        <BrandPattern opacity={0.06} animated={true} />
+        <BrandPattern opacity={0.15} animated={true} />
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 leading-tight">
