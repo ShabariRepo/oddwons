@@ -200,10 +200,10 @@ async def get_subscription_info(user: User) -> Optional[dict]:
         subscription = stripe.Subscription.retrieve(user.stripe_subscription_id)
         return {
             "tier": user.subscription_tier.value,
-            "status": subscription.status,
-            "current_period_end": datetime.fromtimestamp(subscription.current_period_end),
-            "cancel_at_period_end": subscription.cancel_at_period_end,
-            "trial_end": datetime.fromtimestamp(subscription.trial_end) if subscription.trial_end else None,
+            "status": subscription.get("status"),
+            "current_period_end": datetime.fromtimestamp(subscription["current_period_end"]) if subscription.get("current_period_end") else None,
+            "cancel_at_period_end": subscription.get("cancel_at_period_end", False),
+            "trial_end": datetime.fromtimestamp(subscription["trial_end"]) if subscription.get("trial_end") else None,
         }
     except stripe.error.StripeError as e:
         logger.error(f"Error fetching subscription: {e}")
@@ -264,8 +264,8 @@ async def sync_subscription_from_stripe(user: User, db: AsyncSession) -> dict:
         subscription = subscriptions.data[0]
 
         # Update subscription ID if different
-        if user.stripe_subscription_id != subscription.id:
-            user.stripe_subscription_id = subscription.id
+        if user.stripe_subscription_id != subscription.get("id"):
+            user.stripe_subscription_id = subscription.get("id")
 
         # Get price and tier
         price_id = subscription["items"]["data"][0]["price"]["id"]
@@ -282,21 +282,21 @@ async def sync_subscription_from_stripe(user: User, db: AsyncSession) -> dict:
             "incomplete_expired": SubscriptionStatus.INACTIVE,
         }
 
-        new_status = status_map.get(subscription.status, SubscriptionStatus.INACTIVE)
+        new_status = status_map.get(subscription.get("status"), SubscriptionStatus.INACTIVE)
 
         # Handle canceled at period end
-        if subscription.cancel_at_period_end:
+        if subscription.get("cancel_at_period_end"):
             new_status = SubscriptionStatus.CANCELED
 
         # Update user
         user.subscription_tier = tier
         user.subscription_status = new_status
 
-        if subscription.current_period_end:
-            user.subscription_end = datetime.fromtimestamp(subscription.current_period_end)
+        if subscription.get("current_period_end"):
+            user.subscription_end = datetime.fromtimestamp(subscription["current_period_end"])
 
-        if subscription.trial_end:
-            user.trial_end = datetime.fromtimestamp(subscription.trial_end)
+        if subscription.get("trial_end"):
+            user.trial_end = datetime.fromtimestamp(subscription["trial_end"])
 
         await db.commit()
 
@@ -307,8 +307,8 @@ async def sync_subscription_from_stripe(user: User, db: AsyncSession) -> dict:
             "message": f"Subscription synced successfully",
             "tier": tier.value,
             "status": new_status.value,
-            "current_period_end": datetime.fromtimestamp(subscription.current_period_end).isoformat() if subscription.current_period_end else None,
-            "cancel_at_period_end": subscription.cancel_at_period_end,
+            "current_period_end": datetime.fromtimestamp(subscription["current_period_end"]).isoformat() if subscription.get("current_period_end") else None,
+            "cancel_at_period_end": subscription.get("cancel_at_period_end", False),
         }
 
     except stripe.error.StripeError as e:

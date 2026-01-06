@@ -110,11 +110,11 @@ async def get_user(
             "is_admin": user.is_admin,
         },
         "stripe_subscription": {
-            "id": stripe_sub.id,
-            "status": stripe_sub.status,
-            "current_period_end": stripe_sub.current_period_end,
-            "trial_end": stripe_sub.trial_end,
-            "cancel_at_period_end": stripe_sub.cancel_at_period_end,
+            "id": stripe_sub.get("id"),
+            "status": stripe_sub.get("status"),
+            "current_period_end": stripe_sub.get("current_period_end"),
+            "trial_end": stripe_sub.get("trial_end"),
+            "cancel_at_period_end": stripe_sub.get("cancel_at_period_end", False),
         } if stripe_sub else None,
     }
 
@@ -449,18 +449,18 @@ async def list_user_stripe_subscriptions(
             "customer_id": user.stripe_customer_id,
             "subscriptions": [
                 {
-                    "id": sub.id,
-                    "status": sub.status,
+                    "id": sub.get("id"),
+                    "status": sub.get("status"),
                     "price_id": sub["items"]["data"][0]["price"]["id"],
-                    "current_period_end": datetime.fromtimestamp(sub.current_period_end).isoformat(),
-                    "trial_end": datetime.fromtimestamp(sub.trial_end).isoformat() if sub.trial_end else None,
-                    "cancel_at_period_end": sub.cancel_at_period_end,
-                    "created": datetime.fromtimestamp(sub.created).isoformat(),
+                    "current_period_end": datetime.fromtimestamp(sub["current_period_end"]).isoformat() if sub.get("current_period_end") else None,
+                    "trial_end": datetime.fromtimestamp(sub["trial_end"]).isoformat() if sub.get("trial_end") else None,
+                    "cancel_at_period_end": sub.get("cancel_at_period_end", False),
+                    "created": datetime.fromtimestamp(sub["created"]).isoformat() if sub.get("created") else None,
                 }
                 for sub in subscriptions.data
             ],
             "count": len(subscriptions.data),
-            "has_duplicates": len([s for s in subscriptions.data if s.status in ["active", "trialing"]]) > 1,
+            "has_duplicates": len([s for s in subscriptions.data if s.get("status") in ["active", "trialing"]]) > 1,
         }
 
     except stripe.error.StripeError as e:
@@ -509,8 +509,8 @@ async def cancel_stripe_subscription(
         return {
             "message": message,
             "subscription_id": subscription_id,
-            "new_status": canceled_sub.status,
-            "cancel_at_period_end": canceled_sub.cancel_at_period_end,
+            "new_status": canceled_sub.get("status"),
+            "cancel_at_period_end": canceled_sub.get("cancel_at_period_end", False),
         }
 
     except stripe.error.StripeError as e:
@@ -541,29 +541,29 @@ async def cleanup_duplicate_subscriptions(
             limit=10,
         )
 
-        active_subs = [s for s in subscriptions.data if s.status in ["active", "trialing"]]
+        active_subs = [s for s in subscriptions.data if s.get("status") in ["active", "trialing"]]
 
         if len(active_subs) <= 1:
             return {"message": "No duplicates found", "active_count": len(active_subs)}
 
         # Determine which to keep (newest by default, or specified)
         if keep_subscription_id:
-            keep_sub = next((s for s in active_subs if s.id == keep_subscription_id), None)
+            keep_sub = next((s for s in active_subs if s.get("id") == keep_subscription_id), None)
             if not keep_sub:
                 raise HTTPException(status_code=400, detail="Specified subscription not found")
         else:
             # Keep the newest one
-            keep_sub = max(active_subs, key=lambda s: s.created)
+            keep_sub = max(active_subs, key=lambda s: s.get("created", 0))
 
         # Cancel all others immediately
         canceled = []
         for sub in active_subs:
-            if sub.id != keep_sub.id:
-                stripe.Subscription.cancel(sub.id)
-                canceled.append(sub.id)
+            if sub.get("id") != keep_sub.get("id"):
+                stripe.Subscription.cancel(sub.get("id"))
+                canceled.append(sub.get("id"))
 
         # Update user's subscription ID to the kept one
-        user.stripe_subscription_id = keep_sub.id
+        user.stripe_subscription_id = keep_sub.get("id")
 
         # Get tier from kept subscription
         price_id = keep_sub["items"]["data"][0]["price"]["id"]
@@ -574,18 +574,18 @@ async def cleanup_duplicate_subscriptions(
             "active": SubscriptionStatus.ACTIVE,
             "trialing": SubscriptionStatus.TRIALING,
         }
-        user.subscription_status = status_map.get(keep_sub.status, SubscriptionStatus.ACTIVE)
+        user.subscription_status = status_map.get(keep_sub.get("status"), SubscriptionStatus.ACTIVE)
 
-        if keep_sub.trial_end:
-            user.trial_end = datetime.fromtimestamp(keep_sub.trial_end)
-        if keep_sub.current_period_end:
-            user.subscription_end = datetime.fromtimestamp(keep_sub.current_period_end)
+        if keep_sub.get("trial_end"):
+            user.trial_end = datetime.fromtimestamp(keep_sub["trial_end"])
+        if keep_sub.get("current_period_end"):
+            user.subscription_end = datetime.fromtimestamp(keep_sub["current_period_end"])
 
         await db.commit()
 
         return {
             "message": f"Cleaned up {len(canceled)} duplicate subscription(s)",
-            "kept_subscription": keep_sub.id,
+            "kept_subscription": keep_sub.get("id"),
             "canceled_subscriptions": canceled,
             "user_tier": tier.value,
             "user_status": user.subscription_status.value,
