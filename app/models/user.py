@@ -33,6 +33,7 @@ class User(Base):
     name = Column(String)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)
 
     # Subscription
     subscription_tier = Column(Enum(SubscriptionTier), nullable=True)

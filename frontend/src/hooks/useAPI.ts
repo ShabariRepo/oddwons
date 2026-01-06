@@ -169,3 +169,35 @@ export function useMarketDetail(id: string | null) {
     fetcher<Awaited<ReturnType<typeof api.getMarketDetail>>>
   )
 }
+
+// Admin hooks
+export function useAdminStats() {
+  return useSWR(
+    'adminStats',
+    () => api.getAdminStats(),
+    { refreshInterval: 60000 }
+  )
+}
+
+export function useAdminUsers(params?: { search?: string; tier?: string; page?: number }) {
+  return useSWR(
+    ['adminUsers', params?.search || '', params?.tier || '', params?.page || 1].join('|'),
+    () => api.getAdminUsers(params),
+    { refreshInterval: 30000 }
+  )
+}
+
+export function useAdminUser(userId: string | null) {
+  return useSWR(
+    userId ? `adminUser|${userId}` : null,
+    () => userId ? api.getAdminUser(userId) : null
+  )
+}
+
+export function useAdminHealth() {
+  return useSWR(
+    'adminHealth',
+    () => api.getAdminHealth(),
+    { refreshInterval: 30000 }
+  )
+}

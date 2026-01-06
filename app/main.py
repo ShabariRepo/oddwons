@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import get_settings
 from app.core.database import init_db, close_db
-from app.api.routes import markets, patterns, auth, billing, insights, cross_platform
+from app.api.routes import markets, patterns, auth, billing, insights, cross_platform, admin
 from app.services.data_collector import data_collector
 from app.services.kalshi_client import kalshi_client
 from app.services.polymarket_client import polymarket_client
@@ -88,6 +88,7 @@ app.include_router(markets.router, prefix="/api/v1")
 app.include_router(patterns.router, prefix="/api/v1")
 app.include_router(insights.router, prefix="/api/v1")
 app.include_router(cross_platform.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
 
 
 @app.get("/health")

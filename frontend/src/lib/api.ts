@@ -174,3 +174,97 @@ export async function getCrossPlatformStats() {
     categories: Record<string, number>
   }>('/cross-platform/stats')
 }
+
+// Admin APIs
+export interface AdminStats {
+  users: {
+    total: number
+    new_24h: number
+    new_7d: number
+    trialing: number
+  }
+  tiers: Record<string, number>
+  revenue: {
+    paid_users: number
+    estimated_mrr: number
+  }
+  content: {
+    total_markets: number
+    active_insights: number
+  }
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  name: string | null
+  subscription_tier: string
+  subscription_status: string | null
+  stripe_customer_id: string | null
+  trial_end: string | null
+  created_at: string | null
+  last_login: string | null
+  is_admin: boolean
+}
+
+export async function getAdminStats() {
+  return fetchAPI<AdminStats>('/admin/stats')
+}
+
+export async function getAdminUsers(params?: { search?: string; tier?: string; page?: number; page_size?: number }) {
+  const searchParams = new URLSearchParams()
+  if (params?.search) searchParams.set('search', params.search)
+  if (params?.tier) searchParams.set('tier', params.tier)
+  if (params?.page) searchParams.set('page', params.page.toString())
+  if (params?.page_size) searchParams.set('page_size', params.page_size.toString())
+
+  return fetchAPI<{
+    users: AdminUser[]
+    total: number
+    page: number
+    page_size: number
+  }>(`/admin/users?${searchParams}`)
+}
+
+export async function getAdminUser(userId: string) {
+  return fetchAPI<{
+    user: AdminUser & {
+      stripe_subscription_id: string | null
+      subscription_end: string | null
+    }
+    stripe_subscription: any | null
+  }>(`/admin/users/${userId}`)
+}
+
+export async function syncUserSubscription(userId: string) {
+  return fetchAPI<{
+    message: string
+    synced: boolean
+    tier?: string
+    status?: string
+  }>(`/admin/users/${userId}/sync-subscription`, { method: 'POST' })
+}
+
+export async function changeUserTier(userId: string, tier: string) {
+  return fetchAPI<{
+    message: string
+    user_id: string
+    old_tier: string
+    new_tier: string
+  }>(`/admin/users/${userId}/change-tier?tier=${tier}`, { method: 'POST' })
+}
+
+export async function grantUserTrial(userId: string, days: number = 7) {
+  return fetchAPI<{
+    message: string
+    trial_end: string
+  }>(`/admin/users/${userId}/grant-trial?days=${days}`, { method: 'POST' })
+}
+
+export async function getAdminHealth() {
+  return fetchAPI<{
+    database: string
+    redis: string
+    stripe: string
+  }>('/admin/health')
+}

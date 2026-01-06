@@ -12,6 +12,7 @@ import {
   Settings,
   Sparkles,
   Scale,
+  Shield,
 } from 'lucide-react'
 import { useAuth } from './AuthProvider'
 
@@ -75,6 +76,22 @@ export function Sidebar() {
             </Link>
           )
         })}
+
+        {/* Admin Link - only visible to admins */}
+        {user?.is_admin && (
+          <Link
+            href="/admin"
+            className={clsx(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mt-4 border-t border-gray-800 pt-4',
+              pathname.startsWith('/admin')
+                ? 'bg-amber-600 text-white'
+                : 'text-amber-400 hover:text-white hover:bg-gray-800'
+            )}
+          >
+            <Shield className="w-5 h-5" />
+            Admin
+          </Link>
+        )}
       </nav>
 
       {/* Tier Badge */}

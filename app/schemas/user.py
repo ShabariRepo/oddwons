@@ -61,6 +61,7 @@ class UserResponse(UserBase):
     id: str
     is_active: bool
     is_verified: bool
+    is_admin: bool = False
     subscription_tier: Optional[SubscriptionTier] = None
     subscription_status: SubscriptionStatus
     subscription_end: Optional[datetime] = None
