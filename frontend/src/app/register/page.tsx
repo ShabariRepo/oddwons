@@ -72,15 +72,14 @@ export default function RegisterPage() {
         <div className="max-w-md w-full space-y-8">
           {/* Logo */}
           <div>
-            <Link href="/" className="inline-flex items-center gap-2">
+            <Link href="/" className="inline-flex items-center gap-3">
               <Image
                 src="/oddwons-logo.png"
                 alt="OddWons"
-                width={40}
-                height={40}
-                className="rounded-xl"
+                width={120}
+                height={120}
+                className="rounded-2xl shadow-lg"
               />
-              <span className="text-xl font-bold text-gray-900">OddWons</span>
             </Link>
             <h2 className="mt-6 text-3xl font-bold text-gray-900">
               Create your account

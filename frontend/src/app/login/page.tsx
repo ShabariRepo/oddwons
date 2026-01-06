@@ -62,13 +62,13 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8">
         {/* Logo */}
         <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
+          <Link href="/" className="inline-flex items-center gap-3">
             <Image
               src="/oddwons-logo.png"
               alt="OddWons"
-              width={48}
-              height={48}
-              className="rounded-xl"
+              width={120}
+              height={120}
+              className="rounded-2xl shadow-lg"
             />
           </Link>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
