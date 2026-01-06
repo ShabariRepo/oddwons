@@ -414,3 +414,182 @@ async def system_health(
         health["stripe"] = f"error: {str(e)}"
 
     return health
+
+
+# ============ STRIPE SUBSCRIPTION MANAGEMENT ============
+
+@router.get("/users/{user_id}/stripe-subscriptions")
+async def list_user_stripe_subscriptions(
+    user_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List ALL subscriptions for a user in Stripe.
+    Useful for finding duplicates.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.stripe_customer_id:
+        return {"subscriptions": [], "message": "No Stripe customer ID"}
+
+    try:
+        # Get ALL subscriptions (not just active)
+        subscriptions = stripe.Subscription.list(
+            customer=user.stripe_customer_id,
+            status="all",  # active, trialing, canceled, etc.
+            limit=10,
+        )
+
+        return {
+            "customer_id": user.stripe_customer_id,
+            "subscriptions": [
+                {
+                    "id": sub.id,
+                    "status": sub.status,
+                    "price_id": sub["items"]["data"][0]["price"]["id"],
+                    "current_period_end": datetime.fromtimestamp(sub.current_period_end).isoformat(),
+                    "trial_end": datetime.fromtimestamp(sub.trial_end).isoformat() if sub.trial_end else None,
+                    "cancel_at_period_end": sub.cancel_at_period_end,
+                    "created": datetime.fromtimestamp(sub.created).isoformat(),
+                }
+                for sub in subscriptions.data
+            ],
+            "count": len(subscriptions.data),
+            "has_duplicates": len([s for s in subscriptions.data if s.status in ["active", "trialing"]]) > 1,
+        }
+
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/users/{user_id}/cancel-stripe-subscription/{subscription_id}")
+async def cancel_stripe_subscription(
+    user_id: str,
+    subscription_id: str,
+    immediately: bool = Query(False, description="Cancel immediately vs at period end"),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Cancel a specific Stripe subscription.
+    Use this to clean up duplicates.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        if immediately:
+            # Cancel immediately - no more access
+            canceled_sub = stripe.Subscription.cancel(subscription_id)
+            message = "Subscription canceled immediately"
+        else:
+            # Cancel at period end - user keeps access until then
+            canceled_sub = stripe.Subscription.modify(
+                subscription_id,
+                cancel_at_period_end=True
+            )
+            message = "Subscription will cancel at period end"
+
+        # If this was the user's active subscription, clear it from DB
+        if user.stripe_subscription_id == subscription_id:
+            user.stripe_subscription_id = None
+            if immediately:
+                user.subscription_tier = SubscriptionTier.FREE
+                user.subscription_status = SubscriptionStatus.INACTIVE
+            await db.commit()
+
+        return {
+            "message": message,
+            "subscription_id": subscription_id,
+            "new_status": canceled_sub.status,
+            "cancel_at_period_end": canceled_sub.cancel_at_period_end,
+        }
+
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/users/{user_id}/cleanup-duplicate-subscriptions")
+async def cleanup_duplicate_subscriptions(
+    user_id: str,
+    keep_subscription_id: Optional[str] = Query(None, description="ID of subscription to keep (newest if not specified)"),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Find and cancel duplicate subscriptions, keeping only one.
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.stripe_customer_id:
+        raise HTTPException(status_code=404, detail="User not found or no Stripe customer")
+
+    try:
+        # Get active/trialing subscriptions
+        subscriptions = stripe.Subscription.list(
+            customer=user.stripe_customer_id,
+            status="all",
+            limit=10,
+        )
+
+        active_subs = [s for s in subscriptions.data if s.status in ["active", "trialing"]]
+
+        if len(active_subs) <= 1:
+            return {"message": "No duplicates found", "active_count": len(active_subs)}
+
+        # Determine which to keep (newest by default, or specified)
+        if keep_subscription_id:
+            keep_sub = next((s for s in active_subs if s.id == keep_subscription_id), None)
+            if not keep_sub:
+                raise HTTPException(status_code=400, detail="Specified subscription not found")
+        else:
+            # Keep the newest one
+            keep_sub = max(active_subs, key=lambda s: s.created)
+
+        # Cancel all others immediately
+        canceled = []
+        for sub in active_subs:
+            if sub.id != keep_sub.id:
+                stripe.Subscription.cancel(sub.id)
+                canceled.append(sub.id)
+
+        # Update user's subscription ID to the kept one
+        user.stripe_subscription_id = keep_sub.id
+
+        # Get tier from kept subscription
+        price_id = keep_sub["items"]["data"][0]["price"]["id"]
+        tier = PRICE_TO_TIER.get(price_id, SubscriptionTier.BASIC)
+        user.subscription_tier = tier
+
+        status_map = {
+            "active": SubscriptionStatus.ACTIVE,
+            "trialing": SubscriptionStatus.TRIALING,
+        }
+        user.subscription_status = status_map.get(keep_sub.status, SubscriptionStatus.ACTIVE)
+
+        if keep_sub.trial_end:
+            user.trial_end = datetime.fromtimestamp(keep_sub.trial_end)
+        if keep_sub.current_period_end:
+            user.subscription_end = datetime.fromtimestamp(keep_sub.current_period_end)
+
+        await db.commit()
+
+        return {
+            "message": f"Cleaned up {len(canceled)} duplicate subscription(s)",
+            "kept_subscription": keep_sub.id,
+            "canceled_subscriptions": canceled,
+            "user_tier": tier.value,
+            "user_status": user.subscription_status.value,
+        }
+
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
