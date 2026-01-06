@@ -10,6 +10,7 @@ from app.models.market import Market, MarketSnapshot, Pattern as PatternModel, P
 from app.models.ai_insight import AIInsight, ArbitrageOpportunity, DailyDigest
 from app.core.database import AsyncSessionLocal
 from app.services.ai_agent import ai_agent
+from app.services.gemini_search import search_category_news
 
 from .base import PatternResult, MarketData
 from .volume import VolumePatternDetector
@@ -303,7 +304,29 @@ class PatternEngine:
                 "description": pattern.description,
             })
 
-        # Analyze each category separately (better context = better analysis)
+        # Fetch news context for each category via Gemini web search
+        logger.info("Fetching real news context via Gemini web search...")
+        category_news: Dict[str, Dict[str, Any]] = {}
+
+        for category, category_markets in market_by_category.items():
+            if len(category_markets) >= 3:
+                try:
+                    titles = [m["title"] for m in category_markets[:10]]
+                    logger.info(f"Fetching news for {category} ({len(titles)} market titles)...")
+                    category_news[category] = await search_category_news(category, titles)
+
+                    # Log results
+                    news = category_news[category]
+                    if news.get("error"):
+                        logger.warning(f"Gemini search error for {category}: {news['error']}")
+                    else:
+                        logger.info(f"Got {len(news.get('headlines', []))} headlines for {category}")
+
+                except Exception as e:
+                    logger.error(f"Failed to fetch news for {category}: {e}")
+                    category_news[category] = {"error": str(e), "headlines": []}
+
+        # Analyze each category separately (with real news context!)
         categories_analyzed = 0
         for category, category_markets in market_by_category.items():
             if not category_markets:
@@ -316,10 +339,14 @@ class PatternEngine:
             try:
                 logger.info(f"Analyzing category '{category}': {len(category_markets)} markets")
 
+                # Pass news context from Gemini to Groq
+                news_context = category_news.get(category, {})
+
                 result = await ai_agent.analyze_category_batch(
                     category=category,
                     markets=category_markets,
-                    patterns=pattern_by_category.get(category, [])
+                    patterns=pattern_by_category.get(category, []),
+                    news_context=news_context  # NEW: Real news from Gemini
                 )
 
                 # COMPANION: Save highlights (not opportunities)

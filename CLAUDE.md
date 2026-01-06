@@ -431,3 +431,43 @@ print(f"Found {result['matches_found']} matches")
 
 **Sidebar Navigation:**
 - Dashboard -> AI Highlights -> Cross-Platform -> Markets -> Alerts -> Analytics -> Settings
+
+### Gemini Web Search + Bro Vibes Pipeline (Jan 2026)
+**MAJOR IMPROVEMENT:** AI insights now backed by REAL NEWS from Google Search.
+
+**Architecture:**
+```
+Market data → Gemini web search → real headlines
+     ↓
+Market data + real news → Groq → informed analysis with bro vibes
+```
+
+**Cost:** FREE (Gemini: 1,500 searches/day, Groq: ~$0.02/run)
+
+**New Components:**
+- `app/services/gemini_search.py` - Gemini 2.0 Flash with Google Search grounding
+- Updated `app/services/ai_agent.py` - Accepts news_context, uses "bro vibes" tone
+- Updated `app/services/patterns/engine.py` - Fetches news for each category before analysis
+
+**Environment:**
+```bash
+GEMINI_API_KEY=AIzaSy...  # Add to .env
+```
+
+**Bro Vibes Tone Examples:**
+- Instead of: "Market shows elevated probability due to recent polling"
+- Now: "Yo this market is heating up - recent polls got it jumping to 62%, no cap"
+
+- Instead of: "Significant price movement following news event"
+- Now: "Bro this thing moved HARD after the news dropped - we're talking +12% in like 2 hours"
+
+**Dependency:**
+```bash
+pip install google-genai  # Added to requirements.txt
+```
+
+### Performance Fix: O(n²) Arbitrage Detection (Jan 2026)
+Fixed arbitrage detector that was hanging for 25+ minutes due to 16M+ string comparisons.
+- Limited arbitrage detection to top 500 markets by volume per platform
+- Full cross-platform matching handled by MarketMatcher service (uses faster rapidfuzz)
+- Analysis now runs in ~90 seconds

@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     ai_analysis_enabled: bool = True
     ai_model: str = "gpt-oss-20b-128k"
 
+    # Gemini (Google AI) - for web search grounding
+    gemini_api_key: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
