@@ -1391,3 +1391,232 @@ Implement clickable cards throughout the app:
    - **Source articles (the homework)**
    - Cross-platform comparison
    - Direct trade links
+
+---
+
+# FIX: AI Highlights Showing Same Category / Not Rotating
+
+## THE PROBLEM
+
+The AI Highlights page shows 3 insights but:
+- All 3 are from the same category (finance/polymarket)
+- No variety across categories
+- Doesn't show the "best" 3, just the newest 3
+- When analysis runs, same 3 keep showing
+
+## ROOT CAUSE
+
+In `app/api/routes/insights.py`, the query is:
+```python
+query = query.order_by(
+    AIInsight.interest_score.desc().nullslast(),  # All are 50!
+    AIInsight.created_at.desc()
+).limit(tier_limit)
+```
+
+Since all `interest_score` = 50 (default), it's just showing newest 3, which happen to all be finance.
+
+## THE FIX
+
+Update the query to ensure **category variety** for FREE tier:
+
+**Edit `app/api/routes/insights.py` - `get_ai_insights()` function:**
+
+```python
+@router.get("/ai")
+async def get_ai_insights(
+    category: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=50),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    tier = user.subscription_tier
+
+    # Tier limits
+    if tier == SubscriptionTier.FREE or tier is None:
+        tier_limit = 3
+    elif tier == SubscriptionTier.BASIC:
+        tier_limit = min(limit, 10)
+    elif tier == SubscriptionTier.PREMIUM:
+        tier_limit = min(limit, 30)
+    else:  # PRO
+        tier_limit = limit
+
+    # If category filter is set, just query that category
+    if category:
+        query = (
+            select(AIInsight)
+            .where(AIInsight.status == "active")
+            .where(AIInsight.expires_at > datetime.utcnow())
+            .where(AIInsight.category == category)
+            .order_by(AIInsight.created_at.desc())
+            .limit(tier_limit)
+        )
+        result = await db.execute(query)
+        insights = result.scalars().all()
+    else:
+        # NO CATEGORY FILTER: Get variety across categories
+        # For FREE tier especially, show 1 from each top category
+        
+        if tier == SubscriptionTier.FREE or tier is None:
+            # Get 1 newest from each of the top categories
+            insights = []
+            priority_categories = ["politics", "finance", "crypto", "sports", "tech"]
+            
+            for cat in priority_categories:
+                if len(insights) >= tier_limit:
+                    break
+                    
+                result = await db.execute(
+                    select(AIInsight)
+                    .where(AIInsight.status == "active")
+                    .where(AIInsight.expires_at > datetime.utcnow())
+                    .where(AIInsight.category == cat)
+                    .order_by(AIInsight.created_at.desc())
+                    .limit(1)
+                )
+                cat_insight = result.scalar_one_or_none()
+                if cat_insight:
+                    insights.append(cat_insight)
+            
+            # If we still don't have enough, fill with any category
+            if len(insights) < tier_limit:
+                existing_ids = [i.id for i in insights]
+                result = await db.execute(
+                    select(AIInsight)
+                    .where(AIInsight.status == "active")
+                    .where(AIInsight.expires_at > datetime.utcnow())
+                    .where(AIInsight.id.not_in(existing_ids) if existing_ids else True)
+                    .order_by(AIInsight.created_at.desc())
+                    .limit(tier_limit - len(insights))
+                )
+                insights.extend(result.scalars().all())
+        else:
+            # Paid tiers: Get newest, but ensure some variety
+            # Use window function to get top N per category, then merge
+            query = (
+                select(AIInsight)
+                .where(AIInsight.status == "active")
+                .where(AIInsight.expires_at > datetime.utcnow())
+                .order_by(
+                    AIInsight.category,  # Group by category
+                    AIInsight.created_at.desc()
+                )
+                .limit(tier_limit * 3)  # Get more, then dedupe
+            )
+            result = await db.execute(query)
+            all_insights = result.scalars().all()
+            
+            # Take up to 3 from each category, round-robin style
+            from collections import defaultdict
+            by_category = defaultdict(list)
+            for i in all_insights:
+                by_category[i.category].append(i)
+            
+            insights = []
+            max_per_category = max(3, tier_limit // len(by_category)) if by_category else tier_limit
+            
+            # Round-robin across categories
+            idx = 0
+            while len(insights) < tier_limit:
+                added_this_round = False
+                for cat in by_category:
+                    if len(insights) >= tier_limit:
+                        break
+                    if idx < len(by_category[cat]) and idx < max_per_category:
+                        insights.append(by_category[cat][idx])
+                        added_this_round = True
+                if not added_this_round:
+                    break
+                idx += 1
+
+    # ... rest of the function (format response)
+```
+
+## SIMPLER ALTERNATIVE
+
+If you want a quicker fix, just randomize which 3 show for FREE tier:
+
+```python
+from sqlalchemy import func
+
+if tier == SubscriptionTier.FREE or tier is None:
+    # Random 3 from different categories
+    query = (
+        select(AIInsight)
+        .where(AIInsight.status == "active")
+        .where(AIInsight.expires_at > datetime.utcnow())
+        .order_by(func.random())  # Randomize!
+        .distinct(AIInsight.category)  # One per category
+        .limit(tier_limit)
+    )
+```
+
+## ALSO: Update Interest Score
+
+The `interest_score` is always 50. Make it dynamic based on:
+- Volume (higher = more interesting)
+- Recent movement (bigger moves = more interesting)
+- Has upcoming catalyst
+- Cross-platform gap exists
+
+**In `app/services/patterns/engine.py` `save_market_highlight()`:**
+
+```python
+def calculate_interest_score(highlight: dict, market_data: dict = None) -> int:
+    """Calculate how interesting/important this insight is."""
+    score = 50  # Base
+    
+    # Volume boost
+    volume = market_data.get("volume", 0) if market_data else 0
+    if volume > 1_000_000:
+        score += 20
+    elif volume > 100_000:
+        score += 10
+    elif volume > 10_000:
+        score += 5
+    
+    # Movement boost
+    movement = highlight.get("recent_movement", "")
+    if movement:
+        try:
+            pct = float(movement.replace("%", "").replace("+", "").replace("-", ""))
+            if pct > 10:
+                score += 15
+            elif pct > 5:
+                score += 10
+            elif pct > 2:
+                score += 5
+        except:
+            pass
+    
+    # Catalyst boost
+    if highlight.get("upcoming_catalyst"):
+        score += 10
+    
+    # Cap at 100
+    return min(100, score)
+
+
+async def save_market_highlight(self, highlight, category, session, news_context=None):
+    # Calculate dynamic interest score
+    interest = calculate_interest_score(highlight)
+    
+    insight = AIInsight(
+        # ... existing fields ...
+        interest_score=interest,  # Dynamic, not hardcoded 50
+    )
+```
+
+---
+
+## EXPECTED RESULT
+
+**Before:** All 3 highlights are finance/polymarket
+
+**After:** 
+- 1 politics highlight
+- 1 finance highlight  
+- 1 crypto (or sports/tech) highlight
+
+FREE users see variety, making the upgrade more compelling since they see value across categories.

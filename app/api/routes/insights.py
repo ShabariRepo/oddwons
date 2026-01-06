@@ -54,23 +54,102 @@ async def get_ai_insights(
         tier_limit = limit
         refresh_interval = "real-time"
 
-    # Build query - just get active insights
-    query = (
-        select(AIInsight)
-        .where(AIInsight.status == "active")
-        .where(AIInsight.expires_at > datetime.utcnow())
-    )
-
+    # Build query based on tier and category filter
     if category:
-        query = query.where(AIInsight.category == category)
+        # Category filter - just query that category
+        query = (
+            select(AIInsight)
+            .where(AIInsight.status == "active")
+            .where(AIInsight.expires_at > datetime.utcnow())
+            .where(AIInsight.category == category)
+            .order_by(
+                AIInsight.interest_score.desc().nullslast(),
+                AIInsight.created_at.desc()
+            )
+            .limit(tier_limit)
+        )
+        result = await db.execute(query)
+        insights = result.scalars().all()
+    elif tier == SubscriptionTier.FREE or tier is None:
+        # FREE tier: Get variety - 1 from each top category
+        insights = []
+        priority_categories = ["politics", "finance", "crypto", "sports", "tech", "entertainment"]
 
-    query = query.order_by(
-        AIInsight.interest_score.desc().nullslast(),
-        AIInsight.created_at.desc()
-    ).limit(tier_limit)
+        for cat in priority_categories:
+            if len(insights) >= tier_limit:
+                break
 
-    result = await db.execute(query)
-    insights = result.scalars().all()
+            result = await db.execute(
+                select(AIInsight)
+                .where(AIInsight.status == "active")
+                .where(AIInsight.expires_at > datetime.utcnow())
+                .where(AIInsight.category == cat)
+                .order_by(
+                    AIInsight.interest_score.desc().nullslast(),
+                    AIInsight.created_at.desc()
+                )
+                .limit(1)
+            )
+            cat_insight = result.scalar_one_or_none()
+            if cat_insight:
+                insights.append(cat_insight)
+
+        # If we still don't have enough, fill with any category
+        if len(insights) < tier_limit:
+            existing_ids = [i.id for i in insights]
+            fill_query = (
+                select(AIInsight)
+                .where(AIInsight.status == "active")
+                .where(AIInsight.expires_at > datetime.utcnow())
+            )
+            if existing_ids:
+                fill_query = fill_query.where(AIInsight.id.not_in(existing_ids))
+            fill_query = fill_query.order_by(
+                AIInsight.interest_score.desc().nullslast(),
+                AIInsight.created_at.desc()
+            ).limit(tier_limit - len(insights))
+
+            result = await db.execute(fill_query)
+            insights.extend(result.scalars().all())
+    else:
+        # Paid tiers: Get variety via round-robin across categories
+        from collections import defaultdict
+
+        # First, get more than we need
+        query = (
+            select(AIInsight)
+            .where(AIInsight.status == "active")
+            .where(AIInsight.expires_at > datetime.utcnow())
+            .order_by(
+                AIInsight.interest_score.desc().nullslast(),
+                AIInsight.created_at.desc()
+            )
+            .limit(tier_limit * 3)
+        )
+        result = await db.execute(query)
+        all_insights = result.scalars().all()
+
+        # Group by category
+        by_category = defaultdict(list)
+        for i in all_insights:
+            by_category[i.category].append(i)
+
+        # Round-robin across categories
+        insights = []
+        max_per_category = max(3, tier_limit // max(len(by_category), 1))
+        idx = 0
+
+        while len(insights) < tier_limit:
+            added_this_round = False
+            for cat in by_category:
+                if len(insights) >= tier_limit:
+                    break
+                if idx < len(by_category[cat]) and idx < max_per_category:
+                    insights.append(by_category[cat][idx])
+                    added_this_round = True
+            if not added_this_round:
+                break
+            idx += 1
 
     # Format response (COMPANION STYLE - informative, not betting advice)
     response_insights = []

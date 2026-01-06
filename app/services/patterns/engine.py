@@ -384,6 +384,55 @@ class PatternEngine:
         logger.info(f"AI analysis complete: {saved} insights saved across {categories_analyzed} categories")
         return saved
 
+    def _calculate_interest_score(
+        self,
+        highlight: Dict[str, Any],
+        market_data: Optional[Dict[str, Any]] = None
+    ) -> int:
+        """
+        Calculate how interesting/important this insight is.
+        Used for ranking insights on the frontend.
+        """
+        score = 50  # Base
+
+        # Volume boost
+        volume = market_data.get("volume", 0) if market_data else highlight.get("volume", 0)
+        if volume:
+            if volume > 1_000_000:
+                score += 20
+            elif volume > 100_000:
+                score += 10
+            elif volume > 10_000:
+                score += 5
+
+        # Movement boost - bigger moves are more interesting
+        movement = highlight.get("recent_movement", "")
+        if movement:
+            try:
+                # Parse "+5%" or "-3%" etc
+                pct_str = movement.replace("%", "").replace("+", "").replace("-", "").split()[0]
+                pct = float(pct_str)
+                if pct > 10:
+                    score += 15
+                elif pct > 5:
+                    score += 10
+                elif pct > 2:
+                    score += 5
+            except (ValueError, IndexError):
+                pass
+
+        # Catalyst boost - markets with upcoming events are more interesting
+        if highlight.get("upcoming_catalyst"):
+            score += 10
+
+        # Analyst note boost - if AI had good insight
+        analyst_note = highlight.get("analyst_note", "")
+        if analyst_note and len(analyst_note) > 100:
+            score += 5
+
+        # Cap at 100
+        return min(100, score)
+
     async def save_market_highlight(
         self,
         highlight: Dict[str, Any],
@@ -421,6 +470,9 @@ class PatternEngine:
                         "relevance": h.get("relevance", ""),
                     })
 
+            # Calculate dynamic interest score
+            interest_score = self._calculate_interest_score(highlight)
+
             insight = AIInsight(
                 market_id=highlight.get("market_id", "unknown"),
                 market_title=highlight.get("market_title", ""),
@@ -447,14 +499,14 @@ class PatternEngine:
                 source_articles=source_articles if source_articles else None,
                 news_context=news_context if news_context else None,
 
-                # Interest score for ranking (NOT betting confidence)
-                interest_score=50,  # Default; could be enhanced later
+                # Dynamic interest score for ranking
+                interest_score=interest_score,
 
                 expires_at=datetime.utcnow() + timedelta(hours=24),
                 status="active"
             )
             session.add(insight)
-            logger.debug(f"Saved highlight for {highlight.get('market_id')} ({category})")
+            logger.debug(f"Saved highlight for {highlight.get('market_id')} ({category}) - interest={interest_score}")
         except Exception as e:
             logger.error(f"Failed to save market highlight: {e}")
 
