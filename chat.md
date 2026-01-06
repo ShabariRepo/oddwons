@@ -1620,3 +1620,444 @@ async def save_market_highlight(self, highlight, category, session, news_context
 - 1 crypto (or sports/tech) highlight
 
 FREE users see variety, making the upgrade more compelling since they see value across categories.
+
+---
+
+# BUG FIX: Insight Detail Missing Data + Market Detail 404
+
+## Issue 1: Insight Detail Page Looks "Plain"
+
+**Cause:** FREE tier users don't get most fields due to tier-gating:
+
+```python
+# From insights.py - current tier gating:
+- analyst_note → PRO only
+- source_articles → PREMIUM+ only  
+- movement_context → PREMIUM+ only
+- upcoming_catalyst → PREMIUM+ only
+```
+
+So FREE users only see:
+- Market title
+- Summary  
+- Current odds
+- Price history chart
+
+**Option A: Keep as-is** (strong upgrade incentive)
+
+**Option B: Show teaser content** (better UX)
+
+```python
+# In get_insight_detail(), show blurred/truncated teasers for FREE:
+
+# Example: Show first 100 chars of analyst_note with "Upgrade to see full analysis"
+if tier == SubscriptionTier.FREE or tier is None:
+    if insight.analyst_note:
+        insight_data["analyst_note_preview"] = insight.analyst_note[:100] + "..."
+        insight_data["analyst_note_locked"] = True
+```
+
+## Issue 2: "Error loading market" on View Market Details
+
+**Cause:** The `market.id` stored in `ai_insights.market_id` doesn't match any market in the `markets` table.
+
+**Debug Steps:**
+
+```sql
+-- Check what market_id is stored in the insight
+SELECT id, market_id, market_title FROM ai_insights LIMIT 5;
+
+-- Check if that market_id exists in markets table
+SELECT id, title FROM markets WHERE id = '<market_id_from_above>';
+
+-- Find the actual market
+SELECT id, title FROM markets WHERE title ILIKE '%Kevin Hassett%';
+```
+
+**Likely Cause:** When AI analysis runs, it might be storing a different market ID format than what's in the database.
+
+In `app/services/patterns/engine.py` `save_market_highlight()`:
+
+```python
+insight = AIInsight(
+    market_id=highlight.get("market_id", "unknown"),  # This might be wrong!
+    ...
+)
+```
+
+**The Fix:**
+
+Ensure consistent market_id when saving insights:
+
+```python
+async def save_market_highlight(
+    self,
+    highlight: Dict[str, Any],
+    category: str,
+    session: AsyncSession,
+    news_context: Dict[str, Any] = None,
+    original_market_data: Dict[str, Any] = None  # ADD: Pass original market
+) -> None:
+    # Use the ACTUAL market_id from the database, not from AI response
+    actual_market_id = original_market_data.get("market_id") if original_market_data else highlight.get("market_id")
+    
+    insight = AIInsight(
+        market_id=actual_market_id,  # Guaranteed to match markets table
+        ...
+    )
+```
+
+**Quick Fix for Existing Data:**
+
+```sql
+-- Update ai_insights to match market IDs by title
+UPDATE ai_insights ai
+SET market_id = m.id
+FROM markets m
+WHERE LOWER(ai.market_title) = LOWER(m.title)
+AND ai.market_id != m.id;
+```
+
+## Issue 3: Frontend Should Handle Missing Market Gracefully
+
+**In the insight detail page**, if market is null, don't show "View Market Details" button:
+
+```tsx
+{/* Only show if market exists and is valid */}
+{market && market.id && (
+  <Link
+    href={`/markets/${market.id}`}
+    className="btn-secondary flex items-center gap-2"
+  >
+    View Market Details
+  </Link>
+)}
+```
+
+## Summary of Fixes
+
+1. **Debug market_id mismatch** - Run SQL queries to find the discrepancy
+2. **Fix insight save** - Pass original market data to ensure correct market_id
+3. **Frontend fallback** - Hide "View Market Details" if market lookup fails
+4. **Optional: Teaser content** - Show previews to FREE users to entice upgrades
+
+---
+
+# FEATURE: Interactive Tier Banner with Bug Chase Animation
+
+## THE IDEA
+
+A fun, animated banner below the navbar that:
+- Has scrolling marquee text (left to right)
+- Shows user's current tier + a fun message
+- Has a little bug 🐛 emoji "chasing" the text
+- Subtle upgrade nudge for FREE/BASIC users
+
+## IMPLEMENTATION
+
+### Create the Component
+
+**Create `frontend/src/components/TierBanner.tsx`:**
+
+```tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
+
+const TIER_MESSAGES = {
+  free: [
+    "You're on FREE tier • 3 highlights daily • Upgrade for more insights",
+    "FREE tier vibes • Want the full analysis? • Go Premium",
+    "Exploring the markets • FREE tier • Unlock analyst notes with PRO",
+  ],
+  basic: [
+    "BASIC tier unlocked • 10 highlights • Upgrade for catalysts & context",
+    "You're BASIC (in a good way) • Want movement analysis? • Go Premium",
+  ],
+  premium: [
+    "PREMIUM member • Full context unlocked • Upgrade to PRO for analyst notes",
+    "PREMIUM vibes • Source articles unlocked • PRO gets real-time updates",
+  ],
+  pro: [
+    "PRO member • Full access unlocked • You're him",
+    "PRO status • Real-time insights • You're seeing everything",
+    "Maximum PRO energy • All features unlocked • Let's get it",
+  ],
+}
+
+const TIER_COLORS = {
+  free: 'from-gray-600 to-gray-800',
+  basic: 'from-blue-600 to-blue-800',
+  premium: 'from-purple-600 to-purple-800',
+  pro: 'from-amber-500 to-orange-600',
+}
+
+export default function TierBanner() {
+  const { user } = useAuth()
+  const [messageIndex, setMessageIndex] = useState(0)
+  
+  const tier = (user?.subscription_tier?.toLowerCase() || 'free') as keyof typeof TIER_MESSAGES
+  const messages = TIER_MESSAGES[tier] || TIER_MESSAGES.free
+  const colors = TIER_COLORS[tier] || TIER_COLORS.free
+  
+  // Rotate messages every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMessageIndex((prev) => (prev + 1) % messages.length)
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [messages.length])
+
+  const currentMessage = messages[messageIndex]
+  const showUpgrade = tier === 'free' || tier === 'basic'
+
+  return (
+    <div className={`relative overflow-hidden bg-gradient-to-r ${colors} text-white py-1.5`}>
+      {/* Marquee Container */}
+      <div className="marquee-container flex items-center">
+        {/* Bug chasing the text */}
+        <div className="marquee-content flex items-center gap-4 animate-marquee">
+          <span className="bug-icon text-lg">🐛</span>
+          <span className="whitespace-nowrap text-sm font-medium tracking-wide">
+            {currentMessage}
+          </span>
+          <span className="whitespace-nowrap text-sm font-medium tracking-wide">
+            {currentMessage}
+          </span>
+          <span className="bug-icon text-lg">🐛</span>
+          <span className="whitespace-nowrap text-sm font-medium tracking-wide">
+            {currentMessage}
+          </span>
+          <span className="whitespace-nowrap text-sm font-medium tracking-wide">
+            {currentMessage}
+          </span>
+        </div>
+      </div>
+
+      {/* Upgrade button (fixed position on right) */}
+      {showUpgrade && (
+        <div className="absolute right-0 top-0 bottom-0 flex items-center pr-4 bg-gradient-to-l from-black/30 to-transparent pl-8">
+          <Link
+            href="/settings"
+            className="text-xs font-bold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
+          >
+            Upgrade →
+          </Link>
+        </div>
+      )}
+
+      <style jsx>{`
+        .marquee-container {
+          width: 100%;
+        }
+        
+        .marquee-content {
+          display: flex;
+          animation: marquee 20s linear infinite;
+        }
+        
+        @keyframes marquee {
+          0% {
+            transform: translateX(0%);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+        
+        .bug-icon {
+          animation: wiggle 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes wiggle {
+          0%, 100% {
+            transform: rotate(-5deg);
+          }
+          50% {
+            transform: rotate(5deg);
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
+```
+
+### Alternative: Tailwind-only Version (no styled-jsx)
+
+**Add to `frontend/src/app/globals.css`:**
+
+```css
+/* Tier Banner Animations */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes wiggle {
+  0%, 100% {
+    transform: rotate(-5deg) scale(1);
+  }
+  50% {
+    transform: rotate(5deg) scale(1.1);
+  }
+}
+
+@keyframes chase {
+  0%, 100% {
+    transform: translateX(0px);
+  }
+  50% {
+    transform: translateX(10px);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 25s linear infinite;
+}
+
+.animate-wiggle {
+  animation: wiggle 0.4s ease-in-out infinite;
+}
+
+.animate-chase {
+  animation: chase 0.8s ease-in-out infinite;
+}
+```
+
+**Simplified Component:**
+
+```tsx
+'use client'
+
+import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
+
+export default function TierBanner() {
+  const { user } = useAuth()
+  const tier = user?.subscription_tier?.toLowerCase() || 'free'
+  
+  const config = {
+    free: {
+      bg: 'bg-gradient-to-r from-gray-700 to-gray-900',
+      message: "FREE tier • 3 highlights daily • Upgrade for full insights",
+      showUpgrade: true,
+    },
+    basic: {
+      bg: 'bg-gradient-to-r from-blue-600 to-blue-800',
+      message: "BASIC tier • 10 highlights • Upgrade for analyst notes",
+      showUpgrade: true,
+    },
+    premium: {
+      bg: 'bg-gradient-to-r from-purple-600 to-purple-800',
+      message: "PREMIUM • Full context unlocked • Go PRO for real-time",
+      showUpgrade: true,
+    },
+    pro: {
+      bg: 'bg-gradient-to-r from-amber-500 to-orange-600',
+      message: "PRO • All features unlocked • You're him 👑",
+      showUpgrade: false,
+    },
+  }[tier] || { bg: 'bg-gray-800', message: 'Welcome!', showUpgrade: true }
+
+  return (
+    <div className={`${config.bg} text-white overflow-hidden relative`}>
+      <div className="flex animate-marquee whitespace-nowrap py-1.5">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="flex items-center mx-8">
+            <span className="animate-wiggle inline-block mr-3">🐛</span>
+            <span className="text-sm font-medium">{config.message}</span>
+          </div>
+        ))}
+      </div>
+      
+      {config.showUpgrade && (
+        <div className="absolute right-0 top-0 bottom-0 flex items-center bg-gradient-to-l from-black/40 to-transparent pl-12 pr-4">
+          <Link
+            href="/settings"
+            className="text-xs font-bold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-all hover:scale-105"
+          >
+            Upgrade →
+          </Link>
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+### Add to Layout
+
+**Edit `frontend/src/app/(app)/layout.tsx`:**
+
+```tsx
+import TierBanner from '@/components/TierBanner'
+import Sidebar from '@/components/Sidebar'
+import Navbar from '@/components/Navbar'
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      <TierBanner />  {/* ADD THIS */}
+      <Sidebar />
+      <main>{children}</main>
+    </div>
+  )
+}
+```
+
+---
+
+## VISUAL PREVIEW
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  OddWons          [Search...]                    🔔  S  │  <- Navbar
+├────────────────────────────────────────────────────────────┤
+│ 🐛 FREE tier • 3 highlights • Upgrade for more 🐛 FREE tier...  [Upgrade →] │  <- Banner
+├────────────┬───────────────────────────────────────────────┤
+│  Sidebar   │                                              │
+│            │   Market Highlights                          │
+│  Dashboard │   ...                                        │
+│  AI High.. │                                              │
+```
+
+## TIER COLORS
+
+| Tier | Gradient | Vibe |
+|------|----------|------|
+| FREE | Gray | Neutral, "you're missing out" |
+| BASIC | Blue | Getting somewhere |
+| PREMIUM | Purple | VIP energy |
+| PRO | Gold/Orange | You're him 👑 |
+
+## FUN MESSAGES BY TIER
+
+**FREE:**
+- "🐛 FREE tier • 3 highlights daily • Upgrade for full insights"
+- "🐛 Exploring free? • The real insights are in Premium"
+
+**BASIC:**
+- "🐛 BASIC unlocked • Want the analyst notes? • Go PRO fam"
+
+**PREMIUM:**
+- "🐛 PREMIUM vibes • Source articles unlocked • PRO gets real-time"
+
+**PRO:**
+- "🐛 PRO status • Full access • You're him 👑"
+- "🐛 Maximum PRO energy • All features unlocked • Let's get it"
+
+---
+
+## FILES TO CREATE/EDIT
+
+- [ ] `frontend/src/components/TierBanner.tsx` - CREATE the banner component
+- [ ] `frontend/src/app/globals.css` - ADD animation keyframes
+- [ ] `frontend/src/app/(app)/layout.tsx` - ADD TierBanner below Navbar

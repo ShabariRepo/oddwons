@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useAuth } from './AuthProvider'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
+import { TierBanner } from './TierBanner'
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, isAuthenticated } = useAuth()
@@ -27,10 +28,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex">
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
-        <Header />
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <TierBanner />
+      <div className="flex-1 flex">
+        <Sidebar />
         <main className="flex-1 p-6 overflow-auto">
           {children}
         </main>
