@@ -184,6 +184,18 @@ frontend/                     # Next.js frontend
 - `POST /api/v1/billing/webhook` - Stripe webhook handler
 - `GET /api/v1/billing/prices` - Get available subscription prices
 
+### Admin (requires is_admin=true)
+- `GET /api/v1/admin/stats` - Admin dashboard stats (users, MRR, tier distribution)
+- `GET /api/v1/admin/users` - List users with search/filter/pagination
+- `GET /api/v1/admin/users/{id}` - Get user detail with Stripe info
+- `POST /api/v1/admin/users/{id}/sync-subscription` - Sync user's subscription from Stripe
+- `POST /api/v1/admin/users/{id}/change-tier` - Manually change user tier
+- `POST /api/v1/admin/users/{id}/grant-trial` - Grant user trial period
+- `GET /api/v1/admin/webhook-logs` - Get recent Stripe webhook events
+- `POST /api/v1/admin/insights/regenerate` - Trigger AI insight regeneration
+- `DELETE /api/v1/admin/insights/clear-stale` - Delete expired insights
+- `GET /api/v1/admin/health` - System health check (DB, Redis, Stripe)
+
 ### System
 - `GET /health` - Health check
 - `POST /api/v1/collect` - Trigger data collection + analysis
