@@ -61,7 +61,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Background Pattern */}
-      <BrandPattern opacity={0.25} animated={false} />
+      <BrandPattern opacity={0.35} animated={true} />
 
       {/* Login Form - Higher z-index */}
       <div className="relative z-10 max-w-md w-full">
@@ -120,9 +120,14 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password
-                </label>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                    Password
+                  </label>
+                  <Link href="/forgot-password" className="text-sm font-medium text-primary-600 hover:text-primary-500">
+                    Forgot password?
+                  </Link>
+                </div>
                 <div className="mt-1 relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Lock className="h-5 w-5 text-gray-400" />

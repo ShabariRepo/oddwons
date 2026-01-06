@@ -80,13 +80,19 @@
 /* Brand Pattern Float Animation */
 @keyframes float {
   0%, 100% {
-    transform: translateY(0px);
+    transform: translateY(0px) translateX(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-12px) translateX(6px) rotate(3deg);
   }
   50% {
-    transform: translateY(-8px);
+    transform: translateY(-20px) translateX(-4px) rotate(-2deg);
+  }
+  75% {
+    transform: translateY(-8px) translateX(8px) rotate(2deg);
   }
 }
 
 .animate-float {
-  animation: float 4s ease-in-out infinite;
+  animation: float 6s ease-in-out infinite;
 }
