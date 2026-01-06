@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Bell, CreditCard, Shield, Check, Loader2, ExternalLink } from 'lucide-react'
+import { User, Bell, CreditCard, Shield, Check, Loader2, ExternalLink, RefreshCw } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuth } from '@/components/AuthProvider'
-import { createCheckout, createPortal, changePassword } from '@/lib/auth'
+import { createCheckout, createPortal, changePassword, syncSubscription } from '@/lib/auth'
 
 const plans = [
   {
@@ -89,6 +89,27 @@ export default function SettingsPage() {
       window.location.href = portal_url
     } catch (err: any) {
       setError(err.message || 'Failed to open billing portal')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleSyncSubscription = async () => {
+    setLoading('sync')
+    setError('')
+    setSuccess('')
+
+    try {
+      const result = await syncSubscription()
+      if (result.synced) {
+        setSuccess(`Subscription synced: ${result.tier} (${result.status})`)
+        // Refresh user data to show updated tier
+        refreshUser()
+      } else {
+        setError(result.message || 'Failed to sync subscription')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to sync subscription')
     } finally {
       setLoading(null)
     }
@@ -203,17 +224,32 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
-              {hasSubscription && (
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={handleManageSubscription}
-                  disabled={loading === 'portal'}
+                  onClick={handleSyncSubscription}
+                  disabled={loading === 'sync'}
                   className="btn-secondary flex items-center gap-2"
+                  title="Sync subscription status from Stripe"
                 >
-                  {loading === 'portal' && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <ExternalLink className="w-4 h-4" />
-                  Manage Billing
+                  {loading === 'sync' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Sync
                 </button>
-              )}
+                {hasSubscription && (
+                  <button
+                    onClick={handleManageSubscription}
+                    disabled={loading === 'portal'}
+                    className="btn-secondary flex items-center gap-2"
+                  >
+                    {loading === 'portal' && <Loader2 className="w-4 h-4 animate-spin" />}
+                    <ExternalLink className="w-4 h-4" />
+                    Manage Billing
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

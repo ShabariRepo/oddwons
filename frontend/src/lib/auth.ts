@@ -160,3 +160,16 @@ export async function createPortal(): Promise<{ portal_url: string }> {
 export async function cancelSubscription(): Promise<void> {
   await authFetch('/billing/cancel', { method: 'POST' })
 }
+
+export interface SyncResult {
+  synced: boolean
+  message: string
+  tier: string
+  status: string
+  current_period_end?: string
+  cancel_at_period_end?: boolean
+}
+
+export async function syncSubscription(): Promise<SyncResult> {
+  return authFetch<SyncResult>('/billing/sync', { method: 'POST' })
+}

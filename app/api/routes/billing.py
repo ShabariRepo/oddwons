@@ -18,6 +18,7 @@ from app.services.billing import (
     create_billing_portal_session,
     get_subscription_info,
     cancel_subscription,
+    sync_subscription_from_stripe,
     handle_subscription_created,
     handle_subscription_updated,
     handle_subscription_deleted,
@@ -116,6 +117,19 @@ async def cancel_sub(user: User = Depends(get_current_user)):
         )
 
     return {"message": "Subscription will be canceled at period end"}
+
+
+@router.post("/sync")
+async def sync_subscription(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Sync subscription status from Stripe.
+    Useful when webhooks fail or user wants to manually refresh their tier.
+    """
+    result = await sync_subscription_from_stripe(user, db)
+    return result
 
 
 @router.get("/prices")

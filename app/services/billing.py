@@ -224,3 +224,98 @@ async def cancel_subscription(user: User) -> bool:
     except stripe.error.StripeError as e:
         logger.error(f"Error canceling subscription: {e}")
         return False
+
+
+async def sync_subscription_from_stripe(user: User, db: AsyncSession) -> dict:
+    """
+    Sync user's subscription status from Stripe.
+    Useful when webhooks fail or user wants to manually refresh.
+    """
+    if not user.stripe_customer_id:
+        return {
+            "synced": False,
+            "message": "No Stripe customer ID found",
+            "tier": user.subscription_tier.value,
+            "status": user.subscription_status.value if user.subscription_status else "inactive",
+        }
+
+    try:
+        # List all subscriptions for this customer
+        subscriptions = stripe.Subscription.list(
+            customer=user.stripe_customer_id,
+            status="all",
+            limit=1,
+        )
+
+        if not subscriptions.data:
+            # No subscriptions found - reset to free
+            user.subscription_tier = SubscriptionTier.FREE
+            user.subscription_status = SubscriptionStatus.INACTIVE
+            user.stripe_subscription_id = None
+            await db.commit()
+            return {
+                "synced": True,
+                "message": "No active subscription found in Stripe",
+                "tier": "FREE",
+                "status": "inactive",
+            }
+
+        # Get the most recent subscription
+        subscription = subscriptions.data[0]
+
+        # Update subscription ID if different
+        if user.stripe_subscription_id != subscription.id:
+            user.stripe_subscription_id = subscription.id
+
+        # Get price and tier
+        price_id = subscription["items"]["data"][0]["price"]["id"]
+        tier = PRICE_TO_TIER.get(price_id, SubscriptionTier.FREE)
+
+        # Map Stripe status
+        status_map = {
+            "active": SubscriptionStatus.ACTIVE,
+            "past_due": SubscriptionStatus.PAST_DUE,
+            "canceled": SubscriptionStatus.CANCELED,
+            "trialing": SubscriptionStatus.TRIALING,
+            "unpaid": SubscriptionStatus.INACTIVE,
+            "incomplete": SubscriptionStatus.INACTIVE,
+            "incomplete_expired": SubscriptionStatus.INACTIVE,
+        }
+
+        new_status = status_map.get(subscription.status, SubscriptionStatus.INACTIVE)
+
+        # Handle canceled at period end
+        if subscription.cancel_at_period_end:
+            new_status = SubscriptionStatus.CANCELED
+
+        # Update user
+        user.subscription_tier = tier
+        user.subscription_status = new_status
+
+        if subscription.current_period_end:
+            user.subscription_end = datetime.fromtimestamp(subscription.current_period_end)
+
+        if subscription.trial_end:
+            user.trial_end = datetime.fromtimestamp(subscription.trial_end)
+
+        await db.commit()
+
+        logger.info(f"Synced subscription for user {user.id}: {tier.value} ({new_status.value})")
+
+        return {
+            "synced": True,
+            "message": f"Subscription synced successfully",
+            "tier": tier.value,
+            "status": new_status.value,
+            "current_period_end": datetime.fromtimestamp(subscription.current_period_end).isoformat() if subscription.current_period_end else None,
+            "cancel_at_period_end": subscription.cancel_at_period_end,
+        }
+
+    except stripe.error.StripeError as e:
+        logger.error(f"Error syncing subscription from Stripe: {e}")
+        return {
+            "synced": False,
+            "message": f"Stripe error: {str(e)}",
+            "tier": user.subscription_tier.value,
+            "status": user.subscription_status.value if user.subscription_status else "inactive",
+        }
