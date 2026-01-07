@@ -1,115 +1,90 @@
-# OddWons - Railway Deployment (Simple)
+# OddWons - Production Status
 
-_Last updated: January 6, 2025_
-
-The app works locally. Just need correct Railway configs.
+_Last updated: January 7, 2026_
 
 ---
 
-## STEP 1: Fix Backend Config
+## Current Status: DEPLOYED
 
-**Delete `railway.toml`, create `railway.json`:**
+### Live URLs
+- **Frontend**: https://oddwons.ai
+- **Backend API**: https://api.oddwons.ai
 
-```json
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "NIXPACKS"
-  },
-  "deploy": {
-    "startCommand": "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT",
-    "healthcheckPath": "/health",
-    "healthcheckTimeout": 100,
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
-  }
-}
-```
-
-**Create `nixpacks.toml`:**
-
-```toml
-[phases.setup]
-nixPkgs = ["python311", "postgresql", "gcc", "libffi"]
-nixLibs = ["libffi", "openssl"]
-
-[phases.install]
-cmds = [
-    "pip install --upgrade pip",
-    "pip install -r requirements.txt"
-]
-
-[start]
-cmd = "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
-```
+### Services Status
+- Backend: Running (health check passing)
+- Frontend: Running (Next.js serving pages)
+- PostgreSQL: Connected via Railway internal network
+- Redis: Connected via Railway internal network
 
 ---
 
-## STEP 2: Fix Frontend Config
+## Environment Variables Configured
 
-**Delete `frontend/railway.toml`, create `frontend/railway.json`:**
+### Shared Variables (all services)
+- `DATABASE_URL` - PostgreSQL connection
+- `REDIS_URL` - Redis connection
+- `SECRET_KEY` - JWT signing key
+- `ALGORITHM` - HS256
+- `ACCESS_TOKEN_EXPIRE_MINUTES` - 10080 (7 days)
+- `DEBUG` - false
+- `LOG_LEVEL` - INFO
+- `COLLECTION_INTERVAL_MINUTES` - 15
+- `FRONTEND_URL` - https://oddwons.ai
+- `FROM_EMAIL` - alerts@oddwons.ai
+- `STRIPE_SECRET_KEY` - Live key configured
+- `STRIPE_PUBLISHABLE_KEY` - Live key configured
 
-```json
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
-  },
-  "deploy": {
-    "healthcheckPath": "/",
-    "healthcheckTimeout": 30,
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
-  }
-}
-```
+### Backend-Specific
+- `STRIPE_WEBHOOK_SECRET` - For Stripe event verification
 
----
-
-## STEP 3: Fix DATABASE_URL Format
-
-Railway gives `postgresql://` but asyncpg needs `postgresql+asyncpg://`.
-
-**Edit `app/config.py` - add this method to Settings class:**
-
-```python
-def model_post_init(self, __context):
-    """Fix Railway's DATABASE_URL format."""
-    if self.database_url.startswith("postgresql://") and "+asyncpg" not in self.database_url:
-        object.__setattr__(
-            self, 
-            'database_url', 
-            self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        )
-```
+### Frontend-Specific
+- `BACKEND_URL` - https://api.oddwons.ai (for Next.js rewrites)
 
 ---
 
-## STEP 4: Railway Dashboard Cleanup
+## DNS Configuration
 
-1. Delete duplicate Postgres (keep one with data)
-2. Delete duplicate Redis (keep active one)
-3. Set backend service variables (use Railway references):
-
-```
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-REDIS_URL=${{Redis-SaFD.REDIS_URL}}
-```
-
-4. Set frontend service variable:
-```
-BACKEND_URL=https://<backend-service-url>.up.railway.app
-```
+Connected to Cloudflare:
+- `oddwons.ai` -> Railway frontend service
+- `api.oddwons.ai` -> Railway backend service
 
 ---
 
-## STEP 5: Deploy
+## Recent Fixes
+
+1. **Stats Endpoint Fix** (Jan 7)
+   - `/api/v1/markets/stats/summary` was failing with Redis errors
+   - Fixed to handle Redis gracefully (non-blocking)
+
+2. **Frontend Proxy** (Jan 7)
+   - Added `BACKEND_URL` env var for Next.js rewrites
+   - API calls proxied through frontend to backend
+
+---
+
+## Next Steps (Production Readiness)
+
+- [ ] Run data collection to populate markets
+- [ ] Run AI analysis to generate insights
+- [ ] Test Stripe checkout flow with real payments
+- [ ] Verify Stripe webhook receives events
+- [ ] Monitor error logs for any issues
+- [ ] Set up SendGrid for email alerts
+
+---
+
+## Commands
 
 ```bash
-git add .
-git commit -m "Fix Railway configs"
-git push
-```
+# Trigger data collection
+curl -X POST https://api.oddwons.ai/api/v1/collect
 
-Railway auto-deploys on push. Done.
+# Check backend health
+curl https://api.oddwons.ai/health
+
+# Check markets
+curl "https://api.oddwons.ai/api/v1/markets?limit=5"
+
+# Check stats
+curl https://api.oddwons.ai/api/v1/markets/stats/summary
+```
