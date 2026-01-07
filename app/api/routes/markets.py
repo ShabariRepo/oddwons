@@ -380,7 +380,6 @@ async def get_cached_market(
 @router.get("/stats/summary")
 async def get_market_stats(
     db: AsyncSession = Depends(get_db),
-    r: redis.Redis = Depends(get_redis),
 ):
     """Get summary statistics."""
     # Count by platform
@@ -396,8 +395,14 @@ async def get_market_stats(
         select(func.sum(Market.volume))
     )
 
-    # Last collection time
-    last_collection = await r.get("last_collection")
+    # Last collection time - try Redis but don't fail if unavailable
+    last_collection = None
+    try:
+        from app.core.database import get_redis
+        r = await get_redis()
+        last_collection = await r.get("last_collection")
+    except Exception:
+        pass  # Redis unavailable, that's OK
 
     return {
         "kalshi_markets": kalshi_count or 0,
