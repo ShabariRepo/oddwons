@@ -1,5 +1,6 @@
 # Frontend Dockerfile for OddWons
-FROM node:20-alpine AS builder
+ARG CACHEBUST=1
+FROM node:20.11-alpine AS builder
 
 WORKDIR /app
 
