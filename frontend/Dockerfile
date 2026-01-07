@@ -1,4 +1,4 @@
-# Frontend Dockerfile
+# Frontend Dockerfile for OddWons
 FROM node:20-alpine AS builder
 
 WORKDIR /app
