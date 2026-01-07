@@ -195,11 +195,11 @@ export default function SettingsPage() {
                       : 'No Active Plan'}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {user?.subscription_status === 'active'
-                      ? user?.subscription_status === 'trialing'
-                        ? 'Free trial active'
-                        : 'Active subscription'
-                      : 'Start a 7-day free trial below'}
+                    {user?.subscription_status === 'trialing'
+                      ? 'Free trial active'
+                      : user?.subscription_status === 'active'
+                        ? 'Active subscription'
+                        : 'Start a 7-day free trial below'}
                   </p>
                 </div>
               </div>
