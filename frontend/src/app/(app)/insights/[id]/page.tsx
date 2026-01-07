@@ -149,8 +149,8 @@ export default function InsightDetailPage() {
                   tick={{ fill: '#6b7280' }}
                 />
                 <Tooltip
-                  formatter={(v: number) => [`${(v * 100).toFixed(1)}%`, 'Yes']}
-                  labelFormatter={(t) => t ? new Date(t).toLocaleString() : ''}
+                  formatter={(v) => [`${(Number(v) * 100).toFixed(1)}%`, 'Yes']}
+                  labelFormatter={(t) => t ? new Date(t as number).toLocaleString() : ''}
                 />
                 <Line
                   type="monotone"
