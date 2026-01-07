@@ -106,7 +106,7 @@ class Alert(Base):
     __tablename__ = "alerts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    pattern_id = Column(Integer, ForeignKey("patterns.id"), nullable=False)
+    pattern_id = Column(Integer, ForeignKey("patterns.id"), nullable=True)  # Optional - alerts can exist without saved pattern
 
     # Alert content
     title = Column(String, nullable=False)

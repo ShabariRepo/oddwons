@@ -16,6 +16,7 @@ ENV/
 .env.local
 .env.*.local
 keys.txt
+chat.md
 
 # Build outputs
 dist/

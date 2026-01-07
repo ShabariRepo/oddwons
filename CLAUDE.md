@@ -535,3 +535,58 @@ Fixed arbitrage detector that was hanging for 25+ minutes due to 16M+ string com
 **New Hooks Added:**
 - `useInsightDetail(id)` - Fetch single insight with all context
 - `useMarketDetail(id)` - Fetch single market with AI + cross-platform
+
+### Production Prep (Jan 2026)
+
+**Welcome Email Integration:**
+- `notification_service.send_welcome_email()` now called in `/auth/register`
+- Sends branded email with feature overview and dashboard link
+- Wrapped in try/catch to not block registration if email fails
+
+**Alerts System Fix:**
+- Pattern engine now calls `alert_generator.generate_alerts()` after pattern detection
+- Alerts are cached in Redis for fast retrieval via `/api/v1/patterns/alerts`
+- Fixed `Alert.pattern_id` to be nullable (alerts can exist without saved pattern)
+- Analysis result now includes `alerts_generated` count
+
+**Category Rotation (Already Implemented):**
+- FREE tier gets 1 insight from each category (politics, finance, crypto, sports, tech, entertainment)
+- Paid tiers get round-robin distribution across all categories
+- Ensures variety in AI highlights regardless of tier
+
+**Stripe Webhook Handler (Verified):**
+- Signature verification via `stripe.Webhook.construct_event()`
+- Handles: `checkout.session.completed`, `customer.subscription.created/updated/deleted`, `invoice.paid/payment_failed`
+- `sync_subscription_from_stripe()` available for manual refresh
+- Maps Stripe status to internal `SubscriptionStatus` enum
+
+**Production Environment Variables:**
+```env
+# Required for production
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+SECRET_KEY=<generate-secure-random-string>
+FRONTEND_URL=https://oddwons.ai
+
+# Stripe (LIVE keys)
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...  # From Stripe Dashboard after creating webhook
+STRIPE_PRICE_BASIC=price_...    # Create in Stripe Dashboard
+STRIPE_PRICE_PREMIUM=price_...
+STRIPE_PRICE_PRO=price_...
+
+# SendGrid
+SENDGRID_API_KEY=SG....
+FROM_EMAIL=noreply@oddwons.ai
+
+# AI
+GROQ_API_KEY=gsk_...
+GEMINI_API_KEY=AIza...
+```
+
+**Stripe Webhook Setup (Production):**
+1. Go to Stripe Dashboard → Developers → Webhooks
+2. Add endpoint: `https://oddwons.ai/api/v1/billing/webhook`
+3. Select events: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`
+4. Copy signing secret → add to `STRIPE_WEBHOOK_SECRET` env var

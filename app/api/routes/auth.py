@@ -48,6 +48,14 @@ async def register(
     # Create user
     user = await create_user(db, user_data)
 
+    # Send welcome email (don't block registration if email fails)
+    try:
+        await notification_service.send_welcome_email(user.email, user.name)
+    except Exception as e:
+        # Log but don't fail registration
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to send welcome email: {e}")
+
     # Create token
     access_token = create_access_token(
         data={"sub": user.id, "email": user.email}

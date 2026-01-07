@@ -17,6 +17,7 @@ from .volume import VolumePatternDetector
 from .price import PricePatternDetector
 from .arbitrage import ArbitrageDetector
 from .scoring import PatternScorer
+from app.services.alerts import alert_generator
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +209,16 @@ class PatternEngine:
             # Save rule-based patterns
             saved = await self.save_patterns(patterns, session)
 
+            # Generate alerts from patterns (push to Redis for real-time alerts)
+            alerts_generated = 0
+            if patterns:
+                try:
+                    alerts = await alert_generator.generate_alerts(patterns, session)
+                    alerts_generated = len(alerts)
+                    logger.info(f"Generated {alerts_generated} alerts from {len(patterns)} patterns")
+                except Exception as e:
+                    logger.error(f"Alert generation failed: {e}")
+
             # AI analysis on promising patterns
             ai_insights_saved = 0
             if with_ai and ai_agent.is_enabled():
@@ -223,6 +234,7 @@ class PatternEngine:
                 "total_markets_analyzed": len(markets),
                 "total_patterns_detected": len(patterns),
                 "patterns_saved": saved,
+                "alerts_generated": alerts_generated,
                 "ai_insights_saved": ai_insights_saved,
                 "top_opportunities": top_opportunities,
                 "by_category": {
