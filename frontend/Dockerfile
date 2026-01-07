@@ -11,7 +11,9 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the application with backend URL for rewrites
+ARG BACKEND_URL=https://api.oddwons.ai
+ENV BACKEND_URL=${BACKEND_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
