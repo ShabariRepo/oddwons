@@ -23,40 +23,26 @@ const colorClasses = {
 
 // Mini brand pattern for card backgrounds
 function CardBrandPattern() {
-  const items = [
-    { type: 'logo', x: 75, y: 60, rotate: 15, size: 24 },
-    { type: 'cash', x: 85, y: 20, rotate: -10, size: 18 },
-    { type: 'smile', x: 65, y: 85, rotate: 8, size: 16 },
-    { type: 'logo', x: 90, y: 75, rotate: -5, size: 20 },
-  ]
-
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {items.map((item, i) => (
-        <div
-          key={i}
-          className="absolute select-none opacity-[0.06]"
-          style={{
-            left: `${item.x}%`,
-            top: `${item.y}%`,
-            transform: `rotate(${item.rotate}deg)`,
-          }}
-        >
-          {item.type === 'logo' ? (
-            <Image
-              src="/oddwons-logo.png"
-              alt=""
-              width={item.size}
-              height={item.size}
-              className="rounded"
-            />
-          ) : (
-            <span style={{ fontSize: `${item.size}px` }}>
-              {item.type === 'cash' ? '💸' : '😁'}
-            </span>
-          )}
-        </div>
-      ))}
+      {/* Logo */}
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-[0.15]">
+        <Image
+          src="/oddwons-logo.png"
+          alt=""
+          width={48}
+          height={48}
+          className="rounded-lg"
+        />
+      </div>
+      {/* Cash emoji */}
+      <div className="absolute right-16 top-2 opacity-[0.12] rotate-[-12deg]">
+        <span className="text-2xl">💸</span>
+      </div>
+      {/* Smile emoji */}
+      <div className="absolute right-2 bottom-2 opacity-[0.12] rotate-[8deg]">
+        <span className="text-lg">😁</span>
+      </div>
     </div>
   )
 }
