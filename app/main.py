@@ -160,7 +160,7 @@ async def debug_test_collect():
             kalshi_markets = await kalshi_client.fetch_all_markets(max_pages=1)
             results["kalshi"] = {"fetched": len(kalshi_markets)}
 
-            for market_data in kalshi_markets[:5]:  # Just first 5
+            for market_data in kalshi_markets:  # All from first page
                 market_id = f"kalshi_{market_data.ticker}"
                 yes_price = market_data.yes_ask if market_data.yes_ask else market_data.yes_bid
                 stmt = insert(Market).values(
@@ -179,7 +179,7 @@ async def debug_test_collect():
                 await session.execute(stmt)
 
             await session.commit()
-            results["kalshi"]["saved"] = min(5, len(kalshi_markets))
+            results["kalshi"]["saved"] = len(kalshi_markets)
         except Exception as e:
             results["kalshi"] = {"error": str(e)}
             await session.rollback()
