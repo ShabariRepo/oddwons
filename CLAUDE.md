@@ -627,3 +627,10 @@ GEMINI_API_KEY=AIza...
 ```bash
 alembic upgrade head  # Adds email fields to users and alerts tables
 ```
+
+### Bug Fix: Market Matcher Platform Enum (Jan 8, 2026)
+**Fixed cross-platform matching returning 0 results.**
+
+The `market_matcher.py` was comparing `Market.platform == "KALSHI"` (string) instead of `Market.platform == Platform.KALSHI` (enum). Since `Platform.KALSHI.value == "kalshi"` (lowercase), no markets were being matched.
+
+**Fix:** Import `Platform` enum and use `Platform.KALSHI` / `Platform.POLYMARKET` in queries.

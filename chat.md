@@ -1,6 +1,16 @@
 # OddWons - Production Tasks
 
-_Last updated: January 7, 2025_
+_Last updated: January 8, 2026_
+
+## PRODUCTION STATUS: ✅ LIVE
+
+**Backend:** https://api.oddwons.ai
+**Frontend:** https://oddwons.ai
+
+### Latest Fix (Jan 8, 2026)
+- Fixed `market_matcher.py` Platform enum comparison bug
+- Was comparing `"KALSHI"` (string) vs `Platform.KALSHI` (enum value `"kalshi"`)
+- Cross-platform matches should now populate after next 15-min cycle
 
 ---
 
