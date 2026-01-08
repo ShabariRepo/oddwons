@@ -14,7 +14,7 @@ from rapidfuzz import fuzz, process
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.market import Market
+from app.models.market import Market, Platform
 from app.models.cross_platform_match import CrossPlatformMatch
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class MarketMatcher:
         # Get Kalshi markets
         kalshi_result = await self.session.execute(
             select(Market)
-            .where(Market.platform == "KALSHI")
+            .where(Market.platform == Platform.KALSHI)
             .where(Market.volume >= min_volume)
             .where(Market.status.in_(["active", "open"]))
             .where(Market.yes_price.between(min_price, max_price))
@@ -66,7 +66,7 @@ class MarketMatcher:
         # Get Polymarket markets
         poly_result = await self.session.execute(
             select(Market)
-            .where(Market.platform == "POLYMARKET")
+            .where(Market.platform == Platform.POLYMARKET)
             .where(Market.volume >= min_volume)
             .where(Market.status.in_(["active", "open"]))
             .where(Market.yes_price.between(min_price, max_price))
