@@ -119,18 +119,26 @@ async def debug_db():
 
 @app.get("/debug/apis")
 async def debug_apis():
-    """Debug API clients."""
+    """Debug API clients - fetch just one page to test connectivity."""
     results = {"kalshi": None, "polymarket": None}
 
     try:
-        kalshi_markets = await kalshi_client.fetch_all_markets()
-        results["kalshi"] = {"status": "ok", "count": len(kalshi_markets)}
+        # Just test Kalshi events endpoint
+        async with kalshi_client._get_client() as client:
+            resp = await client.get("/events", params={"limit": 1})
+            resp.raise_for_status()
+            data = resp.json()
+            results["kalshi"] = {"status": "ok", "events_count": len(data.get("events", []))}
     except Exception as e:
         results["kalshi"] = {"status": "error", "error": str(e)}
 
     try:
-        poly_markets = await polymarket_client.fetch_all_markets()
-        results["polymarket"] = {"status": "ok", "count": len(poly_markets)}
+        # Just test Polymarket gamma endpoint
+        async with polymarket_client._get_client() as client:
+            resp = await client.get("/events", params={"limit": 1, "closed": "false"})
+            resp.raise_for_status()
+            data = resp.json()
+            results["polymarket"] = {"status": "ok", "events_count": len(data)}
     except Exception as e:
         results["polymarket"] = {"status": "error", "error": str(e)}
 
