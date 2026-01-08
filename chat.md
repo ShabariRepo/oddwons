@@ -4,17 +4,17 @@ _Last updated: January 7, 2026_
 
 ---
 
-## Current Status: DEPLOYED
+## Current Status: DEPLOYED AND WORKING
 
 ### Live URLs
 - **Frontend**: https://oddwons.ai
 - **Backend API**: https://api.oddwons.ai
 
-### Services Status
-- Backend: Running (health check passing)
-- Frontend: Running (Next.js serving pages)
-- PostgreSQL: Connected via Railway internal network
-- Redis: Connected via Railway internal network
+### Database Stats
+- 801 Kalshi markets
+- 1,533 Polymarket markets
+- $2.2 Billion total volume
+- Automatic collection every 15 minutes via scheduler
 
 ---
 
@@ -38,7 +38,7 @@ _Last updated: January 7, 2026_
 - `STRIPE_WEBHOOK_SECRET` - For Stripe event verification
 
 ### Frontend-Specific
-- `BACKEND_URL` - https://api.oddwons.ai (for Next.js rewrites)
+- `BACKEND_URL` - https://api.oddwons.ai (for Next.js rewrites, set at build time)
 
 ---
 
@@ -50,41 +50,45 @@ Connected to Cloudflare:
 
 ---
 
-## Recent Fixes
+## Issues Fixed During Deployment
 
-1. **Stats Endpoint Fix** (Jan 7)
-   - `/api/v1/markets/stats/summary` was failing with Redis errors
-   - Fixed to handle Redis gracefully (non-blocking)
-
-2. **Frontend Proxy** (Jan 7)
-   - Added `BACKEND_URL` env var for Next.js rewrites
-   - API calls proxied through frontend to backend
+1. **Stats Endpoint Fix** - Made Redis optional (graceful fallback)
+2. **Frontend API Proxy** - Set `BACKEND_URL` at Docker build time
+3. **Database Tables** - Fixed model imports in `init_db()`
+4. **Data Collection** - Debug endpoints helped identify timeout issues
 
 ---
 
-## Next Steps (Production Readiness)
+## Debug Endpoints (can be removed later)
 
-- [ ] Run data collection to populate markets
-- [ ] Run AI analysis to generate insights
-- [ ] Test Stripe checkout flow with real payments
-- [ ] Verify Stripe webhook receives events
-- [ ] Monitor error logs for any issues
-- [ ] Set up SendGrid for email alerts
+- `GET /debug/db` - Check database tables
+- `GET /debug/apis` - Test API client connectivity
+- `POST /debug/test-collect` - Run small collection batch
 
 ---
 
 ## Commands
 
 ```bash
-# Trigger data collection
-curl -X POST https://api.oddwons.ai/api/v1/collect
-
 # Check backend health
 curl https://api.oddwons.ai/health
+
+# Check stats
+curl https://api.oddwons.ai/api/v1/markets/stats/summary
 
 # Check markets
 curl "https://api.oddwons.ai/api/v1/markets?limit=5"
 
-# Check stats
-curl https://api.oddwons.ai/api/v1/markets/stats/summary
+# Test collection (via debug endpoint)
+curl -X POST https://api.oddwons.ai/debug/test-collect
 ```
+
+---
+
+## Next Steps
+
+- [ ] Run AI analysis to generate insights (`run_analysis.py`)
+- [ ] Test Stripe checkout flow with real payments
+- [ ] Verify Stripe webhook receives events
+- [ ] Set up SendGrid for email alerts
+- [ ] Remove debug endpoints once stable
