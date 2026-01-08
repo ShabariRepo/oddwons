@@ -139,6 +139,58 @@ async def debug_apis():
     return results
 
 
+@app.post("/debug/test-collect")
+async def debug_test_collect():
+    """Test collecting just a few markets to debug collection issues."""
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Market, Platform
+    from sqlalchemy.dialects.postgresql import insert
+    from datetime import datetime
+
+    results = {"kalshi": None, "polymarket": None, "markets_before": 0, "markets_after": 0}
+
+    async with AsyncSessionLocal() as session:
+        # Count before
+        from sqlalchemy import select, func
+        count_before = await session.scalar(select(func.count()).select_from(Market))
+        results["markets_before"] = count_before or 0
+
+        # Try Kalshi
+        try:
+            kalshi_markets = await kalshi_client.fetch_all_markets(max_pages=1)
+            results["kalshi"] = {"fetched": len(kalshi_markets)}
+
+            for market_data in kalshi_markets[:5]:  # Just first 5
+                market_id = f"kalshi_{market_data.ticker}"
+                yes_price = market_data.yes_ask if market_data.yes_ask else market_data.yes_bid
+                stmt = insert(Market).values(
+                    id=market_id,
+                    platform=Platform.KALSHI,
+                    title=market_data.title,
+                    description=market_data.subtitle,
+                    category=market_data.category,
+                    yes_price=yes_price,
+                    volume=market_data.volume,
+                    status=market_data.status,
+                ).on_conflict_do_update(
+                    index_elements=["id"],
+                    set_={"yes_price": yes_price, "updated_at": datetime.utcnow()}
+                )
+                await session.execute(stmt)
+
+            await session.commit()
+            results["kalshi"]["saved"] = min(5, len(kalshi_markets))
+        except Exception as e:
+            results["kalshi"] = {"error": str(e)}
+            await session.rollback()
+
+        # Count after
+        count_after = await session.scalar(select(func.count()).select_from(Market))
+        results["markets_after"] = count_after or 0
+
+    return results
+
+
 @app.get("/")
 async def root():
     """Root endpoint."""
