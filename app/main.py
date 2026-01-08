@@ -123,22 +123,16 @@ async def debug_apis():
     results = {"kalshi": None, "polymarket": None}
 
     try:
-        # Just test Kalshi events endpoint
-        async with kalshi_client._get_client() as client:
-            resp = await client.get("/events", params={"limit": 1})
-            resp.raise_for_status()
-            data = resp.json()
-            results["kalshi"] = {"status": "ok", "events_count": len(data.get("events", []))}
+        # Test Kalshi events endpoint using the client's method
+        kalshi_data = await kalshi_client.get_events(limit=1)
+        results["kalshi"] = {"status": "ok", "events_count": len(kalshi_data.get("events", []))}
     except Exception as e:
         results["kalshi"] = {"status": "error", "error": str(e)}
 
     try:
-        # Just test Polymarket gamma endpoint
-        async with polymarket_client._get_client() as client:
-            resp = await client.get("/events", params={"limit": 1, "closed": "false"})
-            resp.raise_for_status()
-            data = resp.json()
-            results["polymarket"] = {"status": "ok", "events_count": len(data)}
+        # Test Polymarket using its method
+        poly_data = await polymarket_client.get_events(limit=1)
+        results["polymarket"] = {"status": "ok", "events_count": len(poly_data)}
     except Exception as e:
         results["polymarket"] = {"status": "error", "error": str(e)}
 
