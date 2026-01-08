@@ -481,3 +481,60 @@ async def trigger_collection():
     """Manually trigger data collection."""
     result = await data_collector.run_collection()
     return {"status": "completed", "result": result}
+
+
+@app.post("/debug/migrate")
+async def run_migrations():
+    """Add missing columns to database tables."""
+    from sqlalchemy import text
+    from app.core.database import AsyncSessionLocal
+
+    results = {"alerts": [], "users": []}
+
+    async with AsyncSessionLocal() as session:
+        # Check alerts columns
+        result = await session.execute(text('''
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = :table_name
+        '''), {'table_name': 'alerts'})
+        alert_cols = [row[0] for row in result.fetchall()]
+
+        if 'user_id' not in alert_cols:
+            await session.execute(text('ALTER TABLE alerts ADD COLUMN user_id VARCHAR REFERENCES users(id)'))
+            results["alerts"].append("added user_id")
+
+        if 'email_sent' not in alert_cols:
+            await session.execute(text('ALTER TABLE alerts ADD COLUMN email_sent BOOLEAN DEFAULT FALSE'))
+            results["alerts"].append("added email_sent")
+
+        if 'email_sent_at' not in alert_cols:
+            await session.execute(text('ALTER TABLE alerts ADD COLUMN email_sent_at TIMESTAMP'))
+            results["alerts"].append("added email_sent_at")
+
+        # Check users columns
+        result = await session.execute(text('''
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = :table_name
+        '''), {'table_name': 'users'})
+        user_cols = [row[0] for row in result.fetchall()]
+
+        if 'email_alerts_enabled' not in user_cols:
+            await session.execute(text('ALTER TABLE users ADD COLUMN email_alerts_enabled BOOLEAN DEFAULT TRUE'))
+            results["users"].append("added email_alerts_enabled")
+
+        if 'email_digest_enabled' not in user_cols:
+            await session.execute(text('ALTER TABLE users ADD COLUMN email_digest_enabled BOOLEAN DEFAULT TRUE'))
+            results["users"].append("added email_digest_enabled")
+
+        if 'trial_reminder_sent' not in user_cols:
+            await session.execute(text('ALTER TABLE users ADD COLUMN trial_reminder_sent BOOLEAN DEFAULT FALSE'))
+            results["users"].append("added trial_reminder_sent")
+
+        await session.commit()
+
+    if not results["alerts"] and not results["users"]:
+        return {"status": "no changes needed", "alerts": alert_cols, "users": user_cols}
+
+    return {"status": "migrations applied", "changes": results}
