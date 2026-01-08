@@ -1,5 +1,6 @@
 import { clsx } from 'clsx'
 import { LucideIcon } from 'lucide-react'
+import Image from 'next/image'
 
 interface StatsCardProps {
   title: string
@@ -20,10 +21,51 @@ const colorClasses = {
   orange: 'bg-orange-50 text-orange-600',
 }
 
+// Mini brand pattern for card backgrounds
+function CardBrandPattern() {
+  const items = [
+    { type: 'logo', x: 75, y: 60, rotate: 15, size: 24 },
+    { type: 'cash', x: 85, y: 20, rotate: -10, size: 18 },
+    { type: 'smile', x: 65, y: 85, rotate: 8, size: 16 },
+    { type: 'logo', x: 90, y: 75, rotate: -5, size: 20 },
+  ]
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {items.map((item, i) => (
+        <div
+          key={i}
+          className="absolute select-none opacity-[0.06]"
+          style={{
+            left: `${item.x}%`,
+            top: `${item.y}%`,
+            transform: `rotate(${item.rotate}deg)`,
+          }}
+        >
+          {item.type === 'logo' ? (
+            <Image
+              src="/oddwons-logo.png"
+              alt=""
+              width={item.size}
+              height={item.size}
+              className="rounded"
+            />
+          ) : (
+            <span style={{ fontSize: `${item.size}px` }}>
+              {item.type === 'cash' ? '💸' : '😁'}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function StatsCard({ title, value, subtitle, icon: Icon, trend, color = 'blue' }: StatsCardProps) {
   return (
-    <div className="card">
-      <div className="flex items-start justify-between">
+    <div className="card relative overflow-hidden">
+      <CardBrandPattern />
+      <div className="flex items-start justify-between relative z-10">
         <div>
           <p className="text-sm font-medium text-gray-500">{title}</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
