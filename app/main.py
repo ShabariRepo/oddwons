@@ -532,6 +532,10 @@ async def run_migrations():
             await session.execute(text('ALTER TABLE users ADD COLUMN trial_reminder_sent BOOLEAN DEFAULT FALSE'))
             results["users"].append("added trial_reminder_sent")
 
+        if 'trial_start' not in user_cols:
+            await session.execute(text('ALTER TABLE users ADD COLUMN trial_start TIMESTAMP'))
+            results["users"].append("added trial_start")
+
         await session.commit()
 
     if not results["alerts"] and not results["users"]:
