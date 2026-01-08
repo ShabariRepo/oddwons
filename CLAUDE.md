@@ -634,3 +634,71 @@ alembic upgrade head  # Adds email fields to users and alerts tables
 The `market_matcher.py` was comparing `Market.platform == "KALSHI"` (string) instead of `Market.platform == Platform.KALSHI` (enum). Since `Platform.KALSHI.value == "kalshi"` (lowercase), no markets were being matched.
 
 **Fix:** Import `Platform` enum and use `Platform.KALSHI` / `Platform.POLYMARKET` in queries.
+
+### UI Enhancement Components (Jan 8, 2026)
+**New animated components for a polished, game-like UI.**
+
+**New Components:**
+- `frontend/src/components/SparkleCard.tsx` - Gold sparkle animation wrapper for highlighting current plan
+- `frontend/src/components/TierBadge.tsx` - Sidebar component showing trial countdown or tier ribbon
+- `frontend/src/components/GameCard.tsx` - Card wrapper with shake + green wisps + logo watermark on hover
+
+**SparkleCard Usage:**
+```tsx
+<SparkleCard active={isCurrentPlan}>
+  <div className="card">...</div>
+</SparkleCard>
+```
+
+**TierBadge Usage:**
+```tsx
+// Trial user
+<TierBadge tier="PREMIUM" daysLeft={5} />
+
+// Paid user
+<TierBadge tier="PRO" />
+```
+
+**GameCard Usage:**
+```tsx
+<GameCard className="card hover:shadow-md">
+  {/* Card content */}
+</GameCard>
+```
+
+**Pages Updated:**
+- Settings page: Current plan highlighted with SparkleCard
+- Sidebar: TierBadge shows trial countdown or tier ribbon
+- Dashboard/Opportunities/Cross-platform: All cards wrapped with GameCard
+
+**Animation Keyframes (in globals.css):**
+- `sparkle-float` - Gold particles floating upward
+- `tier-bubble` - Champagne bubble effect for PREMIUM/PRO badges
+- `wisp-float` - Green wisps rising on card hover
+- `card-shake` - Quick shake animation on hover
+
+### Trial Persistence (Jan 8, 2026)
+**Trial periods now persist across plan changes.**
+
+Previously, switching plans during a trial would grant a new 7-day trial. Now:
+- `trial_start` field tracks when user's first trial began (never reset)
+- `calculate_trial_days()` computes remaining trial days
+- Switching plans preserves remaining trial time
+- No double-dipping on trials
+
+**User Model Update:**
+```python
+trial_start = Column(DateTime)  # Set once on first trial, never reset
+trial_end = Column(DateTime)    # Updated based on current subscription
+```
+
+**Billing Logic:**
+```python
+def calculate_trial_days(user: User) -> int:
+    if not user.trial_start:
+        return 7  # Full trial for new users
+    trial_end_date = user.trial_start + timedelta(days=7)
+    if datetime.utcnow() >= trial_end_date:
+        return 0  # Trial expired
+    return (trial_end_date - datetime.utcnow()).days
+```
