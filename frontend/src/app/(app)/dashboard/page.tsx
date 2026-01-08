@@ -147,9 +147,9 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid with Brand Pattern Background */}
-      <div className="relative rounded-2xl overflow-hidden">
-        <BrandPattern opacity={0.06} animated={false} />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10 p-4 -m-4">
+      <div className="relative rounded-2xl overflow-hidden bg-gray-50/50 p-6">
+        <BrandPattern opacity={0.08} animated={false} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
           {statsLoading ? (
             <>
               <StatsCardSkeleton />
