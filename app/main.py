@@ -184,6 +184,36 @@ async def debug_test_collect():
             results["kalshi"] = {"error": str(e)}
             await session.rollback()
 
+        # Try Polymarket
+        try:
+            poly_markets = await polymarket_client.fetch_all_markets(max_pages=1)
+            results["polymarket"] = {"fetched": len(poly_markets)}
+
+            for market_data in poly_markets:
+                if not market_data.condition_id:
+                    continue
+                market_id = f"poly_{market_data.condition_id}"
+                stmt = insert(Market).values(
+                    id=market_id,
+                    platform=Platform.POLYMARKET,
+                    title=market_data.question,
+                    description=market_data.description,
+                    category=market_data.category,
+                    yes_price=market_data.yes_price,
+                    volume=market_data.volume,
+                    status="active" if not market_data.is_closed else "closed",
+                ).on_conflict_do_update(
+                    index_elements=["id"],
+                    set_={"yes_price": market_data.yes_price, "updated_at": datetime.utcnow()}
+                )
+                await session.execute(stmt)
+
+            await session.commit()
+            results["polymarket"]["saved"] = len([m for m in poly_markets if m.condition_id])
+        except Exception as e:
+            results["polymarket"] = {"error": str(e)}
+            await session.rollback()
+
         # Count after
         count_after = await session.scalar(select(func.count()).select_from(Market))
         results["markets_after"] = count_after or 0
