@@ -1,5 +1,6 @@
 # Frontend Dockerfile for OddWons
-ARG CACHEBUST=1
+# Retry build after Docker Hub timeout
+ARG CACHEBUST=2
 FROM node:20.11-alpine AS builder
 
 WORKDIR /app
