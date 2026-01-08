@@ -193,18 +193,19 @@ async def debug_test_collect():
                 if not market_data.condition_id:
                     continue
                 market_id = f"poly_{market_data.condition_id}"
+                yes_price = market_data.outcome_prices[0] if market_data.outcome_prices else None
                 stmt = insert(Market).values(
                     id=market_id,
                     platform=Platform.POLYMARKET,
                     title=market_data.question,
                     description=market_data.description,
                     category=market_data.category,
-                    yes_price=market_data.yes_price,
+                    yes_price=yes_price,
                     volume=market_data.volume,
-                    status="active" if not market_data.is_closed else "closed",
+                    status="active",
                 ).on_conflict_do_update(
                     index_elements=["id"],
-                    set_={"yes_price": market_data.yes_price, "updated_at": datetime.utcnow()}
+                    set_={"yes_price": yes_price, "updated_at": datetime.utcnow()}
                 )
                 await session.execute(stmt)
 
