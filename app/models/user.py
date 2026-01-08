@@ -46,6 +46,7 @@ class User(Base):
     # Subscription dates
     subscription_start = Column(DateTime)
     subscription_end = Column(DateTime)
+    trial_start = Column(DateTime)  # Set once on first trial, never reset
     trial_end = Column(DateTime)
 
     # Password reset

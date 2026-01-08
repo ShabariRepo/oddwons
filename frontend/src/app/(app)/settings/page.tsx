@@ -5,6 +5,7 @@ import { User, Bell, CreditCard, Shield, Check, Loader2, ExternalLink } from 'lu
 import { clsx } from 'clsx'
 import { useAuth } from '@/components/AuthProvider'
 import { createCheckout, createPortal, changePassword } from '@/lib/auth'
+import SparkleCard from '@/components/SparkleCard'
 
 const plans = [
   {
@@ -221,57 +222,82 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {plans.map((plan) => {
               const isCurrent = hasSubscription && plan.id === currentTier
+              const isTrialing = user?.subscription_status === 'trialing' && plan.id === currentTier
               const currentIndex = hasSubscription ? plans.findIndex(p => p.id === currentTier) : -1
               const planIndex = plans.findIndex(p => p.id === plan.id)
               const isUpgrade = !hasSubscription || planIndex > currentIndex
               const isDowngrade = hasSubscription && planIndex < currentIndex
 
               return (
-                <div
+                <SparkleCard
                   key={plan.id}
-                  className={clsx(
-                    'card relative',
-                    plan.recommended && 'ring-2 ring-primary-500',
-                    isCurrent && 'bg-primary-50'
-                  )}
+                  active={isCurrent || isTrialing}
+                  className="rounded-2xl"
                 >
-                  {plan.recommended && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="bg-primary-600 text-white text-xs font-medium px-3 py-1 rounded-full">
-                        Recommended
-                      </span>
-                    </div>
-                  )}
-
-                  <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
-                  <p className="mt-2">
-                    <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
-                    <span className="text-gray-500">/month</span>
-                  </p>
-
-                  <ul className="mt-6 space-y-3">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-2">
-                        <Check className="w-5 h-5 text-green-500 shrink-0" />
-                        <span className="text-sm text-gray-600">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <button
-                    onClick={() => isCurrent ? null : isDowngrade ? handleManageSubscription() : handleUpgrade(plan.id)}
+                  <div
                     className={clsx(
-                      'w-full mt-6 flex justify-center items-center gap-2',
-                      isCurrent
-                        ? 'btn-secondary cursor-default'
-                        : 'btn-primary'
+                      'card relative',
+                      isCurrent || isTrialing
+                        ? 'border-2 border-yellow-400 bg-gradient-to-b from-yellow-50 to-white'
+                        : plan.recommended
+                          ? 'ring-2 ring-primary-500'
+                          : ''
                     )}
-                    disabled={isCurrent || loading === plan.id}
                   >
-                    {loading === plan.id && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {isCurrent ? 'Current Plan' : !hasSubscription ? 'Start Free Trial' : isDowngrade ? 'Downgrade' : 'Upgrade'}
-                  </button>
-                </div>
+                    {(isCurrent || isTrialing) && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                        <span className="bg-gradient-to-r from-yellow-400 to-amber-500 text-white text-xs font-bold px-4 py-1 rounded-full shadow-lg">
+                          {isTrialing ? '⏳ On Trial' : '✨ Current Plan'}
+                        </span>
+                      </div>
+                    )}
+                    {plan.recommended && !isCurrent && !isTrialing && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <span className="bg-primary-600 text-white text-xs font-medium px-3 py-1 rounded-full">
+                          Recommended
+                        </span>
+                      </div>
+                    )}
+
+                    <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
+                    <p className="mt-2">
+                      <span className="text-3xl font-bold text-gray-900">${plan.price}</span>
+                      <span className="text-gray-500">/month</span>
+                    </p>
+
+                    <ul className="mt-6 space-y-3">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2">
+                          <Check className="w-5 h-5 text-green-500 shrink-0" />
+                          <span className="text-sm text-gray-600">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <button
+                      onClick={() => isCurrent ? null : isDowngrade ? handleManageSubscription() : handleUpgrade(plan.id)}
+                      className={clsx(
+                        'w-full mt-6 flex justify-center items-center gap-2',
+                        isCurrent
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed py-2.5 rounded-lg font-medium'
+                          : isUpgrade
+                            ? 'btn-primary'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300 py-2.5 rounded-lg font-medium'
+                      )}
+                      disabled={isCurrent || loading === plan.id}
+                    >
+                      {loading === plan.id && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {isCurrent
+                        ? 'Current Plan'
+                        : !hasSubscription
+                          ? 'Start Free Trial'
+                          : isUpgrade
+                            ? `Upgrade to ${plan.name}`
+                            : `Switch to ${plan.name}`
+                      }
+                    </button>
+                  </div>
+                </SparkleCard>
               )
             })}
           </div>

@@ -1422,3 +1422,590 @@ async def lifespan(app: FastAPI):
 - [ ] MODIFY `app/api/routes/billing.py` - Add subscription emails in webhook
 - [ ] MODIFY `app/main.py` - Add AI analysis + alert emails to scheduler, add daily cron jobs
 - [ ] RUN migration for new User/Alert fields
+
+---
+
+## TASK 7: Settings Page - Highlight Current Plan with Magic Animation
+
+### Problem
+- Settings page shows "Start Free Trial" on ALL plans even if user is already subscribed
+- No indication of which plan user is currently on
+
+### Solution
+- Highlight current plan with gold border and sparkle/bubble animation
+- Show "Current Plan" badge instead of "Start Free Trial"
+- Other plans show "Switch to [Plan]" or "Upgrade" / "Downgrade"
+
+### Create `frontend/src/components/SparkleCard.tsx`
+
+```tsx
+'use client'
+
+import { useEffect, useRef } from 'react'
+
+interface SparkleCardProps {
+  children: React.ReactNode
+  active?: boolean
+  className?: string
+}
+
+export default function SparkleCard({ children, active = false, className = '' }: SparkleCardProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!active || !containerRef.current) return
+
+    const container = containerRef.current
+    const sparkleInterval = setInterval(() => {
+      createSparkle(container)
+    }, 150)
+
+    return () => clearInterval(sparkleInterval)
+  }, [active])
+
+  const createSparkle = (container: HTMLElement) => {
+    const sparkle = document.createElement('div')
+    sparkle.className = 'sparkle'
+    
+    // Random position along the card edges and inside
+    const x = Math.random() * container.offsetWidth
+    const startY = container.offsetHeight + 10
+    
+    sparkle.style.cssText = `
+      position: absolute;
+      left: ${x}px;
+      bottom: 0;
+      width: ${4 + Math.random() * 4}px;
+      height: ${4 + Math.random() * 4}px;
+      background: radial-gradient(circle, #ffd700 0%, #ffec80 50%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+      animation: sparkle-float ${2 + Math.random() * 2}s ease-out forwards;
+      box-shadow: 0 0 ${4 + Math.random() * 4}px #ffd700;
+    `
+    
+    container.appendChild(sparkle)
+    
+    // Remove after animation
+    setTimeout(() => sparkle.remove(), 4000)
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative overflow-visible ${active ? 'ring-2 ring-yellow-400 shadow-[0_0_30px_rgba(255,215,0,0.3)]' : ''} ${className}`}
+    >
+      {children}
+      
+      <style jsx global>{`
+        @keyframes sparkle-float {
+          0% {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(-120px) scale(0);
+            opacity: 0;
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
+```
+
+### Update Settings Page Plan Cards
+
+```tsx
+// In frontend/src/app/(app)/settings/page.tsx
+
+import SparkleCard from '@/components/SparkleCard'
+
+// In the pricing section:
+{tiers.map((tier) => {
+  const isCurrentPlan = user?.subscription_tier === tier.id
+  const isDowngrade = getTierLevel(tier.id) < getTierLevel(user?.subscription_tier)
+  const isUpgrade = getTierLevel(tier.id) > getTierLevel(user?.subscription_tier)
+  
+  return (
+    <SparkleCard 
+      key={tier.id} 
+      active={isCurrentPlan}
+      className="rounded-2xl"
+    >
+      <div className={`p-6 rounded-2xl border-2 transition-all ${
+        isCurrentPlan 
+          ? 'border-yellow-400 bg-gradient-to-b from-yellow-50 to-white' 
+          : 'border-gray-200 bg-white hover:border-gray-300'
+      }`}>
+        {isCurrentPlan && (
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+            <span className="bg-gradient-to-r from-yellow-400 to-amber-500 text-white text-xs font-bold px-4 py-1 rounded-full shadow-lg">
+              ✨ Current Plan
+            </span>
+          </div>
+        )}
+        
+        <h3 className="text-xl font-bold">{tier.name}</h3>
+        <p className="text-3xl font-bold mt-2">${tier.price}<span className="text-sm text-gray-500">/mo</span></p>
+        
+        {/* Features list */}
+        <ul className="mt-4 space-y-2">
+          {tier.features.map((feature, i) => (
+            <li key={i} className="flex items-center gap-2 text-sm text-gray-600">
+              <span className="text-green-500">✓</span> {feature}
+            </li>
+          ))}
+        </ul>
+        
+        {/* Action button */}
+        <button
+          disabled={isCurrentPlan}
+          onClick={() => handlePlanChange(tier.id)}
+          className={`mt-6 w-full py-3 rounded-lg font-semibold transition-all ${
+            isCurrentPlan
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : isUpgrade
+                ? 'bg-primary-600 text-white hover:bg-primary-700'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          {isCurrentPlan 
+            ? 'Current Plan' 
+            : isUpgrade 
+              ? `Upgrade to ${tier.name}` 
+              : `Switch to ${tier.name}`
+          }
+        </button>
+      </div>
+    </SparkleCard>
+  )
+})}
+
+// Helper function
+function getTierLevel(tier: string | undefined): number {
+  const levels: Record<string, number> = { FREE: 0, BASIC: 1, PREMIUM: 2, PRO: 3 }
+  return levels[tier?.toUpperCase() || 'FREE'] || 0
+}
+```
+
+---
+
+## TASK 8: Trial Period Persists When Switching Plans
+
+### Problem
+User might try to game the system by switching plans to reset their trial.
+
+### Solution
+Track `trial_start_date` on the user, not per-subscription. Trial end date = trial_start + 7 days regardless of plan changes.
+
+### Backend Changes
+
+**In `app/api/routes/billing.py` - when creating checkout session:**
+
+```python
+async def create_checkout_session(...):
+    # Check if user already used their trial
+    user = await get_current_user(...)
+    
+    # If user has a trial_start_date, don't give another trial
+    trial_days = 0
+    if not user.trial_start_date:
+        trial_days = 7
+    elif user.trial_end_date and user.trial_end_date > datetime.utcnow():
+        # Still in trial - calculate remaining days
+        remaining = (user.trial_end_date - datetime.utcnow()).days
+        trial_days = max(0, remaining)
+    
+    session = stripe.checkout.Session.create(
+        # ... other params ...
+        subscription_data={
+            "trial_period_days": trial_days if trial_days > 0 else None,
+        }
+    )
+```
+
+**Update User model if needed:**
+
+```python
+class User(Base):
+    # ... existing fields ...
+    trial_start_date = Column(DateTime, nullable=True)  # Set once, never reset
+    trial_end_date = Column(DateTime, nullable=True)    # trial_start + 7 days
+```
+
+**On first subscription (webhook):**
+
+```python
+# In checkout.session.completed handler:
+if not user.trial_start_date:
+    user.trial_start_date = datetime.utcnow()
+    user.trial_end_date = datetime.utcnow() + timedelta(days=7)
+```
+
+---
+
+## TASK 9: Sidebar Trial/Plan Banner
+
+### Current
+Sidebar shows "Start your 7 day free trial" for everyone.
+
+### New Behavior
+
+| User State | Banner Display |
+|------------|----------------|
+| Not subscribed | "Start your 7 day free trial" (current) |
+| On trial (BASIC) | "⏳ 5 days left on trial" (countdown) |
+| On trial (PREMIUM) | "⏳ 5 days left on trial" (countdown) |
+| On trial (PRO) | "⏳ 5 days left on trial" (countdown) |
+| Paid BASIC | Yellow ribbon: "BASIC" |
+| Paid PREMIUM | Champagne sparkle ribbon: "PREMIUM" |
+| Paid PRO | Gold with gold flakes: "PRO" |
+
+### Create `frontend/src/components/TierBadge.tsx`
+
+```tsx
+'use client'
+
+import { useEffect, useRef } from 'react'
+
+interface TierBadgeProps {
+  tier: 'BASIC' | 'PREMIUM' | 'PRO'
+  daysLeft?: number // If on trial
+}
+
+export default function TierBadge({ tier, daysLeft }: TierBadgeProps) {
+  const badgeRef = useRef<HTMLDivElement>(null)
+
+  // Bubble/sparkle effect for PREMIUM and PRO
+  useEffect(() => {
+    if (!badgeRef.current || tier === 'BASIC') return
+    
+    const container = badgeRef.current
+    const interval = setInterval(() => {
+      createParticle(container, tier)
+    }, tier === 'PRO' ? 100 : 200)
+
+    return () => clearInterval(interval)
+  }, [tier])
+
+  const createParticle = (container: HTMLElement, tier: string) => {
+    const particle = document.createElement('div')
+    const x = Math.random() * container.offsetWidth
+    const size = 2 + Math.random() * 3
+    
+    const colors = {
+      PREMIUM: ['#d4af37', '#f5e6c8', '#c9b896'], // Champagne
+      PRO: ['#ffd700', '#ffec80', '#fff4cc'],      // Gold
+    }
+    const color = colors[tier as keyof typeof colors]?.[Math.floor(Math.random() * 3)] || '#ffd700'
+    
+    particle.style.cssText = `
+      position: absolute;
+      left: ${x}px;
+      bottom: 0;
+      width: ${size}px;
+      height: ${size}px;
+      background: ${color};
+      border-radius: 50%;
+      pointer-events: none;
+      animation: tier-bubble ${1.5 + Math.random()}s ease-out forwards;
+      box-shadow: 0 0 ${size}px ${color};
+    `
+    
+    container.appendChild(particle)
+    setTimeout(() => particle.remove(), 2500)
+  }
+
+  // If on trial, show countdown
+  if (daysLeft !== undefined && daysLeft > 0) {
+    return (
+      <div className="mx-3 mb-4 p-3 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">⏳</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              {daysLeft} day{daysLeft !== 1 ? 's' : ''} left on trial
+            </p>
+            <p className="text-xs text-amber-600">{tier} plan</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Paid user badges
+  const styles = {
+    BASIC: {
+      bg: 'bg-gradient-to-r from-yellow-400 to-amber-400',
+      text: 'text-yellow-900',
+      shadow: 'shadow-yellow-200',
+    },
+    PREMIUM: {
+      bg: 'bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-200',
+      text: 'text-amber-800',
+      shadow: 'shadow-amber-100',
+    },
+    PRO: {
+      bg: 'bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-400',
+      text: 'text-yellow-900',
+      shadow: 'shadow-yellow-300',
+    },
+  }
+
+  const style = styles[tier]
+
+  return (
+    <div className="mx-3 mb-4 relative overflow-visible">
+      <div
+        ref={badgeRef}
+        className={`relative p-3 ${style.bg} rounded-xl shadow-lg ${style.shadow} overflow-visible`}
+      >
+        {/* Ribbon fold effect */}
+        <div className="absolute -right-2 -top-2 w-4 h-4 bg-amber-600 rounded-sm transform rotate-45 opacity-30" />
+        
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-lg">
+            {tier === 'BASIC' && '⭐'}
+            {tier === 'PREMIUM' && '💎'}
+            {tier === 'PRO' && '👑'}
+          </span>
+          <span className={`font-bold ${style.text}`}>{tier}</span>
+        </div>
+      </div>
+      
+      <style jsx global>{`
+        @keyframes tier-bubble {
+          0% {
+            transform: translateY(0) scale(1);
+            opacity: 0.8;
+          }
+          100% {
+            transform: translateY(-40px) scale(0);
+            opacity: 0;
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
+```
+
+### Update Sidebar Component
+
+```tsx
+// In frontend/src/components/Sidebar.tsx
+
+import TierBadge from './TierBadge'
+
+// Inside the sidebar, replace the "Start your 7 day free trial" section:
+
+{/* Bottom section - Trial/Plan badge */}
+<div className="mt-auto">
+  {!user ? (
+    // Not logged in - show nothing or login prompt
+    null
+  ) : user.subscription_status === 'trialing' && user.trial_end_date ? (
+    // On trial - show countdown
+    <TierBadge 
+      tier={user.subscription_tier as 'BASIC' | 'PREMIUM' | 'PRO'} 
+      daysLeft={Math.ceil((new Date(user.trial_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))}
+    />
+  ) : user.subscription_tier && user.subscription_tier !== 'FREE' ? (
+    // Paid user - show tier badge
+    <TierBadge tier={user.subscription_tier as 'BASIC' | 'PREMIUM' | 'PRO'} />
+  ) : (
+    // Free user - show upgrade prompt
+    <Link
+      href="/settings"
+      className="mx-3 mb-4 block p-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl text-center text-sm font-semibold hover:from-primary-600 hover:to-primary-700 transition-all"
+    >
+      🚀 Start your 7-day free trial
+    </Link>
+  )}
+</div>
+```
+
+---
+
+## TASK 10: Card Hover Animation - Shake + Green Wisps + Logo Watermark
+
+### Requirements
+- Cards shake slightly on hover
+- Green wisps/particles float up on hover
+- OddWons logo watermark in center of each card
+
+### Create `frontend/src/components/GameCard.tsx`
+
+```tsx
+'use client'
+
+import { useRef, useState } from 'react'
+import Image from 'next/image'
+
+interface GameCardProps {
+  children: React.ReactNode
+  className?: string
+  showWatermark?: boolean
+}
+
+export default function GameCard({ children, className = '', showWatermark = true }: GameCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [isHovered, setIsHovered] = useState(false)
+
+  const handleMouseEnter = () => {
+    setIsHovered(true)
+    if (cardRef.current) {
+      // Create green wisps
+      for (let i = 0; i < 5; i++) {
+        setTimeout(() => createWisp(cardRef.current!), i * 100)
+      }
+    }
+  }
+
+  const handleMouseLeave = () => {
+    setIsHovered(false)
+  }
+
+  const createWisp = (container: HTMLElement) => {
+    const wisp = document.createElement('div')
+    const x = Math.random() * container.offsetWidth
+    const size = 6 + Math.random() * 8
+    
+    wisp.style.cssText = `
+      position: absolute;
+      left: ${x}px;
+      bottom: 20%;
+      width: ${size}px;
+      height: ${size * 1.5}px;
+      background: radial-gradient(ellipse, rgba(34, 197, 94, 0.6) 0%, rgba(34, 197, 94, 0.2) 50%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+      animation: wisp-float ${1 + Math.random() * 0.5}s ease-out forwards;
+      filter: blur(1px);
+    `
+    
+    container.appendChild(wisp)
+    setTimeout(() => wisp.remove(), 1500)
+  }
+
+  return (
+    <div
+      ref={cardRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={`relative overflow-hidden transition-all duration-200 ${isHovered ? 'animate-card-shake' : ''} ${className}`}
+    >
+      {/* Logo watermark */}
+      {showWatermark && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+          <Image
+            src="/oddwons-logo.png"
+            alt=""
+            width={80}
+            height={80}
+            className="opacity-[0.04] select-none"
+          />
+        </div>
+      )}
+      
+      {/* Card content */}
+      <div className="relative z-10">
+        {children}
+      </div>
+      
+      <style jsx global>{`
+        @keyframes wisp-float {
+          0% {
+            transform: translateY(0) scale(1);
+            opacity: 0.8;
+          }
+          50% {
+            transform: translateY(-30px) scale(1.2) translateX(${Math.random() > 0.5 ? '' : '-'}10px);
+            opacity: 0.6;
+          }
+          100% {
+            transform: translateY(-60px) scale(0.5);
+            opacity: 0;
+          }
+        }
+        
+        @keyframes card-shake {
+          0%, 100% { transform: translateX(0); }
+          10% { transform: translateX(-2px) rotate(-0.5deg); }
+          20% { transform: translateX(2px) rotate(0.5deg); }
+          30% { transform: translateX(-2px) rotate(-0.5deg); }
+          40% { transform: translateX(2px) rotate(0.5deg); }
+          50% { transform: translateX(-1px); }
+          60% { transform: translateX(1px); }
+          70% { transform: translateX(-1px); }
+          80% { transform: translateX(1px); }
+          90% { transform: translateX(0); }
+        }
+        
+        .animate-card-shake {
+          animation: card-shake 0.5s ease-in-out;
+        }
+      `}</style>
+    </div>
+  )
+}
+```
+
+### Usage in Dashboard, AI Highlights, Cross-Platform Pages
+
+```tsx
+import GameCard from '@/components/GameCard'
+
+// Wrap market/insight cards with GameCard:
+<GameCard className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-lg">
+  <h3>{market.title}</h3>
+  <p>{market.description}</p>
+  {/* ... rest of card content */}
+</GameCard>
+```
+
+### Add Global Animation Classes to `globals.css`
+
+```css
+/* Card shake animation */
+@keyframes card-shake {
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(-2px) rotate(-0.5deg); }
+  20% { transform: translateX(2px) rotate(0.5deg); }
+  30% { transform: translateX(-2px) rotate(-0.5deg); }
+  40% { transform: translateX(2px) rotate(0.5deg); }
+  50% { transform: translateX(-1px); }
+  60% { transform: translateX(1px); }
+  70% { transform: translateX(0); }
+}
+
+.hover-shake:hover {
+  animation: card-shake 0.4s ease-in-out;
+}
+```
+
+---
+
+## Summary - UI Enhancement Tasks
+
+| Task | Component | Description |
+|------|-----------|-------------|
+| **7** | Settings Page | Highlight current plan with gold sparkles |
+| **8** | Billing Logic | Trial persists across plan changes |
+| **9** | Sidebar | Trial countdown OR tier ribbon badge |
+| **10** | Cards | Shake + green wisps + logo watermark on hover |
+
+## Files to Create/Modify
+
+- [ ] CREATE `frontend/src/components/SparkleCard.tsx`
+- [ ] CREATE `frontend/src/components/TierBadge.tsx`
+- [ ] CREATE `frontend/src/components/GameCard.tsx`
+- [ ] MODIFY `frontend/src/app/(app)/settings/page.tsx` - Use SparkleCard for current plan
+- [ ] MODIFY `frontend/src/components/Sidebar.tsx` - Add TierBadge component
+- [ ] MODIFY `frontend/src/app/(app)/dashboard/page.tsx` - Wrap cards with GameCard
+- [ ] MODIFY `frontend/src/app/(app)/opportunities/page.tsx` - Wrap cards with GameCard
+- [ ] MODIFY `frontend/src/app/(app)/cross-platform/page.tsx` - Wrap cards with GameCard
+- [ ] MODIFY `frontend/src/app/globals.css` - Add animation keyframes
+- [ ] MODIFY `app/api/routes/billing.py` - Trial persistence logic
+- [ ] MODIFY `app/models/user.py` - Add trial_start_date field if missing

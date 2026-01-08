@@ -6,6 +6,7 @@ import { useAIInsights } from '@/hooks/useAPI'
 import { AIInsight } from '@/lib/types'
 import { clsx } from 'clsx'
 import Link from 'next/link'
+import GameCard from '@/components/GameCard'
 
 const categories = [
   { id: '', name: 'All Categories' },
@@ -30,95 +31,95 @@ function InsightCard({ insight }: { insight: AIInsight }) {
 
   return (
     <Link href={`/insights/${insight.id}`}>
-    <div className="card hover:shadow-md transition-shadow cursor-pointer">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${platformColor}`}>
-            {insight.platform}
-          </span>
-          {insight.category && (
-            <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-              {insight.category}
+      <GameCard className="card hover:shadow-md transition-shadow cursor-pointer">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className={`px-2 py-0.5 rounded text-xs font-medium ${platformColor}`}>
+              {insight.platform}
+            </span>
+            {insight.category && (
+              <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+                {insight.category}
+              </span>
+            )}
+          </div>
+          {insight.recent_movement && (
+            <span className={`flex items-center gap-1 text-sm font-medium ${movementColor}`}>
+              {insight.recent_movement.includes('+') ? (
+                <TrendingUp className="w-3 h-3" />
+              ) : insight.recent_movement.includes('-') ? (
+                <TrendingDown className="w-3 h-3" />
+              ) : null}
+              {insight.recent_movement}
             </span>
           )}
         </div>
-        {insight.recent_movement && (
-          <span className={`flex items-center gap-1 text-sm font-medium ${movementColor}`}>
-            {insight.recent_movement.includes('+') ? (
-              <TrendingUp className="w-3 h-3" />
-            ) : insight.recent_movement.includes('-') ? (
-              <TrendingDown className="w-3 h-3" />
-            ) : null}
-            {insight.recent_movement}
-          </span>
-        )}
-      </div>
 
-      {/* Title */}
-      <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
-        {insight.market_title}
-      </h3>
+        {/* Title */}
+        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
+          {insight.market_title}
+        </h3>
 
-      {/* Summary */}
-      <p className="text-sm text-gray-600 mb-4 line-clamp-3">
-        {insight.summary}
-      </p>
-
-      {/* Odds */}
-      {insight.current_odds && (
-        <div className="flex items-center gap-4 mb-3">
-          <div className="flex-1 bg-green-50 rounded-lg p-2 text-center">
-            <p className="text-xs text-green-600">Yes</p>
-            <p className="text-lg font-bold text-green-700">
-              {(insight.current_odds.yes * 100).toFixed(0)}%
-            </p>
-          </div>
-          <div className="flex-1 bg-red-50 rounded-lg p-2 text-center">
-            <p className="text-xs text-red-600">No</p>
-            <p className="text-lg font-bold text-red-700">
-              {(insight.current_odds.no * 100).toFixed(0)}%
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Implied Probability */}
-      {insight.implied_probability && (
-        <p className="text-sm text-primary-600 font-medium mb-2">
-          {insight.implied_probability}
+        {/* Summary */}
+        <p className="text-sm text-gray-600 mb-4 line-clamp-3">
+          {insight.summary}
         </p>
-      )}
 
-      {/* Volume Note */}
-      {insight.volume_note && (
-        <p className="text-xs text-gray-500 mb-2">{insight.volume_note}</p>
-      )}
+        {/* Odds */}
+        {insight.current_odds && (
+          <div className="flex items-center gap-4 mb-3">
+            <div className="flex-1 bg-green-50 rounded-lg p-2 text-center">
+              <p className="text-xs text-green-600">Yes</p>
+              <p className="text-lg font-bold text-green-700">
+                {(insight.current_odds.yes * 100).toFixed(0)}%
+              </p>
+            </div>
+            <div className="flex-1 bg-red-50 rounded-lg p-2 text-center">
+              <p className="text-xs text-red-600">No</p>
+              <p className="text-lg font-bold text-red-700">
+                {(insight.current_odds.no * 100).toFixed(0)}%
+              </p>
+            </div>
+          </div>
+        )}
 
-      {/* Movement Context (Premium+) */}
-      {insight.movement_context && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-500 font-medium mb-1">Why it moved</p>
-          <p className="text-sm text-gray-600">{insight.movement_context}</p>
-        </div>
-      )}
+        {/* Implied Probability */}
+        {insight.implied_probability && (
+          <p className="text-sm text-primary-600 font-medium mb-2">
+            {insight.implied_probability}
+          </p>
+        )}
 
-      {/* Upcoming Catalyst (Premium+) */}
-      {insight.upcoming_catalyst && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-500 font-medium mb-1">Upcoming</p>
-          <p className="text-sm text-gray-600">{insight.upcoming_catalyst}</p>
-        </div>
-      )}
+        {/* Volume Note */}
+        {insight.volume_note && (
+          <p className="text-xs text-gray-500 mb-2">{insight.volume_note}</p>
+        )}
 
-      {/* Analyst Note (Pro) */}
-      {insight.analyst_note && (
-        <div className="mt-3 pt-3 border-t border-gray-100 bg-yellow-50 -mx-4 -mb-4 px-4 py-3 rounded-b-lg">
-          <p className="text-xs text-yellow-700 font-medium mb-1">Analyst Note</p>
-          <p className="text-sm text-yellow-800">{insight.analyst_note}</p>
-        </div>
-      )}
-    </div>
+        {/* Movement Context (Premium+) */}
+        {insight.movement_context && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs text-gray-500 font-medium mb-1">Why it moved</p>
+            <p className="text-sm text-gray-600">{insight.movement_context}</p>
+          </div>
+        )}
+
+        {/* Upcoming Catalyst (Premium+) */}
+        {insight.upcoming_catalyst && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs text-gray-500 font-medium mb-1">Upcoming</p>
+            <p className="text-sm text-gray-600">{insight.upcoming_catalyst}</p>
+          </div>
+        )}
+
+        {/* Analyst Note (Pro) */}
+        {insight.analyst_note && (
+          <div className="mt-3 pt-3 border-t border-gray-100 bg-yellow-50 -mx-4 -mb-4 px-4 py-3 rounded-b-lg">
+            <p className="text-xs text-yellow-700 font-medium mb-1">Analyst Note</p>
+            <p className="text-sm text-yellow-800">{insight.analyst_note}</p>
+          </div>
+        )}
+      </GameCard>
     </Link>
   )
 }

@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import stripe
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,9 @@ from app.services.notifications import notification_service
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Trial duration in days
+TRIAL_DURATION_DAYS = 7
 
 # Initialize Stripe
 stripe.api_key = settings.stripe_secret_key
@@ -47,13 +50,59 @@ async def get_or_create_stripe_customer(user: User, db: AsyncSession) -> str:
     return customer.id
 
 
+def calculate_trial_days(user: User) -> int:
+    """
+    Calculate remaining trial days for a user.
+    Trial persists across plan changes - once started, it never resets.
+
+    Returns:
+        Number of trial days remaining (0 if trial used or expired)
+    """
+    now = datetime.utcnow()
+
+    # Case 1: User never had a trial - give full 7 days
+    if not user.trial_start:
+        return TRIAL_DURATION_DAYS
+
+    # Case 2: User has a trial_start - calculate remaining days
+    trial_end_date = user.trial_start + timedelta(days=TRIAL_DURATION_DAYS)
+
+    if now >= trial_end_date:
+        # Trial has already expired
+        return 0
+
+    # Calculate remaining days
+    remaining = (trial_end_date - now).days
+    return max(0, remaining)
+
+
 async def create_checkout_session(
     user: User,
     price_id: str,
     db: AsyncSession,
 ) -> dict:
-    """Create a Stripe checkout session for subscription."""
+    """
+    Create a Stripe checkout session for subscription.
+
+    Trial persistence: The trial period is tracked per-user, not per-subscription.
+    Once a user starts a trial, switching plans does NOT reset their trial period.
+    """
     customer_id = await get_or_create_stripe_customer(user, db)
+
+    # Calculate trial days based on user's trial history
+    trial_days = calculate_trial_days(user)
+
+    # Build subscription data
+    subscription_data = {
+        "metadata": {"user_id": user.id},
+    }
+
+    # Only add trial_period_days if user has remaining trial
+    if trial_days > 0:
+        subscription_data["trial_period_days"] = trial_days
+        logger.info(f"User {user.id} gets {trial_days} trial days (trial_start: {user.trial_start})")
+    else:
+        logger.info(f"User {user.id} has no trial remaining (trial_start: {user.trial_start})")
 
     session = stripe.checkout.Session.create(
         customer=customer_id,
@@ -63,10 +112,7 @@ async def create_checkout_session(
         success_url=f"{settings.frontend_url}/settings?success=true",
         cancel_url=f"{settings.frontend_url}/settings?canceled=true",
         metadata={"user_id": user.id},
-        subscription_data={
-            "trial_period_days": 7,  # 7-day trial
-            "metadata": {"user_id": user.id},
-        },
+        subscription_data=subscription_data,
     )
 
     logger.info(f"Created checkout session {session.id} for user {user.id}")
@@ -121,6 +167,10 @@ async def handle_subscription_created(subscription: dict, db: AsyncSession) -> N
         user.trial_end = datetime.fromtimestamp(subscription["trial_end"])
         if subscription.get("status") == "trialing":
             user.subscription_status = SubscriptionStatus.TRIALING
+            # Set trial_start ONCE - never reset it
+            if not user.trial_start:
+                user.trial_start = datetime.utcnow()
+                logger.info(f"Set trial_start for user {user.id}")
 
     user.subscription_start = datetime.utcnow()
 

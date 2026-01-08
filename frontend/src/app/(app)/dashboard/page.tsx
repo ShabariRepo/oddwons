@@ -6,6 +6,7 @@ import { useMarketStats, usePatternStats, useAIInsights, useCrossPlatformMatches
 import { AIInsight, CrossPlatformMatch } from '@/lib/types'
 import Link from 'next/link'
 import BrandPattern from '@/components/BrandPattern'
+import GameCard from '@/components/GameCard'
 
 function InsightCard({ insight }: { insight: AIInsight }) {
   const platformColor = insight.platform === 'kalshi'
@@ -14,46 +15,46 @@ function InsightCard({ insight }: { insight: AIInsight }) {
 
   return (
     <Link href={`/insights/${insight.id}`}>
-    <div className="card hover:shadow-md transition-shadow cursor-pointer">
-      <div className="flex items-start justify-between mb-2">
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${platformColor}`}>
-          {insight.platform}
-        </span>
-        {insight.category && (
-          <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-            {insight.category}
+      <GameCard className="card hover:shadow-md transition-shadow cursor-pointer">
+        <div className="flex items-start justify-between mb-2">
+          <span className={`px-2 py-0.5 rounded text-xs font-medium ${platformColor}`}>
+            {insight.platform}
           </span>
+          {insight.category && (
+            <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+              {insight.category}
+            </span>
+          )}
+        </div>
+
+        <h3 className="font-medium text-gray-900 line-clamp-2 mb-2">
+          {insight.market_title}
+        </h3>
+
+        <p className="text-sm text-gray-600 line-clamp-3 mb-3">
+          {insight.summary}
+        </p>
+
+        <div className="flex items-center justify-between text-sm">
+          {insight.implied_probability && (
+            <span className="text-primary-600 font-medium">
+              {insight.implied_probability}
+            </span>
+          )}
+          {insight.recent_movement && (
+            <span className={`${
+              insight.recent_movement.includes('+') ? 'text-green-600' :
+              insight.recent_movement.includes('-') ? 'text-red-600' : 'text-gray-500'
+            }`}>
+              {insight.recent_movement}
+            </span>
+          )}
+        </div>
+
+        {insight.volume_note && (
+          <p className="text-xs text-gray-500 mt-2">{insight.volume_note}</p>
         )}
-      </div>
-
-      <h3 className="font-medium text-gray-900 line-clamp-2 mb-2">
-        {insight.market_title}
-      </h3>
-
-      <p className="text-sm text-gray-600 line-clamp-3 mb-3">
-        {insight.summary}
-      </p>
-
-      <div className="flex items-center justify-between text-sm">
-        {insight.implied_probability && (
-          <span className="text-primary-600 font-medium">
-            {insight.implied_probability}
-          </span>
-        )}
-        {insight.recent_movement && (
-          <span className={`${
-            insight.recent_movement.includes('+') ? 'text-green-600' :
-            insight.recent_movement.includes('-') ? 'text-red-600' : 'text-gray-500'
-          }`}>
-            {insight.recent_movement}
-          </span>
-        )}
-      </div>
-
-      {insight.volume_note && (
-        <p className="text-xs text-gray-500 mt-2">{insight.volume_note}</p>
-      )}
-    </div>
+      </GameCard>
     </Link>
   )
 }
@@ -63,40 +64,40 @@ function CrossPlatformCard({ match }: { match: CrossPlatformMatch }) {
 
   return (
     <Link href={`/cross-platform`}>
-    <div className="card hover:shadow-md transition-shadow cursor-pointer">
-      <div className="flex items-center gap-2 mb-3">
-        <Scale className="w-4 h-4 text-primary-500" />
-        <span className="text-xs font-medium text-primary-600 uppercase">Cross-Platform</span>
-      </div>
-
-      <h3 className="font-medium text-gray-900 line-clamp-2 mb-3">
-        {match.topic}
-      </h3>
-
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div className="bg-blue-50 rounded-lg p-2">
-          <p className="text-xs text-blue-600 font-medium">Kalshi</p>
-          <p className="text-lg font-bold text-blue-800">
-            {match.kalshi_yes_price?.toFixed(0)}¢
-          </p>
+      <GameCard className="card hover:shadow-md transition-shadow cursor-pointer">
+        <div className="flex items-center gap-2 mb-3">
+          <Scale className="w-4 h-4 text-primary-500" />
+          <span className="text-xs font-medium text-primary-600 uppercase">Cross-Platform</span>
         </div>
-        <div className="bg-purple-50 rounded-lg p-2">
-          <p className="text-xs text-purple-600 font-medium">Polymarket</p>
-          <p className="text-lg font-bold text-purple-800">
-            {match.polymarket_yes_price?.toFixed(0)}¢
-          </p>
-        </div>
-      </div>
 
-      <div className="flex items-center justify-between">
-        <span className={`text-sm font-medium ${gapColor}`}>
-          {match.price_gap_cents.toFixed(1)}¢ gap
-        </span>
-        <span className="text-xs text-gray-500">
-          ${(match.combined_volume / 1000).toFixed(0)}K vol
-        </span>
-      </div>
-    </div>
+        <h3 className="font-medium text-gray-900 line-clamp-2 mb-3">
+          {match.topic}
+        </h3>
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="bg-blue-50 rounded-lg p-2">
+            <p className="text-xs text-blue-600 font-medium">Kalshi</p>
+            <p className="text-lg font-bold text-blue-800">
+              {match.kalshi_yes_price?.toFixed(0)}¢
+            </p>
+          </div>
+          <div className="bg-purple-50 rounded-lg p-2">
+            <p className="text-xs text-purple-600 font-medium">Polymarket</p>
+            <p className="text-lg font-bold text-purple-800">
+              {match.polymarket_yes_price?.toFixed(0)}¢
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className={`text-sm font-medium ${gapColor}`}>
+            {match.price_gap_cents.toFixed(1)}¢ gap
+          </span>
+          <span className="text-xs text-gray-500">
+            ${(match.combined_volume / 1000).toFixed(0)}K vol
+          </span>
+        </div>
+      </GameCard>
     </Link>
   )
 }

@@ -5,6 +5,7 @@ import { Scale, TrendingUp, TrendingDown, ArrowRight, ExternalLink } from 'lucid
 import { useCrossPlatformMatches, useCrossPlatformStats } from '@/hooks/useAPI'
 import { CrossPlatformMatch } from '@/lib/types'
 import { clsx } from 'clsx'
+import GameCard from '@/components/GameCard'
 
 function MatchCard({ match }: { match: CrossPlatformMatch }) {
   const gapColor = Math.abs(match.price_gap_cents) >= 5
@@ -16,7 +17,7 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
   const higherPlatform = match.gap_direction === 'kalshi_higher' ? 'Kalshi' : 'Polymarket'
 
   return (
-    <div className="card hover:shadow-md transition-shadow">
+    <GameCard className="card hover:shadow-md transition-shadow">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -92,7 +93,7 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
           {(match.similarity_score * 100).toFixed(0)}% match confidence
         </div>
       )}
-    </div>
+    </GameCard>
   )
 }
 

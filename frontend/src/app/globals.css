@@ -96,3 +96,63 @@
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
+
+/* Card shake animation on hover */
+@keyframes card-shake {
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(-2px) rotate(-0.5deg); }
+  20% { transform: translateX(2px) rotate(0.5deg); }
+  30% { transform: translateX(-2px) rotate(-0.5deg); }
+  40% { transform: translateX(2px) rotate(0.5deg); }
+  50% { transform: translateX(-1px); }
+  60% { transform: translateX(1px); }
+  70% { transform: translateX(0); }
+}
+
+.hover-shake:hover {
+  animation: card-shake 0.4s ease-in-out;
+}
+
+.animate-card-shake {
+  animation: card-shake 0.5s ease-in-out;
+}
+
+/* Sparkle float animation for SparkleCard */
+@keyframes sparkle-float {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-120px) scale(0);
+    opacity: 0;
+  }
+}
+
+/* Tier badge bubble animation */
+@keyframes tier-bubble {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-40px) scale(0);
+    opacity: 0;
+  }
+}
+
+/* Wisp float animation for GameCard */
+@keyframes wisp-float {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(-30px) scale(1.2) translateX(var(--x-offset, 10px));
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-60px) scale(0.5);
+    opacity: 0;
+  }
+}
