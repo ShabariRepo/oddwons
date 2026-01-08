@@ -97,6 +97,26 @@ async def health_check():
     return {"status": "healthy", "version": "0.1.0"}
 
 
+@app.get("/debug/db")
+async def debug_db():
+    """Debug database tables."""
+    from sqlalchemy import text
+    from app.core.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        try:
+            # Check if tables exist
+            result = await session.execute(text("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public'
+                ORDER BY table_name
+            """))
+            tables = [row[0] for row in result.fetchall()]
+            return {"status": "connected", "tables": tables}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+
 @app.get("/")
 async def root():
     """Root endpoint."""
