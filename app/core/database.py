@@ -52,6 +52,9 @@ async def get_redis() -> redis.Redis:
 
 async def init_db():
     """Initialize database tables."""
+    # Import all models so they're registered with Base.metadata
+    from app.models import market, user, ai_insight, cross_platform_match  # noqa
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
