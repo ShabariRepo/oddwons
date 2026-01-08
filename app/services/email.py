@@ -1,14 +1,3 @@
-# OddWons - Production Tasks
-
-_Last updated: January 7, 2025_
-
----
-
-## TASK 1: SendGrid Email Service (Complete Implementation)
-
-### Create `app/services/email.py`
-
-```python
 """
 SendGrid Email Service for OddWons.
 
@@ -19,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileContent, FileName, FileType, Disposition
+from sendgrid.helpers.mail import Mail, Email, To, Content
 
 from app.config import get_settings
 
@@ -55,29 +44,29 @@ def get_base_template(content: str, preview_text: str = "") -> str:
     <div style="display: none; max-height: 0; overflow: hidden;">
         {preview_text}
     </div>
-    
+
     <!-- Email container -->
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f3f4f6;">
         <tr>
             <td align="center" style="padding: 40px 20px;">
                 <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
-                    
+
                     <!-- Header with logo -->
                     <tr>
                         <td style="background: linear-gradient(135deg, {BRAND_PRIMARY} 0%, {BRAND_DARK} 100%); padding: 32px; text-align: center;">
                             <img src="https://oddwons.ai/oddwons-logo.png" alt="OddWons" width="60" height="60" style="border-radius: 12px; margin-bottom: 12px;">
                             <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">OddWons</h1>
-                            <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0 0; font-size: 14px;">Your Prediction Market Companion 🎯</p>
+                            <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0 0; font-size: 14px;">Your Prediction Market Companion</p>
                         </td>
                     </tr>
-                    
+
                     <!-- Main content -->
                     <tr>
                         <td style="padding: 40px 32px;">
                             {content}
                         </td>
                     </tr>
-                    
+
                     <!-- Footer -->
                     <tr>
                         <td style="background-color: #f9fafb; padding: 24px 32px; border-top: 1px solid #e5e7eb;">
@@ -85,14 +74,14 @@ def get_base_template(content: str, preview_text: str = "") -> str:
                                 <tr>
                                     <td style="text-align: center;">
                                         <p style="margin: 0 0 8px 0; font-size: 14px; color: #6b7280;">
-                                            💸 Compare markets • 🧠 AI insights • ⚡ Real-time alerts
+                                            Compare markets | AI insights | Real-time alerts
                                         </p>
                                         <p style="margin: 0; font-size: 12px; color: #9ca3af;">
                                             © {datetime.now().year} OddWons. All rights reserved.
                                         </p>
                                         <p style="margin: 8px 0 0 0; font-size: 12px; color: #9ca3af;">
                                             <a href="https://oddwons.ai/settings" style="color: {BRAND_PRIMARY}; text-decoration: none;">Manage preferences</a>
-                                            &nbsp;•&nbsp;
+                                            &nbsp;|&nbsp;
                                             <a href="https://oddwons.ai" style="color: {BRAND_PRIMARY}; text-decoration: none;">Visit OddWons</a>
                                         </p>
                                     </td>
@@ -100,7 +89,7 @@ def get_base_template(content: str, preview_text: str = "") -> str:
                             </table>
                         </td>
                     </tr>
-                    
+
                 </table>
             </td>
         </tr>
@@ -125,12 +114,13 @@ def button(text: str, url: str, color: str = BRAND_PRIMARY) -> str:
     """
 
 
-def info_box(content: str, emoji: str = "💡") -> str:
+def info_box(content: str, emoji: str = "") -> str:
     """Generate an info box."""
+    prefix = f"{emoji} " if emoji else ""
     return f"""
     <div style="background-color: {BRAND_LIGHT}; border-left: 4px solid {BRAND_PRIMARY}; padding: 16px; border-radius: 0 8px 8px 0; margin: 20px 0;">
         <p style="margin: 0; color: #0c4a6e; font-size: 14px;">
-            {emoji} {content}
+            {prefix}{content}
         </p>
     </div>
     """
@@ -178,21 +168,21 @@ async def send_email(
     if not settings.sendgrid_api_key:
         logger.warning("SendGrid API key not configured - skipping email")
         return False
-    
+
     try:
         sg = SendGridAPIClient(settings.sendgrid_api_key)
-        
+
         message = Mail(
             from_email=Email(from_email or settings.from_email, "OddWons"),
             to_emails=To(to_email),
             subject=subject,
             html_content=Content("text/html", html_content)
         )
-        
+
         response = sg.send(message)
         logger.info(f"Email sent to {to_email}: {subject} (status: {response.status_code})")
         return response.status_code in [200, 201, 202]
-        
+
     except Exception as e:
         logger.error(f"Failed to send email to {to_email}: {e}")
         return False
@@ -205,10 +195,10 @@ async def send_email(
 async def send_welcome_email(to_email: str, name: str = None) -> bool:
     """Welcome email after registration."""
     display_name = name or to_email.split('@')[0]
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Welcome aboard, {display_name}! 🎉
+            Welcome aboard, {display_name}!
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             You just joined the smartest prediction market community. We're pumped to have you here!
@@ -216,28 +206,28 @@ async def send_welcome_email(to_email: str, name: str = None) -> bool:
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             OddWons gives you the edge by aggregating data from Kalshi and Polymarket, then serving you AI-powered insights so you can make smarter decisions.
         </p>
-        
-        {info_box("Your 7-day free trial just started. Explore everything!", "🚀")}
-        
+
+        {info_box("Your 7-day free trial just started. Explore everything!")}
+
         <p style="color: #111827; font-weight: 600; margin: 24px 0 12px 0;">Here's what you can do:</p>
-        
+
         {feature_list([
             "Browse 2,000+ markets from Kalshi & Polymarket",
             "Get AI-generated market highlights daily",
             "Compare prices across platforms instantly",
             "Set alerts for markets you care about",
         ])}
-        
+
         {button("Go to Dashboard", "https://oddwons.ai/dashboard")}
-        
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
-            Questions? Just reply to this email – we actually read them! 😄
+            Questions? Just reply to this email - we actually read them!
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
-        subject="Welcome to OddWons! 🎯 Your prediction market journey starts now",
+        subject="Welcome to OddWons! Your prediction market journey starts now",
         html_content=get_base_template(content, f"Hey {display_name}! Welcome to OddWons - your prediction market companion.")
     )
 
@@ -246,27 +236,27 @@ async def send_password_reset_email(to_email: str, reset_token: str, name: str =
     """Password reset request email."""
     display_name = name or "there"
     reset_url = f"https://oddwons.ai/reset-password?token={reset_token}"
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Reset your password 🔐
+            Reset your password
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
-            Hey {display_name}, we got a request to reset your OddWons password. No worries – it happens to the best of us!
+            Hey {display_name}, we got a request to reset your OddWons password. No worries - it happens to the best of us!
         </p>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             Click the button below to set a new password:
         </p>
-        
+
         {button("Reset Password", reset_url)}
-        
-        {info_box("This link expires in 1 hour for security reasons.", "⏰")}
-        
+
+        {info_box("This link expires in 1 hour for security reasons.")}
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
-            Didn't request this? No worries – just ignore this email and your password stays the same.
+            Didn't request this? No worries - just ignore this email and your password stays the same.
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
         subject="Reset your OddWons password",
@@ -277,20 +267,20 @@ async def send_password_reset_email(to_email: str, reset_token: str, name: str =
 async def send_password_changed_email(to_email: str, name: str = None) -> bool:
     """Confirmation that password was changed."""
     display_name = name or "there"
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Password changed successfully ✅
+            Password changed successfully
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             Hey {display_name}, just confirming that your OddWons password was just changed.
         </p>
-        
-        {info_box("If you didn't make this change, please contact us immediately by replying to this email.", "⚠️")}
-        
+
+        {info_box("If you didn't make this change, please contact us immediately by replying to this email.")}
+
         {button("Go to OddWons", "https://oddwons.ai")}
     """
-    
+
     return await send_email(
         to_email=to_email,
         subject="Your OddWons password was changed",
@@ -305,10 +295,10 @@ async def send_password_changed_email(to_email: str, name: str = None) -> bool:
 async def send_trial_started_email(to_email: str, name: str = None, tier: str = "BASIC") -> bool:
     """Trial period started."""
     display_name = name or to_email.split('@')[0]
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Your free trial is active! 🎁
+            Your free trial is active!
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;">
             Hey {display_name}, you've got <strong>7 days</strong> to explore OddWons {tier_badge(tier)} features.
@@ -316,26 +306,26 @@ async def send_trial_started_email(to_email: str, name: str = None, tier: str = 
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             No credit card charged until your trial ends. Cancel anytime.
         </p>
-        
+
         <p style="color: #111827; font-weight: 600; margin: 24px 0 12px 0;">What you get during your trial:</p>
-        
+
         {feature_list([
             "Full access to AI-powered market highlights",
             "Cross-platform price comparison",
             "Real-time market alerts",
             "All premium features unlocked",
         ])}
-        
+
         {button("Start Exploring", "https://oddwons.ai/dashboard")}
-        
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
-            Make the most of your trial – we'll remind you before it ends! 💪
+            Make the most of your trial - we'll remind you before it ends!
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
-        subject=f"Your {tier} trial is now active – 7 days free! 🎉",
+        subject=f"Your {tier} trial is now active - 7 days free!",
         html_content=get_base_template(content, f"Your 7-day free trial of OddWons {tier} is now active!")
     )
 
@@ -344,19 +334,18 @@ async def send_trial_ending_soon_email(to_email: str, days_left: int, name: str 
     """Trial ending reminder (3 days or 1 day)."""
     display_name = name or "there"
     urgency = "tomorrow" if days_left == 1 else f"in {days_left} days"
-    emoji = "⚠️" if days_left == 1 else "⏰"
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Your trial ends {urgency} {emoji}
+            Your trial ends {urgency}
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
-            Hey {display_name}, just a heads up – your OddWons {tier_badge(tier)} trial wraps up {urgency}.
+            Hey {display_name}, just a heads up - your OddWons {tier_badge(tier)} trial wraps up {urgency}.
         </p>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             To keep your access to AI insights and market analysis, upgrade to a paid plan:
         </p>
-        
+
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 24px 0;">
             <tr>
                 <td style="background-color: #f9fafb; border-radius: 12px; padding: 20px;">
@@ -383,28 +372,28 @@ async def send_trial_ending_soon_email(to_email: str, days_left: int, name: str 
                 </td>
             </tr>
         </table>
-        
+
         {button("Upgrade Now", "https://oddwons.ai/settings")}
-        
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
-            Not ready? No pressure – you can always come back later. We'll keep your account safe.
+            Not ready? No pressure - you can always come back later. We'll keep your account safe.
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
-        subject=f"{emoji} Your OddWons trial ends {urgency}",
-        html_content=get_base_template(content, f"Your free trial ends {urgency} – upgrade to keep access")
+        subject=f"Your OddWons trial ends {urgency}",
+        html_content=get_base_template(content, f"Your free trial ends {urgency} - upgrade to keep access")
     )
 
 
 async def send_trial_ended_email(to_email: str, name: str = None) -> bool:
     """Trial has ended."""
     display_name = name or "there"
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Your trial has ended 😢
+            Your trial has ended
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             Hey {display_name}, your 7-day OddWons trial is now over.
@@ -412,28 +401,28 @@ async def send_trial_ended_email(to_email: str, name: str = None) -> bool:
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             You've been downgraded to the free tier, which means limited access to insights and features.
         </p>
-        
-        {info_box("Upgrade anytime to get full access back – your data is still here!", "💾")}
-        
+
+        {info_box("Upgrade anytime to get full access back - your data is still here!")}
+
         <p style="color: #111827; font-weight: 600; margin: 24px 0 12px 0;">What you're missing:</p>
-        
+
         {feature_list([
             "Full AI-powered market analysis",
             "Unlimited market highlights",
             "Real-time alerts",
             "Cross-platform arbitrage detection",
         ])}
-        
+
         {button("Upgrade to Premium", "https://oddwons.ai/settings", BRAND_PRIMARY)}
-        
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
-            We hope to see you back soon! 🙏
+            We hope to see you back soon!
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
-        subject="Your OddWons trial has ended – we miss you already! 😢",
+        subject="Your OddWons trial has ended - we miss you already!",
         html_content=get_base_template(content, "Your trial ended but you can upgrade anytime")
     )
 
@@ -441,7 +430,7 @@ async def send_trial_ended_email(to_email: str, name: str = None) -> bool:
 async def send_subscription_confirmed_email(to_email: str, tier: str, amount: float, name: str = None) -> bool:
     """Subscription payment confirmed."""
     display_name = name or "there"
-    
+
     tier_features = {
         "BASIC": [
             "Daily AI market highlights",
@@ -452,9 +441,9 @@ async def send_subscription_confirmed_email(to_email: str, tier: str, amount: fl
         "PREMIUM": [
             "Everything in Basic",
             "Real-time alerts",
-            "Custom alert parameters",
+            "Cross-platform comparison",
             "SMS notifications",
-            "Discord/Slack integration",
+            "Movement analysis",
         ],
         "PRO": [
             "Everything in Premium",
@@ -464,102 +453,44 @@ async def send_subscription_confirmed_email(to_email: str, tier: str, amount: fl
             "Early feature access",
         ],
     }
-    
+
     features = tier_features.get(tier.upper(), tier_features["BASIC"])
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            You're officially {tier_badge(tier)}! 🎊
+            You're officially {tier_badge(tier)}!
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             Hey {display_name}, welcome to OddWons {tier}! Your payment of <strong>${amount:.2f}</strong> was successful.
         </p>
-        
+
         <p style="color: #111827; font-weight: 600; margin: 24px 0 12px 0;">Here's what you now have access to:</p>
-        
+
         {feature_list(features)}
-        
+
         {button("Go to Dashboard", "https://oddwons.ai/dashboard")}
-        
-        {info_box("Your subscription renews automatically each month. Manage it anytime in Settings.", "📅")}
-        
+
+        {info_box("Your subscription renews automatically each month. Manage it anytime in Settings.")}
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
-            Thanks for supporting OddWons! You're gonna love it. 🚀
+            Thanks for supporting OddWons! You're gonna love it.
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
-        subject=f"You're now OddWons {tier}! 🎉",
-        html_content=get_base_template(content, f"Welcome to OddWons {tier} – your subscription is active!")
-    )
-
-
-async def send_subscription_upgraded_email(to_email: str, old_tier: str, new_tier: str, name: str = None) -> bool:
-    """Subscription upgraded."""
-    display_name = name or "there"
-    
-    content = f"""
-        <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Upgrade complete! 🚀
-        </h2>
-        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
-            Hey {display_name}, you just leveled up from {tier_badge(old_tier)} to {tier_badge(new_tier)}!
-        </p>
-        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
-            Your new features are already active. Go check them out!
-        </p>
-        
-        {button("Explore New Features", "https://oddwons.ai/dashboard")}
-        
-        <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
-            Thanks for upgrading – you won't regret it! 💪
-        </p>
-    """
-    
-    return await send_email(
-        to_email=to_email,
-        subject=f"You upgraded to {new_tier}! 🎉",
-        html_content=get_base_template(content, f"You've been upgraded from {old_tier} to {new_tier}")
-    )
-
-
-async def send_subscription_downgraded_email(to_email: str, old_tier: str, new_tier: str, name: str = None) -> bool:
-    """Subscription downgraded."""
-    display_name = name or "there"
-    
-    content = f"""
-        <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Plan changed to {new_tier}
-        </h2>
-        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
-            Hey {display_name}, your plan has been changed from {tier_badge(old_tier)} to {tier_badge(new_tier)}.
-        </p>
-        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
-            Some features may no longer be available. You can upgrade again anytime.
-        </p>
-        
-        {button("View Plans", "https://oddwons.ai/settings")}
-        
-        <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
-            We're still here whenever you're ready to upgrade again! 🙂
-        </p>
-    """
-    
-    return await send_email(
-        to_email=to_email,
-        subject=f"Your OddWons plan has been changed",
-        html_content=get_base_template(content, f"Your plan changed from {old_tier} to {new_tier}")
+        subject=f"You're now OddWons {tier}!",
+        html_content=get_base_template(content, f"Welcome to OddWons {tier} - your subscription is active!")
     )
 
 
 async def send_subscription_cancelled_email(to_email: str, tier: str, end_date: str, name: str = None) -> bool:
     """Subscription cancelled."""
     display_name = name or "there"
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            We're sad to see you go 😢
+            We're sad to see you go
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             Hey {display_name}, your {tier_badge(tier)} subscription has been cancelled.
@@ -567,16 +498,16 @@ async def send_subscription_cancelled_email(to_email: str, tier: str, end_date: 
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             You'll still have access to your current features until <strong>{end_date}</strong>, then you'll be moved to the free tier.
         </p>
-        
-        {info_box("Changed your mind? You can resubscribe anytime before your access ends.", "💡")}
-        
+
+        {info_box("Changed your mind? You can resubscribe anytime before your access ends.")}
+
         {button("Resubscribe", "https://oddwons.ai/settings")}
-        
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
             If you have feedback on how we can improve, just reply to this email. We'd love to hear from you!
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
         subject="Your OddWons subscription has been cancelled",
@@ -587,10 +518,10 @@ async def send_subscription_cancelled_email(to_email: str, tier: str, end_date: 
 async def send_payment_failed_email(to_email: str, amount: float, name: str = None) -> bool:
     """Payment failed notification."""
     display_name = name or "there"
-    
+
     content = f"""
         <h2 style="color: {BRAND_ERROR}; margin: 0 0 16px 0; font-size: 24px;">
-            Payment failed ⚠️
+            Payment failed
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             Hey {display_name}, we couldn't process your payment of <strong>${amount:.2f}</strong>.
@@ -598,42 +529,42 @@ async def send_payment_failed_email(to_email: str, amount: float, name: str = No
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             This could happen if your card expired, has insufficient funds, or was declined by your bank.
         </p>
-        
-        {info_box("Please update your payment method to avoid losing access to your subscription.", "🔧")}
-        
+
+        {info_box("Please update your payment method to avoid losing access to your subscription.")}
+
         {button("Update Payment Method", "https://oddwons.ai/settings", BRAND_ERROR)}
-        
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
             We'll retry the payment in a few days. If you need help, just reply to this email.
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
-        subject="⚠️ Your OddWons payment failed",
-        html_content=get_base_template(content, "Your payment couldn't be processed – please update your payment method")
+        subject="Your OddWons payment failed",
+        html_content=get_base_template(content, "Your payment couldn't be processed - please update your payment method")
     )
 
 
 async def send_payment_receipt_email(
-    to_email: str, 
-    amount: float, 
-    tier: str, 
+    to_email: str,
+    amount: float,
+    tier: str,
     invoice_id: str,
     name: str = None
 ) -> bool:
     """Payment receipt/invoice."""
     display_name = name or "there"
     date = datetime.now().strftime("%B %d, %Y")
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Payment received ✅
+            Payment received
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
             Hey {display_name}, thanks for your payment!
         </p>
-        
+
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f9fafb; border-radius: 12px; padding: 20px; margin: 0 0 24px 0;">
             <tr>
                 <td style="padding: 12px 20px; border-bottom: 1px solid #e5e7eb;">
@@ -660,12 +591,12 @@ async def send_payment_receipt_email(
                 </td>
             </tr>
         </table>
-        
+
         <p style="color: #6b7280; font-size: 14px; margin: 0;">
             This receipt was sent to {to_email}. Keep it for your records.
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
         subject=f"Receipt for your OddWons {tier} subscription",
@@ -688,26 +619,25 @@ async def send_market_alert_email(
 ) -> bool:
     """Market price movement alert."""
     display_name = name or "there"
-    
+
     price_change = new_price - old_price
     direction = "up" if price_change > 0 else "down"
-    direction_emoji = "📈" if price_change > 0 else "📉"
     direction_color = BRAND_SUCCESS if price_change > 0 else BRAND_ERROR
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Market Alert {direction_emoji}
+            Market Alert
         </h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
             Hey {display_name}, a market you're watching just moved!
         </p>
-        
+
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f9fafb; border-radius: 12px; overflow: hidden; margin: 0 0 24px 0;">
             <tr>
                 <td style="padding: 20px;">
                     <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 12px; text-transform: uppercase;">{platform}</p>
                     <h3 style="margin: 0 0 16px 0; color: #111827; font-size: 18px;">{market_title}</h3>
-                    
+
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                         <tr>
                             <td style="text-align: center; padding: 12px;">
@@ -727,17 +657,17 @@ async def send_market_alert_email(
                 </td>
             </tr>
         </table>
-        
+
         {button("View Market", "https://oddwons.ai/markets")}
-        
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
             <a href="https://oddwons.ai/settings" style="color: {BRAND_PRIMARY};">Manage your alerts</a>
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
-        subject=f"{direction_emoji} {market_title} moved {direction} {abs(price_change):.0%}",
+        subject=f"{market_title} moved {direction} {abs(price_change):.0%}",
         html_content=get_base_template(content, f"Market alert: {market_title} is now at {new_price:.0%}")
     )
 
@@ -751,7 +681,7 @@ async def send_daily_digest_email(
     """Daily digest with top AI insights."""
     display_name = name or "there"
     date = datetime.now().strftime("%A, %B %d")
-    
+
     # Build insights HTML
     insights_html = ""
     for i, insight in enumerate(insights[:5], 1):
@@ -759,7 +689,7 @@ async def send_daily_digest_email(
         summary = insight.get("summary", "")
         price = insight.get("yes_price", 0)
         platform = insight.get("platform", "")
-        
+
         insights_html += f"""
         <tr>
             <td style="padding: 16px 0; border-bottom: 1px solid #e5e7eb;">
@@ -770,17 +700,17 @@ async def send_daily_digest_email(
             </td>
         </tr>
         """
-    
+
     content = f"""
         <h2 style="color: #111827; margin: 0 0 8px 0; font-size: 24px;">
-            Your Daily Digest 📰
+            Your Daily Digest
         </h2>
         <p style="color: #6b7280; margin: 0 0 24px 0; font-size: 14px;">{date}</p>
-        
+
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
             Hey {display_name}, here's what's happening in prediction markets today:
         </p>
-        
+
         <!-- Stats bar -->
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: {BRAND_LIGHT}; border-radius: 12px; margin: 0 0 24px 0;">
             <tr>
@@ -798,286 +728,27 @@ async def send_daily_digest_email(
                 </td>
             </tr>
         </table>
-        
-        <h3 style="color: #111827; margin: 0 0 16px 0; font-size: 18px;">🧠 Today's Top Insights</h3>
-        
+
+        <h3 style="color: #111827; margin: 0 0 16px 0; font-size: 18px;">Today's Top Insights</h3>
+
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
             {insights_html}
         </table>
-        
+
         {button("See All Insights", "https://oddwons.ai/opportunities")}
-        
+
         <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
             <a href="https://oddwons.ai/settings" style="color: {BRAND_PRIMARY};">Adjust digest preferences</a>
         </p>
     """
-    
+
     return await send_email(
         to_email=to_email,
-        subject=f"📰 Your OddWons Daily Digest – {date}",
+        subject=f"Your OddWons Daily Digest - {date}",
         html_content=get_base_template(content, f"Your daily prediction market insights for {date}")
     )
 
 
-async def send_weekly_recap_email(
-    to_email: str,
-    weekly_stats: Dict[str, Any],
-    top_movers: List[Dict[str, Any]],
-    name: str = None
-) -> bool:
-    """Weekly recap email."""
-    display_name = name or "there"
-    
-    # Build movers HTML
-    movers_html = ""
-    for mover in top_movers[:5]:
-        title = mover.get("title", "Market")
-        change = mover.get("price_change", 0)
-        direction = "📈" if change > 0 else "📉"
-        color = BRAND_SUCCESS if change > 0 else BRAND_ERROR
-        
-        movers_html += f"""
-        <tr>
-            <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-                <span style="color: #111827;">{title[:50]}...</span>
-                <span style="float: right; color: {color}; font-weight: 600;">{direction} {'+' if change > 0 else ''}{change:.0%}</span>
-            </td>
-        </tr>
-        """
-    
-    content = f"""
-        <h2 style="color: #111827; margin: 0 0 16px 0; font-size: 24px;">
-            Your Week in Review 📊
-        </h2>
-        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
-            Hey {display_name}, here's your weekly prediction market recap:
-        </p>
-        
-        <h3 style="color: #111827; margin: 0 0 16px 0; font-size: 18px;">🔥 Biggest Movers This Week</h3>
-        
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 24px 0;">
-            {movers_html}
-        </table>
-        
-        {button("Explore Markets", "https://oddwons.ai/markets")}
-        
-        <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">
-            See you next week! 👋
-        </p>
-    """
-    
-    return await send_email(
-        to_email=to_email,
-        subject="📊 Your OddWons Weekly Recap",
-        html_content=get_base_template(content, "Your weekly prediction market recap is here")
-    )
-```
-
----
-
-## TASK 2: Hook Emails Into App
-
-### 2a. Auth Routes - `app/api/routes/auth.py`
-
-Add at the top:
-```python
-from app.services.email import send_welcome_email, send_password_reset_email, send_password_changed_email
-```
-
-**After successful registration** (in register endpoint):
-```python
-# Send welcome email (fire and forget)
-import asyncio
-asyncio.create_task(send_welcome_email(user.email, user.name))
-```
-
-**After password reset request** (if you have this endpoint):
-```python
-asyncio.create_task(send_password_reset_email(user.email, reset_token, user.name))
-```
-
-**After password change**:
-```python
-asyncio.create_task(send_password_changed_email(user.email, user.name))
-```
-
-### 2b. Billing Webhook - `app/api/routes/billing.py`
-
-Add at the top:
-```python
-from app.services.email import (
-    send_trial_started_email,
-    send_subscription_confirmed_email,
-    send_subscription_cancelled_email,
-    send_payment_failed_email,
-    send_payment_receipt_email,
-)
-```
-
-**In webhook handler, add email sends for each event:**
-
-```python
-# After checkout.session.completed (new subscription)
-asyncio.create_task(send_subscription_confirmed_email(
-    to_email=user.email,
-    tier=tier.value,
-    amount=session.amount_total / 100,
-    name=user.name
-))
-
-# After invoice.paid
-asyncio.create_task(send_payment_receipt_email(
-    to_email=user.email,
-    amount=invoice.amount_paid / 100,
-    tier=user.subscription_tier.value,
-    invoice_id=invoice.id,
-    name=user.name
-))
-
-# After invoice.payment_failed
-asyncio.create_task(send_payment_failed_email(
-    to_email=user.email,
-    amount=invoice.amount_due / 100,
-    name=user.name
-))
-
-# After customer.subscription.deleted
-asyncio.create_task(send_subscription_cancelled_email(
-    to_email=user.email,
-    tier=user.subscription_tier.value,
-    end_date=subscription.current_period_end.strftime("%B %d, %Y"),
-    name=user.name
-))
-```
-
----
-
-## TASK 3: Add AI Analysis to Scheduler
-
-### Update `app/main.py`
-
-Modify the `scheduled_collection` function to run AI analysis after data collection:
-
-```python
-async def scheduled_collection():
-    """Background task for collecting market data and running AI analysis."""
-    logger.info("Starting scheduled data collection...")
-    try:
-        # Run data collection
-        result = await data_collector.run_collection(run_pattern_detection=False)
-        logger.info(f"Collection complete: {result}")
-        
-        # Run AI analysis (every collection cycle)
-        logger.info("Starting AI analysis...")
-        from app.services.patterns.engine import pattern_engine
-        from app.services.market_matcher import run_market_matching
-        
-        # Pattern detection + AI insights
-        ai_enabled = settings.groq_api_key and len(settings.groq_api_key) > 0
-        analysis_result = await pattern_engine.run_full_analysis(with_ai=ai_enabled)
-        logger.info(f"AI analysis complete: {analysis_result}")
-        
-        # Cross-platform matching
-        match_result = await run_market_matching(min_volume=1000)
-        logger.info(f"Market matching complete: {match_result}")
-        
-    except Exception as e:
-        logger.error(f"Scheduled task failed: {e}", exc_info=True)
-```
-
----
-
-## TASK 4: Trial Reminder Cron Job (Optional)
-
-Add a daily job to check for expiring trials:
-
-```python
-# In app/main.py, add to lifespan startup:
-
-async def check_expiring_trials():
-    """Send reminder emails for expiring trials."""
-    from sqlalchemy import select, and_
-    from datetime import datetime, timedelta
-    from app.models.user import User
-    from app.services.email import send_trial_ending_soon_email
-    
-    async with AsyncSessionLocal() as session:
-        # Find users with trials ending in 3 days
-        three_days = datetime.utcnow() + timedelta(days=3)
-        four_days = datetime.utcnow() + timedelta(days=4)
-        
-        result = await session.execute(
-            select(User).where(
-                and_(
-                    User.trial_end >= three_days,
-                    User.trial_end < four_days,
-                    User.subscription_status == "trialing"
-                )
-            )
-        )
-        
-        for user in result.scalars():
-            await send_trial_ending_soon_email(user.email, 3, user.name)
-        
-        # Find users with trials ending tomorrow
-        one_day = datetime.utcnow() + timedelta(days=1)
-        two_days = datetime.utcnow() + timedelta(days=2)
-        
-        result = await session.execute(
-            select(User).where(
-                and_(
-                    User.trial_end >= one_day,
-                    User.trial_end < two_days,
-                    User.subscription_status == "trialing"
-                )
-            )
-        )
-        
-        for user in result.scalars():
-            await send_trial_ending_soon_email(user.email, 1, user.name)
-
-# Add to scheduler in lifespan:
-scheduler.add_job(
-    check_expiring_trials,
-    "cron",
-    hour=9,  # Run at 9 AM UTC daily
-    id="trial_reminders",
-    replace_existing=True,
-)
-```
-
----
-
-## Summary
-
-| Email Type | Trigger |
-|------------|---------|
-| Welcome | After registration |
-| Password Reset | Password reset request |
-| Password Changed | After password update |
-| Trial Started | After checkout with trial |
-| Trial Ending (3 days) | Daily cron job |
-| Trial Ending (1 day) | Daily cron job |
-| Trial Ended | Stripe webhook (subscription status change) |
-| Subscription Confirmed | Stripe webhook (checkout.session.completed) |
-| Subscription Upgraded | Stripe webhook (subscription updated) |
-| Subscription Downgraded | Stripe webhook (subscription updated) |
-| Subscription Cancelled | Stripe webhook (subscription deleted) |
-| Payment Failed | Stripe webhook (invoice.payment_failed) |
-| Payment Receipt | Stripe webhook (invoice.paid) |
-| Market Alert | Alert system (when triggered) |
-| Daily Digest | Daily cron job |
-| Weekly Recap | Weekly cron job |
-
----
-
-## TASK 5: Batch Alert Email Processing (End of Cycle)
-
-Alerts are created during the 15-min analysis cycle. At the end of each cycle, query for unsent alerts and send emails.
-
-### Add to `app/services/email.py`:
-
-```python
 # -----------------------------------------------------------------------------
 # BATCH ALERT PROCESSING
 # -----------------------------------------------------------------------------
@@ -1090,325 +761,49 @@ async def process_pending_alert_emails() -> dict:
     """
     from sqlalchemy import select, and_
     from app.core.database import AsyncSessionLocal
-    from app.models.alert import Alert  # Adjust import based on your model
+    from app.models.market import Alert
     from app.models.user import User
-    
+
     results = {"processed": 0, "sent": 0, "failed": 0}
-    
+
     async with AsyncSessionLocal() as session:
         # Get all unsent alerts with user info
-        # Assuming Alert model has: id, user_id, market_title, alert_type, 
-        # old_price, new_price, platform, email_sent (bool), created_at
-        query = select(Alert, User).join(User).where(
+        query = select(Alert, User).join(User, Alert.user_id == User.id).where(
             and_(
                 Alert.email_sent == False,
-                User.email_alerts_enabled == True  # Respect user preferences
+                User.email_alerts_enabled == True
             )
-        ).order_by(Alert.created_at.desc()).limit(100)  # Batch limit
-        
+        ).order_by(Alert.created_at.desc()).limit(100)
+
         result = await session.execute(query)
         alerts_with_users = result.all()
-        
+
         for alert, user in alerts_with_users:
             results["processed"] += 1
-            
+
             try:
-                # Send the alert email
                 success = await send_market_alert_email(
                     to_email=user.email,
-                    market_title=alert.market_title,
+                    market_title=alert.title,
                     alert_type=alert.alert_type,
-                    old_price=alert.old_price,
-                    new_price=alert.new_price,
-                    platform=alert.platform,
+                    old_price=alert.old_price or 0,
+                    new_price=alert.new_price or 0,
+                    platform=alert.platform or "unknown",
                     name=user.name
                 )
-                
+
                 if success:
-                    # Mark as sent
                     alert.email_sent = True
                     alert.email_sent_at = datetime.utcnow()
                     results["sent"] += 1
                 else:
                     results["failed"] += 1
-                    
+
             except Exception as e:
                 logger.error(f"Failed to send alert email for alert {alert.id}: {e}")
                 results["failed"] += 1
-        
-        # Commit all the email_sent updates
+
         await session.commit()
-    
+
     logger.info(f"Alert email batch complete: {results}")
     return results
-```
-
-### Update Alert Model (if needed)
-
-Make sure your `Alert` model in `app/models/alert.py` has these fields:
-
-```python
-class Alert(Base):
-    __tablename__ = "alerts"
-    
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    market_id = Column(String, nullable=False)
-    market_title = Column(String, nullable=False)
-    platform = Column(String, nullable=False)
-    alert_type = Column(String, nullable=False)  # e.g., "price_spike", "volume_surge"
-    old_price = Column(Float)
-    new_price = Column(Float)
-    
-    # Email tracking
-    email_sent = Column(Boolean, default=False)
-    email_sent_at = Column(DateTime, nullable=True)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-```
-
-### Update User Model (if needed)
-
-Add email preference field to `app/models/user.py`:
-
-```python
-class User(Base):
-    # ... existing fields ...
-    
-    # Email preferences
-    email_alerts_enabled = Column(Boolean, default=True)
-    email_digest_enabled = Column(Boolean, default=True)
-```
-
-### Update Scheduler in `app/main.py`
-
-```python
-async def scheduled_collection():
-    """Background task for collecting market data, running AI analysis, and sending alerts."""
-    logger.info("Starting scheduled data collection...")
-    try:
-        # Step 1: Run data collection
-        result = await data_collector.run_collection(run_pattern_detection=False)
-        logger.info(f"Collection complete: {result}")
-        
-        # Step 2: Run AI analysis
-        logger.info("Starting AI analysis...")
-        from app.services.patterns.engine import pattern_engine
-        from app.services.market_matcher import run_market_matching
-        
-        ai_enabled = settings.groq_api_key and len(settings.groq_api_key) > 0
-        analysis_result = await pattern_engine.run_full_analysis(with_ai=ai_enabled)
-        logger.info(f"AI analysis complete: {analysis_result}")
-        
-        # Step 3: Cross-platform matching
-        match_result = await run_market_matching(min_volume=1000)
-        logger.info(f"Market matching complete: {match_result}")
-        
-        # Step 4: Process pending alert emails (NEW)
-        logger.info("Processing pending alert emails...")
-        from app.services.email import process_pending_alert_emails
-        email_result = await process_pending_alert_emails()
-        logger.info(f"Alert emails processed: {email_result}")
-        
-    except Exception as e:
-        logger.error(f"Scheduled task failed: {e}", exc_info=True)
-```
-
----
-
-## TASK 6: Daily Digest Email (9 AM UTC)
-
-Send daily digest to users who have it enabled.
-
-### Add to `app/main.py` (in lifespan startup):
-
-```python
-async def send_daily_digest_emails():
-    """Send daily digest emails to all subscribed users."""
-    from sqlalchemy import select
-    from app.core.database import AsyncSessionLocal
-    from app.models.user import User
-    from app.models.ai_insight import AIInsight
-    from app.services.email import send_daily_digest_email
-    
-    logger.info("Starting daily digest email job...")
-    
-    async with AsyncSessionLocal() as session:
-        # Get users with digest enabled (paid tiers only)
-        users_result = await session.execute(
-            select(User).where(
-                and_(
-                    User.email_digest_enabled == True,
-                    User.subscription_tier.in_(["BASIC", "PREMIUM", "PRO"])
-                )
-            )
-        )
-        users = users_result.scalars().all()
-        
-        if not users:
-            logger.info("No users subscribed to daily digest")
-            return
-        
-        # Get today's top insights
-        insights_result = await session.execute(
-            select(AIInsight)
-            .where(AIInsight.status == "active")
-            .order_by(AIInsight.created_at.desc())
-            .limit(5)
-        )
-        insights = insights_result.scalars().all()
-        
-        # Get stats
-        from app.models.market import Market
-        from sqlalchemy import func
-        
-        market_count = await session.scalar(select(func.count()).select_from(Market))
-        total_volume = await session.scalar(select(func.sum(Market.volume)).select_from(Market)) or 0
-        
-        stats = {
-            "total_markets": market_count,
-            "movers": len([i for i in insights if i.recent_movement]),
-            "volume": total_volume
-        }
-        
-        # Convert insights to dicts
-        insights_data = [
-            {
-                "market_title": i.market_title,
-                "summary": i.summary,
-                "yes_price": i.current_yes_price or 0,
-                "platform": i.platform
-            }
-            for i in insights
-        ]
-        
-        # Send to each user
-        sent_count = 0
-        for user in users:
-            try:
-                success = await send_daily_digest_email(
-                    to_email=user.email,
-                    insights=insights_data,
-                    stats=stats,
-                    name=user.name
-                )
-                if success:
-                    sent_count += 1
-            except Exception as e:
-                logger.error(f"Failed to send digest to {user.email}: {e}")
-        
-        logger.info(f"Daily digest sent to {sent_count}/{len(users)} users")
-
-
-# Add to scheduler in lifespan:
-scheduler.add_job(
-    send_daily_digest_emails,
-    "cron",
-    hour=9,  # 9 AM UTC
-    minute=0,
-    id="daily_digest",
-    replace_existing=True,
-)
-```
-
----
-
-## Complete Scheduler Setup in `app/main.py`
-
-Here's the full lifespan with all jobs:
-
-```python
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup and shutdown events."""
-    # Startup
-    logger.info("Starting OddWons API...")
-    await init_db()
-    logger.info("Database initialized")
-
-    # Job 1: Data collection + AI analysis + alert emails (every 15 min)
-    scheduler.add_job(
-        scheduled_collection,
-        "interval",
-        minutes=settings.collection_interval_minutes,
-        id="data_collection",
-        replace_existing=True,
-    )
-    
-    # Job 2: Trial expiration reminders (daily at 9 AM UTC)
-    scheduler.add_job(
-        check_expiring_trials,
-        "cron",
-        hour=9,
-        minute=0,
-        id="trial_reminders",
-        replace_existing=True,
-    )
-    
-    # Job 3: Daily digest emails (daily at 9:30 AM UTC, after trial reminders)
-    scheduler.add_job(
-        send_daily_digest_emails,
-        "cron",
-        hour=9,
-        minute=30,
-        id="daily_digest",
-        replace_existing=True,
-    )
-    
-    scheduler.start()
-    logger.info(f"Scheduler started with 3 jobs")
-
-    yield
-
-    # Shutdown
-    logger.info("Shutting down OddWons API...")
-    scheduler.shutdown(wait=False)
-    await kalshi_client.close()
-    await polymarket_client.close()
-    await close_db()
-    logger.info("Shutdown complete")
-```
-
----
-
-## Email Flow Summary
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     EMAIL TRIGGER FLOW                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  IMMEDIATE (API Response)                                       │
-│  ├── User registers → Welcome email                            │
-│  ├── Password reset request → Reset email                      │
-│  └── Password changed → Confirmation email                     │
-│                                                                 │
-│  STRIPE WEBHOOK (Real-time)                                     │
-│  ├── checkout.session.completed → Subscription confirmed       │
-│  ├── invoice.paid → Payment receipt                            │
-│  ├── invoice.payment_failed → Payment failed                   │
-│  └── customer.subscription.deleted → Cancellation email        │
-│                                                                 │
-│  15-MIN CYCLE (End of scheduled_collection)                     │
-│  └── process_pending_alert_emails() → Market alerts            │
-│                                                                 │
-│  DAILY CRON (9:00 AM UTC)                                       │
-│  └── check_expiring_trials() → Trial reminder emails           │
-│                                                                 │
-│  DAILY CRON (9:30 AM UTC)                                       │
-│  └── send_daily_digest_emails() → Daily digest                 │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Files to Create/Modify
-
-- [ ] CREATE `app/services/email.py` - Full email service with all templates + batch processing
-- [ ] MODIFY `app/models/alert.py` - Add email_sent, email_sent_at fields
-- [ ] MODIFY `app/models/user.py` - Add email_alerts_enabled, email_digest_enabled fields
-- [ ] MODIFY `app/api/routes/auth.py` - Add welcome email on register
-- [ ] MODIFY `app/api/routes/billing.py` - Add subscription emails in webhook
-- [ ] MODIFY `app/main.py` - Add AI analysis + alert emails to scheduler, add daily cron jobs
-- [ ] RUN migration for new User/Alert fields

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, DateTime, Integer, Enum, ForeignKey, Text, JSON
+from sqlalchemy import Column, String, Float, DateTime, Integer, Enum, ForeignKey, Text, JSON, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -107,6 +107,7 @@ class Alert(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     pattern_id = Column(Integer, ForeignKey("patterns.id"), nullable=True)  # Optional - alerts can exist without saved pattern
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)  # Which user this alert is for
 
     # Alert content
     title = Column(String, nullable=False)
@@ -118,6 +119,10 @@ class Alert(Base):
 
     # Delivery status
     delivered = Column(DateTime)
+
+    # Email tracking
+    email_sent = Column(Boolean, default=False)  # Whether email was sent
+    email_sent_at = Column(DateTime)  # When email was sent
 
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())

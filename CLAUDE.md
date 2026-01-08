@@ -590,3 +590,40 @@ GEMINI_API_KEY=AIza...
 2. Add endpoint: `https://oddwons.ai/api/v1/billing/webhook`
 3. Select events: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`
 4. Copy signing secret → add to `STRIPE_WEBHOOK_SECRET` env var
+
+### Email Notification System (Jan 2026)
+**COMPLETE EMAIL INTEGRATION** with SendGrid for all user lifecycle events.
+
+**Email Types:**
+- **Auth Emails**: Welcome (on register), Password reset, Password changed confirmation
+- **Subscription Emails**: Trial started, Trial ending (1-day reminder), Subscription confirmed, Subscription cancelled
+- **Billing Emails**: Payment failed (action required)
+- **Alert Emails**: Market alerts (batched), Daily digest
+
+**User Email Preferences (in users table):**
+- `email_alerts_enabled` (Boolean, default true) - Toggle market alert emails
+- `email_digest_enabled` (Boolean, default true) - Toggle daily digest emails
+- `trial_reminder_sent` (Boolean, default false) - Tracks if 1-day trial reminder was sent
+
+**Alert Email Tracking (in alerts table):**
+- `user_id` (FK to users.id) - Which user the alert is for
+- `email_sent` (Boolean, default false) - Whether email was sent
+- `email_sent_at` (DateTime) - When email was sent
+
+**Cron Jobs (APScheduler):**
+- Data collection: Every 15 minutes
+- Trial reminders: Daily at 10:00 AM UTC
+- Daily digest: Daily at 8:00 AM UTC
+- Alert email processing: Every 5 minutes (batch of 50)
+
+**Files:**
+- `app/services/notifications.py` - NotificationService with all email templates
+- `app/services/billing.py` - Subscription email triggers
+- `app/api/routes/auth.py` - Auth email triggers (welcome, password reset)
+- `app/api/routes/billing.py` - Payment failed email trigger
+- `app/main.py` - Cron job definitions
+
+**Migration:**
+```bash
+alembic upgrade head  # Adds email fields to users and alerts tables
+```

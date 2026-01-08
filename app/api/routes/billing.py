@@ -224,6 +224,24 @@ async def stripe_webhook(
         await handle_subscription_deleted(data, db)
     elif event_type == "invoice.payment_failed":
         logger.warning(f"Payment failed for subscription: {data.get('subscription')}")
+        # Send payment failed email
+        from sqlalchemy import select
+        from app.models.user import User
+        from app.services.notifications import notification_service
+        customer_id = data.get("customer")
+        if customer_id:
+            result = await db.execute(
+                select(User).where(User.stripe_customer_id == customer_id)
+            )
+            user = result.scalar_one_or_none()
+            if user:
+                try:
+                    await notification_service.send_payment_failed_email(
+                        to_email=user.email,
+                        user_name=user.name
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send payment failed email: {e}")
     elif event_type == "invoice.paid":
         logger.info(f"Invoice paid for subscription: {data.get('subscription')}")
 

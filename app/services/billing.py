@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models.user import User, SubscriptionTier, SubscriptionStatus
+from app.services.notifications import notification_service
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -126,6 +127,24 @@ async def handle_subscription_created(subscription: dict, db: AsyncSession) -> N
     await db.commit()
     logger.info(f"Updated user {user.id} subscription to {tier.value}")
 
+    # Send trial started email
+    try:
+        if subscription.get("status") == "trialing":
+            await notification_service.send_trial_started_email(
+                to_email=user.email,
+                user_name=user.name,
+                tier=tier.value,
+                trial_end=user.trial_end
+            )
+        else:
+            await notification_service.send_subscription_confirmed_email(
+                to_email=user.email,
+                user_name=user.name,
+                tier=tier.value
+            )
+    except Exception as e:
+        logger.warning(f"Failed to send subscription email: {e}")
+
 
 async def handle_subscription_updated(subscription: dict, db: AsyncSession) -> None:
     """Handle subscription.updated webhook."""
@@ -183,12 +202,24 @@ async def handle_subscription_deleted(subscription: dict, db: AsyncSession) -> N
         logger.error(f"User not found for subscription {subscription_id}")
         return
 
+    old_tier = user.subscription_tier
+
     user.subscription_tier = SubscriptionTier.FREE
     user.subscription_status = SubscriptionStatus.INACTIVE
     user.stripe_subscription_id = None
 
     await db.commit()
     logger.info(f"Canceled subscription for user {user.id}")
+
+    # Send cancellation email
+    try:
+        await notification_service.send_subscription_cancelled_email(
+            to_email=user.email,
+            user_name=user.name,
+            tier=old_tier.value if old_tier else "BASIC"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send cancellation email: {e}")
 
 
 async def get_subscription_info(user: User) -> Optional[dict]:

@@ -365,6 +365,328 @@ The OddWons Team
 
         return await self.send_email(to_email, subject, html_content, text_content)
 
+    async def send_trial_started_email(
+        self,
+        to_email: str,
+        user_name: Optional[str] = None,
+        tier: str = "BASIC",
+        trial_end: Optional[datetime] = None
+    ) -> bool:
+        """Send trial started email."""
+        subject = f"Your OddWons {tier.title()} Trial Has Started!"
+        greeting = f"Hi {user_name}," if user_name else "Hi there,"
+        trial_end_str = trial_end.strftime('%B %d, %Y') if trial_end else "7 days from now"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
+                .content {{ background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }}
+                .button {{ display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
+                .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
+                .highlight {{ background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 15px; margin-top: 15px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Your Trial Has Started!</h1>
+                    <p>{tier.title()} Plan</p>
+                </div>
+                <div class="content">
+                    <p>{greeting}</p>
+                    <p>Welcome to OddWons {tier.title()}! Your 7-day free trial is now active.</p>
+                    <div class="highlight">
+                        <strong>Trial ends:</strong> {trial_end_str}<br>
+                        <strong>Plan:</strong> {tier.title()}
+                    </div>
+                    <p>During your trial, you'll have full access to:</p>
+                    <ul>
+                        <li>AI-powered market analysis</li>
+                        <li>Cross-platform price comparisons</li>
+                        <li>Real-time alerts and notifications</li>
+                        <li>Daily market briefings</li>
+                    </ul>
+                    <p>Explore everything OddWons has to offer!</p>
+                    <a href="https://oddwons.ai/dashboard" class="button">Go to Dashboard</a>
+                </div>
+                <div class="footer">
+                    <p>&copy; {datetime.utcnow().year} OddWons. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+{greeting}
+
+Your OddWons {tier.title()} trial has started!
+
+Trial ends: {trial_end_str}
+Plan: {tier.title()}
+
+During your trial, you'll have full access to all features. Explore everything OddWons has to offer!
+
+Visit https://oddwons.ai/dashboard to get started.
+
+Best,
+The OddWons Team
+        """
+
+        return await self.send_email(to_email, subject, html_content, text_content)
+
+    async def send_subscription_confirmed_email(
+        self,
+        to_email: str,
+        user_name: Optional[str] = None,
+        tier: str = "BASIC"
+    ) -> bool:
+        """Send subscription confirmed email."""
+        subject = f"Welcome to OddWons {tier.title()}!"
+        greeting = f"Hi {user_name}," if user_name else "Hi there,"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
+                .content {{ background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }}
+                .button {{ display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
+                .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Subscription Confirmed!</h1>
+                    <p>{tier.title()} Plan</p>
+                </div>
+                <div class="content">
+                    <p>{greeting}</p>
+                    <p>Thank you for subscribing to OddWons {tier.title()}! Your subscription is now active.</p>
+                    <p>You now have full access to all {tier.title()} features. We're excited to help you stay informed on prediction markets!</p>
+                    <a href="https://oddwons.ai/dashboard" class="button">Go to Dashboard</a>
+                </div>
+                <div class="footer">
+                    <p>&copy; {datetime.utcnow().year} OddWons. All rights reserved.</p>
+                    <p><a href="https://oddwons.ai/settings">Manage your subscription</a></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+{greeting}
+
+Thank you for subscribing to OddWons {tier.title()}!
+
+Your subscription is now active. You have full access to all {tier.title()} features.
+
+Visit https://oddwons.ai/dashboard to explore.
+
+Best,
+The OddWons Team
+        """
+
+        return await self.send_email(to_email, subject, html_content, text_content)
+
+    async def send_subscription_cancelled_email(
+        self,
+        to_email: str,
+        user_name: Optional[str] = None,
+        tier: str = "BASIC"
+    ) -> bool:
+        """Send subscription cancelled email."""
+        subject = "Your OddWons Subscription Has Been Cancelled"
+        greeting = f"Hi {user_name}," if user_name else "Hi there,"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #1f2937; color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
+                .content {{ background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }}
+                .button {{ display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
+                .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Subscription Cancelled</h1>
+                </div>
+                <div class="content">
+                    <p>{greeting}</p>
+                    <p>Your OddWons {tier.title()} subscription has been cancelled.</p>
+                    <p>We're sorry to see you go! If you change your mind, you can resubscribe anytime from your settings page.</p>
+                    <p>You still have access to our free tier with limited features.</p>
+                    <a href="https://oddwons.ai/settings" class="button">Resubscribe</a>
+                </div>
+                <div class="footer">
+                    <p>&copy; {datetime.utcnow().year} OddWons. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+{greeting}
+
+Your OddWons {tier.title()} subscription has been cancelled.
+
+We're sorry to see you go! If you change your mind, you can resubscribe anytime at https://oddwons.ai/settings
+
+You still have access to our free tier with limited features.
+
+Best,
+The OddWons Team
+        """
+
+        return await self.send_email(to_email, subject, html_content, text_content)
+
+    async def send_payment_failed_email(
+        self,
+        to_email: str,
+        user_name: Optional[str] = None
+    ) -> bool:
+        """Send payment failed email."""
+        subject = "Action Required: Payment Failed for OddWons"
+        greeting = f"Hi {user_name}," if user_name else "Hi there,"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #ef4444; color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
+                .content {{ background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }}
+                .button {{ display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
+                .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
+                .warning {{ background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin-top: 15px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Payment Failed</h1>
+                </div>
+                <div class="content">
+                    <p>{greeting}</p>
+                    <p>We were unable to process your payment for OddWons.</p>
+                    <div class="warning">
+                        <strong>Action Required:</strong> Please update your payment method to avoid service interruption.
+                    </div>
+                    <p>Common reasons for failed payments:</p>
+                    <ul>
+                        <li>Expired card</li>
+                        <li>Insufficient funds</li>
+                        <li>Card declined by bank</li>
+                    </ul>
+                    <a href="https://oddwons.ai/settings" class="button">Update Payment Method</a>
+                </div>
+                <div class="footer">
+                    <p>&copy; {datetime.utcnow().year} OddWons. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+{greeting}
+
+We were unable to process your payment for OddWons.
+
+Please update your payment method at https://oddwons.ai/settings to avoid service interruption.
+
+Best,
+The OddWons Team
+        """
+
+        return await self.send_email(to_email, subject, html_content, text_content)
+
+    async def send_trial_ending_email(
+        self,
+        to_email: str,
+        user_name: Optional[str] = None,
+        days_remaining: int = 1,
+        tier: str = "BASIC"
+    ) -> bool:
+        """Send trial ending reminder email."""
+        subject = f"Your OddWons Trial Ends in {days_remaining} Day{'s' if days_remaining != 1 else ''}"
+        greeting = f"Hi {user_name}," if user_name else "Hi there,"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
+                .content {{ background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }}
+                .button {{ display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
+                .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
+                .highlight {{ background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 15px; margin-top: 15px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Trial Ending Soon</h1>
+                    <p>{days_remaining} day{'s' if days_remaining != 1 else ''} remaining</p>
+                </div>
+                <div class="content">
+                    <p>{greeting}</p>
+                    <p>Your OddWons {tier.title()} trial ends in {days_remaining} day{'s' if days_remaining != 1 else ''}.</p>
+                    <div class="highlight">
+                        <strong>Don't lose access!</strong> Subscribe now to keep your {tier.title()} features.
+                    </div>
+                    <p>What you'll keep with {tier.title()}:</p>
+                    <ul>
+                        <li>AI-powered market insights</li>
+                        <li>Cross-platform price comparisons</li>
+                        <li>Real-time alerts</li>
+                        <li>Daily market briefings</li>
+                    </ul>
+                    <a href="https://oddwons.ai/settings" class="button">Subscribe Now</a>
+                </div>
+                <div class="footer">
+                    <p>&copy; {datetime.utcnow().year} OddWons. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+{greeting}
+
+Your OddWons {tier.title()} trial ends in {days_remaining} day{'s' if days_remaining != 1 else ''}.
+
+Don't lose access! Subscribe now at https://oddwons.ai/settings to keep your {tier.title()} features.
+
+Best,
+The OddWons Team
+        """
+
+        return await self.send_email(to_email, subject, html_content, text_content)
+
 
 # Singleton instance
 notification_service = NotificationService()

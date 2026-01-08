@@ -47,3 +47,5 @@ coverage/
 # Cache
 .cache/
 *.tsbuildinfo
+prodstatus.md
+chat.md

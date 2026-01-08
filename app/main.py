@@ -34,6 +34,194 @@ async def scheduled_collection():
         logger.error(f"Scheduled collection failed: {e}")
 
 
+async def send_trial_reminders():
+    """Send trial ending reminder emails (1 day before expiry)."""
+    from sqlalchemy import select, and_
+    from datetime import datetime, timedelta
+    from app.core.database import AsyncSessionLocal
+    from app.models.user import User, SubscriptionStatus
+    from app.services.notifications import notification_service
+
+    logger.info("Checking for trial reminders to send...")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            # Find users whose trial ends in ~24 hours and haven't been reminded yet
+            tomorrow = datetime.utcnow() + timedelta(days=1)
+            today = datetime.utcnow()
+
+            result = await session.execute(
+                select(User).where(
+                    and_(
+                        User.subscription_status == SubscriptionStatus.TRIALING,
+                        User.trial_end.isnot(None),
+                        User.trial_end > today,
+                        User.trial_end <= tomorrow,
+                        User.trial_reminder_sent == False,
+                        User.email_alerts_enabled == True
+                    )
+                )
+            )
+            users = result.scalars().all()
+
+            sent_count = 0
+            for user in users:
+                try:
+                    tier = user.subscription_tier.value if user.subscription_tier else "BASIC"
+                    await notification_service.send_trial_ending_email(
+                        to_email=user.email,
+                        user_name=user.name,
+                        days_remaining=1,
+                        tier=tier
+                    )
+                    user.trial_reminder_sent = True
+                    sent_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to send trial reminder to {user.email}: {e}")
+
+            await session.commit()
+            logger.info(f"Sent {sent_count} trial reminder emails")
+
+        except Exception as e:
+            logger.error(f"Error in send_trial_reminders: {e}")
+
+
+async def send_daily_digest_emails():
+    """Send daily digest emails to subscribers with digest enabled."""
+    from sqlalchemy import select, and_
+    from app.core.database import AsyncSessionLocal
+    from app.models.user import User, SubscriptionStatus, SubscriptionTier
+    from app.models.ai_insight import AIInsight
+    from app.services.notifications import notification_service
+    from datetime import datetime, timedelta
+
+    logger.info("Sending daily digest emails...")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            # Find users with active subscriptions and digest enabled
+            result = await session.execute(
+                select(User).where(
+                    and_(
+                        User.subscription_status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING]),
+                        User.subscription_tier.in_([SubscriptionTier.BASIC, SubscriptionTier.PREMIUM, SubscriptionTier.PRO]),
+                        User.email_digest_enabled == True
+                    )
+                )
+            )
+            users = result.scalars().all()
+
+            if not users:
+                logger.info("No users eligible for daily digest")
+                return
+
+            # Get today's top insights
+            yesterday = datetime.utcnow() - timedelta(hours=24)
+            insights_result = await session.execute(
+                select(AIInsight)
+                .where(AIInsight.created_at >= yesterday)
+                .order_by(AIInsight.interest_score.desc())
+                .limit(5)
+            )
+            insights = insights_result.scalars().all()
+
+            if not insights:
+                logger.info("No insights to include in daily digest")
+                return
+
+            # Format insights for email
+            opportunities = []
+            for insight in insights:
+                opportunities.append({
+                    "title": insight.market_title or "Market Insight",
+                    "description": insight.summary or "",
+                    "score": insight.interest_score or 50
+                })
+
+            sent_count = 0
+            for user in users:
+                try:
+                    await notification_service.send_daily_digest(
+                        to_email=user.email,
+                        opportunities=opportunities,
+                        user_name=user.name
+                    )
+                    sent_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to send digest to {user.email}: {e}")
+
+            logger.info(f"Sent {sent_count} daily digest emails")
+
+        except Exception as e:
+            logger.error(f"Error in send_daily_digest_emails: {e}")
+
+
+async def process_alert_emails():
+    """Process pending alert emails in batches."""
+    from sqlalchemy import select, and_
+    from datetime import datetime
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Alert
+    from app.models.user import User
+    from app.services.notifications import notification_service
+
+    logger.info("Processing pending alert emails...")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            # Find alerts that haven't been emailed yet
+            result = await session.execute(
+                select(Alert).where(
+                    and_(
+                        Alert.email_sent == False,
+                        Alert.user_id.isnot(None)
+                    )
+                ).limit(50)  # Process in batches
+            )
+            alerts = result.scalars().all()
+
+            if not alerts:
+                logger.info("No pending alert emails")
+                return
+
+            sent_count = 0
+            for alert in alerts:
+                # Get the user
+                user_result = await session.execute(
+                    select(User).where(User.id == alert.user_id)
+                )
+                user = user_result.scalar_one_or_none()
+
+                if not user or not user.email_alerts_enabled:
+                    # Mark as sent to skip in future
+                    alert.email_sent = True
+                    continue
+
+                try:
+                    await notification_service.send_alert_email(
+                        to_email=user.email,
+                        alert={
+                            "title": alert.title,
+                            "message": alert.message,
+                            "action_suggestion": alert.action_suggestion,
+                            "pattern_type": alert.min_tier,
+                            "score": 70  # Default score
+                        },
+                        user_name=user.name
+                    )
+                    alert.email_sent = True
+                    alert.email_sent_at = datetime.utcnow()
+                    sent_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to send alert email: {e}")
+
+            await session.commit()
+            logger.info(f"Sent {sent_count} alert emails")
+
+        except Exception as e:
+            logger.error(f"Error in process_alert_emails: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
@@ -50,8 +238,38 @@ async def lifespan(app: FastAPI):
         id="data_collection",
         replace_existing=True,
     )
+
+    # Trial reminder emails - daily at 10:00 AM UTC
+    scheduler.add_job(
+        send_trial_reminders,
+        "cron",
+        hour=10,
+        minute=0,
+        id="trial_reminders",
+        replace_existing=True,
+    )
+
+    # Daily digest emails - daily at 8:00 AM UTC
+    scheduler.add_job(
+        send_daily_digest_emails,
+        "cron",
+        hour=8,
+        minute=0,
+        id="daily_digest",
+        replace_existing=True,
+    )
+
+    # Process alert emails - every 5 minutes
+    scheduler.add_job(
+        process_alert_emails,
+        "interval",
+        minutes=5,
+        id="alert_emails",
+        replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info(f"Scheduler started (interval: {settings.collection_interval_minutes} min)")
+    logger.info(f"Scheduler started (collection: {settings.collection_interval_minutes} min, digest: 8am UTC, trial reminders: 10am UTC, alerts: every 5 min)")
 
     yield
 

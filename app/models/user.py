@@ -52,6 +52,11 @@ class User(Base):
     password_reset_token = Column(String, index=True)
     password_reset_expires = Column(DateTime)
 
+    # Email preferences
+    email_alerts_enabled = Column(Boolean, default=True)  # Market alert emails
+    email_digest_enabled = Column(Boolean, default=True)  # Daily digest emails
+    trial_reminder_sent = Column(Boolean, default=False)  # 1-day trial reminder sent
+
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
