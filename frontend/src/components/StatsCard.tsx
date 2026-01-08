@@ -21,28 +21,17 @@ const colorClasses = {
   orange: 'bg-orange-50 text-orange-600',
 }
 
-// Mini brand pattern for card backgrounds
-function CardBrandPattern() {
+// Centered logo watermark for cards
+function CardWatermark() {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Logo */}
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-[0.15]">
-        <Image
-          src="/oddwons-logo.png"
-          alt=""
-          width={48}
-          height={48}
-          className="rounded-lg"
-        />
-      </div>
-      {/* Cash emoji */}
-      <div className="absolute right-16 top-2 opacity-[0.12] rotate-[-12deg]">
-        <span className="text-2xl">💸</span>
-      </div>
-      {/* Smile emoji */}
-      <div className="absolute right-2 bottom-2 opacity-[0.12] rotate-[8deg]">
-        <span className="text-lg">😁</span>
-      </div>
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <Image
+        src="/oddwons-logo.png"
+        alt=""
+        width={64}
+        height={64}
+        className="rounded-lg opacity-[0.06]"
+      />
     </div>
   )
 }
@@ -50,7 +39,7 @@ function CardBrandPattern() {
 export function StatsCard({ title, value, subtitle, icon: Icon, trend, color = 'blue' }: StatsCardProps) {
   return (
     <div className="card relative overflow-hidden">
-      <CardBrandPattern />
+      <CardWatermark />
       <div className="flex items-start justify-between relative z-10">
         <div>
           <p className="text-sm font-medium text-gray-500">{title}</p>

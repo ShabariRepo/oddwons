@@ -5,6 +5,7 @@ import { StatsCard, StatsCardSkeleton } from '@/components/StatsCard'
 import { useMarketStats, usePatternStats, useAIInsights, useCrossPlatformMatches, useInsightStats } from '@/hooks/useAPI'
 import { AIInsight, CrossPlatformMatch } from '@/lib/types'
 import Link from 'next/link'
+import BrandPattern from '@/components/BrandPattern'
 
 function InsightCard({ insight }: { insight: AIInsight }) {
   const platformColor = insight.platform === 'kalshi'
@@ -145,47 +146,50 @@ export default function Dashboard() {
         <p className="text-gray-500 mt-1">Your prediction market research companion</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statsLoading ? (
-          <>
-            <StatsCardSkeleton />
-            <StatsCardSkeleton />
-            <StatsCardSkeleton />
-            <StatsCardSkeleton />
-          </>
-        ) : (
-          <>
-            <StatsCard
-              title="Markets Tracked"
-              value={marketStats?.total_markets || 0}
-              subtitle={`${marketStats?.kalshi_markets || 0} Kalshi, ${marketStats?.polymarket_markets || 0} Poly`}
-              icon={TrendingUp}
-              color="blue"
-            />
-            <StatsCard
-              title="AI Highlights"
-              value={insightStats?.active_highlights || patternStats?.active_patterns || 0}
-              subtitle={`${insightStats?.categories_covered || 0} categories`}
-              icon={Sparkles}
-              color="purple"
-            />
-            <StatsCard
-              title="Total Volume"
-              value={formatVolume(marketStats?.total_volume || 0)}
-              subtitle="Across all markets"
-              icon={BarChart3}
-              color="green"
-            />
-            <StatsCard
-              title="Cross-Platform"
-              value={crossPlatform?.total || 0}
-              subtitle="Price comparisons"
-              icon={Scale}
-              color="orange"
-            />
-          </>
-        )}
+      {/* Stats Grid with Brand Pattern Background */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <BrandPattern opacity={0.06} animated={false} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10 p-4 -m-4">
+          {statsLoading ? (
+            <>
+              <StatsCardSkeleton />
+              <StatsCardSkeleton />
+              <StatsCardSkeleton />
+              <StatsCardSkeleton />
+            </>
+          ) : (
+            <>
+              <StatsCard
+                title="Markets Tracked"
+                value={marketStats?.total_markets || 0}
+                subtitle={`${marketStats?.kalshi_markets || 0} Kalshi, ${marketStats?.polymarket_markets || 0} Poly`}
+                icon={TrendingUp}
+                color="blue"
+              />
+              <StatsCard
+                title="AI Highlights"
+                value={insightStats?.active_highlights || patternStats?.active_patterns || 0}
+                subtitle={`${insightStats?.categories_covered || 0} categories`}
+                icon={Sparkles}
+                color="purple"
+              />
+              <StatsCard
+                title="Total Volume"
+                value={formatVolume(marketStats?.total_volume || 0)}
+                subtitle="Across all markets"
+                icon={BarChart3}
+                color="green"
+              />
+              <StatsCard
+                title="Cross-Platform"
+                value={crossPlatform?.total || 0}
+                subtitle="Price comparisons"
+                icon={Scale}
+                color="orange"
+              />
+            </>
+          )}
+        </div>
       </div>
 
       {/* AI Insights Section */}
