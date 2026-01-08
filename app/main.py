@@ -117,6 +117,26 @@ async def debug_db():
             return {"status": "error", "error": str(e)}
 
 
+@app.get("/debug/apis")
+async def debug_apis():
+    """Debug API clients."""
+    results = {"kalshi": None, "polymarket": None}
+
+    try:
+        kalshi_markets = await kalshi_client.fetch_all_markets()
+        results["kalshi"] = {"status": "ok", "count": len(kalshi_markets)}
+    except Exception as e:
+        results["kalshi"] = {"status": "error", "error": str(e)}
+
+    try:
+        poly_markets = await polymarket_client.fetch_all_markets()
+        results["polymarket"] = {"status": "ok", "count": len(poly_markets)}
+    except Exception as e:
+        results["polymarket"] = {"status": "error", "error": str(e)}
+
+    return results
+
+
 @app.get("/")
 async def root():
     """Root endpoint."""
