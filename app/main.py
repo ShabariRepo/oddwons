@@ -25,13 +25,38 @@ scheduler = AsyncIOScheduler()
 
 
 async def scheduled_collection():
-    """Background task for collecting market data."""
+    """Background task for collecting market data, running AI analysis, and processing alerts."""
     logger.info("Starting scheduled data collection...")
     try:
+        # Step 1: Run data collection
         result = await data_collector.run_collection()
         logger.info(f"Collection complete: {result}")
+
+        # Step 2: Run AI analysis (pattern detection + insights)
+        logger.info("Starting AI analysis...")
+        from app.services.patterns.engine import pattern_engine
+
+        ai_enabled = settings.groq_api_key and len(settings.groq_api_key) > 0
+        if ai_enabled:
+            try:
+                analysis_result = await pattern_engine.run_full_analysis(with_ai=True)
+                logger.info(f"AI analysis complete: {analysis_result}")
+            except Exception as e:
+                logger.error(f"AI analysis failed: {e}")
+        else:
+            logger.warning("AI analysis skipped - GROQ_API_KEY not configured")
+
+        # Step 3: Cross-platform matching
+        logger.info("Running cross-platform market matching...")
+        try:
+            from app.services.market_matcher import run_market_matching
+            match_result = await run_market_matching(min_volume=1000)
+            logger.info(f"Market matching complete: {match_result}")
+        except Exception as e:
+            logger.error(f"Market matching failed: {e}")
+
     except Exception as e:
-        logger.error(f"Scheduled collection failed: {e}")
+        logger.error(f"Scheduled collection failed: {e}", exc_info=True)
 
 
 async def send_trial_reminders():
