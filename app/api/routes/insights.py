@@ -343,8 +343,12 @@ async def get_insight_detail(
 
 def _get_market_url(market) -> str:
     """Get direct link to market on platform."""
+    # Use stored URL if available
+    if market.url:
+        return market.url
+
+    # Fallback: construct URL from ID
     platform_value = market.platform.value if hasattr(market.platform, 'value') else market.platform
-    # Strip platform prefix from ID for external URLs
     external_id = market.id
     if external_id.startswith("kalshi_"):
         external_id = external_id[7:]

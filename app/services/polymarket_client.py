@@ -124,6 +124,10 @@ class PolymarketClient:
         # Event-level volume24hr (applies to all markets in this event)
         event_volume_24h = float(event.get("volume24hr", 0) or 0)
 
+        # Event-level slug for URL construction
+        event_slug = event.get("slug")
+        event_url = f"https://polymarket.com/event/{event_slug}" if event_slug else None
+
         # Event-level image (applies to all markets in this event)
         event_image_url = (
             event.get("image") or
@@ -202,6 +206,10 @@ class PolymarketClient:
                     market.get("image_url") or event_image_url
                 )
 
+                # Try to get market-specific slug, fall back to event slug
+                market_slug = market.get("slug") or event_slug
+                market_url = f"https://polymarket.com/event/{market_slug}" if market_slug else event_url
+
                 markets.append(PolymarketMarketData(
                     condition_id=market.get("conditionId", market.get("condition_id", "")),
                     question=market.get("question", event.get("title", "")),
@@ -218,6 +226,7 @@ class PolymarketClient:
                     best_ask=best_ask,
                     price_change_24h=price_change_24h,
                     image_url=market_image_url,
+                    url=market_url,
                 ))
             except Exception as e:
                 logger.warning(f"Failed to parse Polymarket market: {e}")

@@ -299,20 +299,20 @@ async def get_market(
             ) if cross_match.kalshi_yes_price and cross_match.polymarket_yes_price else None,
         }
 
-    # Build market URL - strip platform prefix from ID
-    platform_value = market.platform.value if hasattr(market.platform, 'value') else market.platform
-    # IDs are stored as "kalshi_TICKER" or "poly_CONDITIONID", strip prefix for external URLs
-    external_id = market.id
-    if external_id.startswith("kalshi_"):
-        external_id = external_id[7:]  # Remove "kalshi_" prefix
-    elif external_id.startswith("poly_"):
-        external_id = external_id[5:]  # Remove "poly_" prefix
-
-    market_url = (
-        f"https://kalshi.com/markets/{external_id}"
-        if platform_value == "kalshi"
-        else f"https://polymarket.com/event/{external_id}"
-    )
+    # Use stored market URL, or construct fallback
+    market_url = market.url
+    if not market_url:
+        platform_value = market.platform.value if hasattr(market.platform, 'value') else market.platform
+        external_id = market.id
+        if external_id.startswith("kalshi_"):
+            external_id = external_id[7:]
+        elif external_id.startswith("poly_"):
+            external_id = external_id[5:]
+        market_url = (
+            f"https://kalshi.com/markets/{external_id}"
+            if platform_value == "kalshi"
+            else f"https://polymarket.com/event/{external_id}"
+        )
 
     # Build response
     enriched_market = enriched[0]

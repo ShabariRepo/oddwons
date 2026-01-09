@@ -155,8 +155,12 @@ class KalshiClient:
             event_image_url
         )
 
+        # Construct direct link to market on Kalshi
+        ticker = market.get("ticker", "")
+        market_url = f"https://kalshi.com/markets/{ticker}" if ticker else None
+
         return KalshiMarketData(
-            ticker=market.get("ticker", ""),
+            ticker=ticker,
             title=market.get("title", ""),
             subtitle=market.get("subtitle"),
             yes_bid=cents_to_decimal(market.get("yes_bid")),
@@ -169,6 +173,7 @@ class KalshiClient:
             close_time=datetime.fromisoformat(market["close_time"]) if market.get("close_time") else None,
             category=market.get("category"),
             image_url=image_url,
+            url=market_url,
         )
 
     async def fetch_all_markets(self, max_pages: int = 50) -> List[KalshiMarketData]:

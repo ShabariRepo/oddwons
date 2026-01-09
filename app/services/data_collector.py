@@ -56,6 +56,7 @@ class DataCollector:
                     description=market_data.subtitle,
                     category=market_data.category,
                     image_url=market_data.image_url,
+                    url=market_data.url,
                     yes_price=yes_price,
                     no_price=no_price,
                     volume=market_data.volume,
@@ -70,6 +71,7 @@ class DataCollector:
                         "volume": stmt.excluded.volume,
                         "status": stmt.excluded.status,
                         "image_url": stmt.excluded.image_url,
+                        "url": stmt.excluded.url,
                         "updated_at": datetime.utcnow(),
                     }
                 )
@@ -139,6 +141,7 @@ class DataCollector:
                     description=market_data.description,
                     category=market_data.category,
                     image_url=market_data.image_url,
+                    url=market_data.url,
                     yes_price=yes_price,
                     no_price=no_price,
                     volume=market_data.volume,
@@ -154,6 +157,7 @@ class DataCollector:
                         "volume": stmt.excluded.volume,
                         "liquidity": stmt.excluded.liquidity,
                         "image_url": stmt.excluded.image_url,
+                        "url": stmt.excluded.url,
                         "updated_at": datetime.utcnow(),
                     }
                 )

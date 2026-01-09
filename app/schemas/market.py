@@ -138,6 +138,7 @@ class KalshiMarketData(BaseModel):
     close_time: Optional[datetime] = None
     category: Optional[str] = None
     image_url: Optional[str] = None
+    url: Optional[str] = None  # Direct link to market on Kalshi
 
 
 class PolymarketMarketData(BaseModel):
@@ -156,6 +157,7 @@ class PolymarketMarketData(BaseModel):
     best_ask: Optional[float] = None  # bestAsk field from API
     price_change_24h: Optional[float] = None  # oneDayPriceChange from API
     image_url: Optional[str] = None  # Event/market image from API
+    url: Optional[str] = None  # Direct link to event on Polymarket
 
 
 # ============================================================================
