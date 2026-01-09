@@ -48,7 +48,7 @@ function MarketRow({ market }: { market: Market }) {
 
   return (
     <tr
-      className="hover:bg-gray-50 cursor-pointer relative overflow-hidden"
+      className="hover:bg-gray-50 cursor-pointer relative overflow-hidden transition-all duration-200 hover:scale-[1.01] hover:shadow-md hover:z-10"
       onClick={handleRowClick}
     >
       <td className="px-4 py-4">
@@ -96,12 +96,12 @@ function MarketRow({ market }: { market: Market }) {
           {market.status}
         </span>
       </td>
-      {/* Diagonal gradient on the right side of row */}
+      {/* Diagonal gradient on the right side of row - 50% width */}
       <td className="px-4 py-4 text-right relative">
         <div
-          className="absolute right-0 top-0 bottom-0 w-16 pointer-events-none"
+          className="absolute right-0 top-0 bottom-0 w-1/2 pointer-events-none"
           style={{
-            background: `linear-gradient(115deg, transparent 0%, transparent 30%, ${platformColor}20 30%, ${platformColor}40 100%)`,
+            background: `linear-gradient(115deg, transparent 0%, transparent 20%, ${platformColor}15 20%, ${platformColor}35 100%)`,
           }}
         />
         <button

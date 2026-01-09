@@ -309,6 +309,12 @@ async def get_market(
 
     # Build response
     enriched_market = enriched[0]
+
+    # Get volume_24h from latest snapshot
+    volume_24h = None
+    if snapshots:
+        volume_24h = snapshots[0].volume_24h
+
     return {
         "market": {
             "id": enriched_market.id,
@@ -317,7 +323,7 @@ async def get_market(
             "yes_price": enriched_market.yes_price,
             "no_price": enriched_market.no_price,
             "volume": enriched_market.volume,
-            "volume_24h": enriched_market.volume_24h,
+            "volume_24h": volume_24h,
             "status": enriched_market.status,
             "category": enriched_market.category,
             "close_time": enriched_market.close_time.isoformat() if enriched_market.close_time else None,
