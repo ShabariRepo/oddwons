@@ -6,6 +6,7 @@ import { clsx } from 'clsx'
 import { useAuth } from '@/components/AuthProvider'
 import { createCheckout, createPortal, changePassword } from '@/lib/auth'
 import SparkleCard from '@/components/SparkleCard'
+import TierComparisonTable from '@/components/TierComparisonTable'
 
 const plans = [
   {
@@ -329,6 +330,9 @@ export default function SettingsPage() {
               )
             })}
           </div>
+
+          {/* Tier Comparison Table */}
+          <TierComparisonTable className="mt-8" />
         </div>
       )}
 

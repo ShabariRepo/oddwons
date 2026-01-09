@@ -1,435 +1,295 @@
-# OddWons - COMPLETE FIX INSTRUCTIONS
-
-## ✅ ALL ISSUES COMPLETED (Jan 9, 2026)
-
-All 6 issues have been implemented and committed:
-- [x] Issue 1: Kalshi images - Added `get_event_metadata()` method
-- [x] Issue 2: Circle image bigger - Changed to `w-20 h-20`, `-top-10`, `pt-14 mt-12`
-- [x] Issue 3: Dashboard cards - Replaced InsightCard with floating circle + diagonal footer
-- [x] Issue 4: Sidebar trial badge - Removed `daysLeft > 0` check, defaults to 7
-- [x] Issue 5: Settings NaN fix - Handles null `trial_end_date` gracefully
-- [x] Issue 6: Backend /me endpoint - Now returns `trial_end_date` field
+# OddWons - UI Fixes
 
 ---
 
-## ISSUE 1: Fetch Market Images from APIs
+## WHY IMAGES AREN'T SHOWING
 
-### Problem
-Cards show letter fallback (S, K, R, F, W) instead of actual market images because:
-- **Kalshi:** Images are in a **separate metadata endpoint**, not in the events/markets response
-- **Polymarket:** Images should be in event response but may not be extracted correctly
+The backend code fetches images, but **existing data doesn't have images yet**.
 
-### Fix 1A: Update Kalshi Client
+**Fix:** Re-run data collection:
 
-**File:** `app/services/kalshi_client.py`
-
-**Add this new method after `get_event_markets`:**
-
-```python
-async def get_event_metadata(self, event_ticker: str) -> Dict[str, Any]:
-    """Fetch event metadata including image_url."""
-    client = await self._get_client()
-    try:
-        response = await client.get(f"/events/{event_ticker}/metadata")
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logger.warning(f"Kalshi event metadata error for {event_ticker}: {e}")
-        return {}
+```bash
+railway run python -c "import asyncio; from app.services.data_collector import data_collector; asyncio.run(data_collector.run_collection())"
 ```
 
-**Update `fetch_all_markets` method - find the events loop (around line 95) and replace:**
+---
 
-```python
-for event in events:
-    event_ticker = event.get("event_ticker") or event.get("ticker")
-    if not event_ticker:
-        continue
+## TASK 1: Markets Page - Add Platform Color Gradient to Table Rows
 
-    # Extract event image URL
-    event_image_url = event.get("image_url") or event.get("image")
-```
+**Keep the table layout**, but add a diagonal platform color indicator to each row.
 
-**With:**
+**File:** `frontend/src/app/(app)/markets/page.tsx`
 
-```python
-for event in events:
-    event_ticker = event.get("event_ticker") or event.get("ticker")
-    if not event_ticker:
-        continue
+**Replace the `MarketRow` function with:**
 
-    # Fetch event metadata to get image_url (Kalshi stores images in separate endpoint)
-    event_image_url = None
-    try:
-        metadata = await self.get_event_metadata(event_ticker)
-        event_image_url = metadata.get("image_url")
-    except Exception as e:
-        logger.debug(f"Could not fetch metadata for {event_ticker}: {e}")
-    
-    # Fallback to event fields if metadata failed
-    if not event_image_url:
-        event_image_url = event.get("image_url") or event.get("image")
-```
+```tsx
+function MarketRow({ market }: { market: Market }) {
+  const router = useRouter()
+  const yesPrice = market.yes_price ? (market.yes_price * 100).toFixed(1) : '-'
+  const noPrice = market.no_price ? (market.no_price * 100).toFixed(1) : '-'
 
-### Fix 1B: Verify Polymarket Client
+  // Platform colors
+  const platformColor = market.platform === 'kalshi' ? '#00D26A' : '#6366F1'
+  const platformLogo = market.platform === 'kalshi' 
+    ? '/logos/kalshi-logo.png' 
+    : '/logos/polymarket-logo.png'
 
-**File:** `app/services/polymarket_client.py`
+  const formatVolume = (vol?: number) => {
+    if (!vol) return '-'
+    if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`
+    if (vol >= 1000) return `$${(vol / 1000).toFixed(0)}K`
+    return `$${vol.toFixed(0)}`
+  }
 
-In `parse_market` method, try multiple field names for image:
+  const handleRowClick = () => {
+    router.push(`/markets/${market.id}`)
+  }
 
-```python
-event_image_url = (
-    event.get("image") or 
-    event.get("icon") or 
-    event.get("image_url") or
-    event.get("imageUrl") or
-    event.get("banner") or
-    event.get("thumbnail")
-)
-```
+  const handleExternalClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const url = market.platform === 'kalshi'
+      ? `https://kalshi.com/markets/${market.id}`
+      : `https://polymarket.com/event/${market.id}`
+    window.open(url, '_blank')
+  }
 
-### Fix 1C: Add image_url to AIInsight Schema
-
-**File:** `app/schemas/insight.py` (or wherever AIInsight is defined)
-
-```python
-class AIInsight(BaseModel):
-    # ... existing fields ...
-    image_url: Optional[str] = None
-```
-
-**File:** `frontend/src/lib/types.ts`
-
-```typescript
-export interface AIInsight {
-  // ... existing fields ...
-  image_url?: string;
+  return (
+    <tr 
+      className="hover:bg-gray-50 cursor-pointer relative overflow-hidden" 
+      onClick={handleRowClick}
+    >
+      <td className="px-4 py-4">
+        <div className="flex items-start gap-3">
+          {/* Platform logo + diagonal color bar */}
+          <div className="relative flex items-center gap-2 shrink-0">
+            <div 
+              className="w-1 h-10 rounded-full"
+              style={{ backgroundColor: platformColor }}
+            />
+            <Image
+              src={platformLogo}
+              alt={market.platform}
+              width={20}
+              height={20}
+              className="rounded-sm"
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {market.title}
+            </p>
+            {market.category && (
+              <p className="text-xs text-gray-500 mt-0.5">{market.category}</p>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-4 text-center">
+        <span className="text-sm font-medium text-green-600">{yesPrice}¢</span>
+      </td>
+      <td className="px-4 py-4 text-center">
+        <span className="text-sm font-medium text-red-600">{noPrice}¢</span>
+      </td>
+      <td className="px-4 py-4 text-center">
+        <span className="text-sm text-gray-900">{formatVolume(market.volume)}</span>
+      </td>
+      <td className="px-4 py-4 text-center">
+        <span className={clsx(
+          'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+          market.status === 'active'
+            ? 'bg-green-100 text-green-800'
+            : 'bg-gray-100 text-gray-800'
+        )}>
+          {market.status}
+        </span>
+      </td>
+      {/* Diagonal gradient on the right side of row */}
+      <td className="px-4 py-4 text-right relative">
+        <div 
+          className="absolute right-0 top-0 bottom-0 w-16 pointer-events-none"
+          style={{
+            background: `linear-gradient(115deg, transparent 0%, transparent 30%, ${platformColor}20 30%, ${platformColor}40 100%)`,
+          }}
+        />
+        <button
+          className="text-gray-400 hover:text-gray-600 relative z-10"
+          onClick={handleExternalClick}
+          title="Open on platform"
+        >
+          <ExternalLink className="w-4 h-4" />
+        </button>
+      </td>
+    </tr>
+  )
 }
 ```
 
----
-
-## ISSUE 2: Circle Image Too Small & Not Overlapping Enough
-
-### Problem
-Circle is small (w-16 h-16) and only slightly overlapping the card.
-
-### Fix
-
-**Files to update:**
-- `frontend/src/app/(app)/opportunities/page.tsx`
-- `frontend/src/app/(app)/dashboard/page.tsx`
-
-**In InsightCard, change:**
-
+**Make sure Image is imported at the top:**
 ```tsx
-{/* Container - MORE padding and margin */}
-<div className="relative pt-14 mt-12">
-
-  {/* Circle - BIGGER and overlap more */}
-  <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20">
-    <div className={`w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br ${platform.gradient}`}>
-      {insight.image_url ? (
-        <Image
-          src={insight.image_url}
-          alt=""
-          width={80}
-          height={80}
-          className="object-cover w-full h-full"
-          unoptimized
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-white text-2xl font-bold">
-          {insight.market_title?.charAt(0) || '?'}
-        </div>
-      )}
-    </div>
-  </div>
+import Image from 'next/image'
 ```
 
-**Key changes:**
-- `pt-14 mt-12` (was pt-10 mt-8)
-- `w-20 h-20` (was w-16 h-16)  
-- `-top-10` (was -top-6)
-- `width={80} height={80}` (was 64)
-- `text-2xl` (was text-xl)
-
 ---
 
-## ISSUE 3: Dashboard Cards Need Same Layout
+## TASK 2: Cross-Platform Page - Full Card Layout
 
-### Problem
-Dashboard has its OWN `InsightCard` function that doesn't have the floating circle + diagonal footer design.
+**File:** `frontend/src/app/(app)/cross-platform/page.tsx`
 
-### Fix
-
-**File:** `frontend/src/app/(app)/dashboard/page.tsx`
-
-**Replace the entire `InsightCard` function with:**
+**Replace `MatchCard` function with:**
 
 ```tsx
-function InsightCard({ insight }: { insight: AIInsight }) {
-  const platformConfig = {
-    kalshi: {
-      color: '#00D26A',
-      logo: '/logos/kalshi-logo.png',
-      gradient: 'from-green-400 to-emerald-600',
-    },
-    polymarket: {
-      color: '#6366F1',
-      logo: '/logos/polymarket-logo.png',
-      gradient: 'from-indigo-400 to-purple-600',
-    },
-  }
-
-  const platform = platformConfig[insight.platform as keyof typeof platformConfig] || platformConfig.polymarket
+function MatchCard({ match }: { match: CrossPlatformMatch }) {
+  const kalshiPercent = match.kalshi_yes_price ? Math.round(match.kalshi_yes_price) : 50
+  const polyPercent = match.polymarket_yes_price ? Math.round(match.polymarket_yes_price) : 50
+  const gapColor = Math.abs(match.price_gap_cents) >= 5 ? 'text-green-600' : 'text-yellow-600'
 
   return (
-    <Link href={`/insights/${insight.id}`}>
-      <div className="relative pt-14 mt-12">
-        {/* Floating Circular Image */}
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20">
-          <div className={`w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br ${platform.gradient}`}>
-            {insight.image_url ? (
-              <Image
-                src={insight.image_url}
-                alt=""
-                width={80}
-                height={80}
-                className="object-cover w-full h-full"
-                unoptimized
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-white text-2xl font-bold">
-                {insight.market_title?.charAt(0) || '?'}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Card */}
-        <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow cursor-pointer border border-gray-100 overflow-hidden">
-          <div className="px-4 pt-10 pb-4">
-            {insight.category && (
-              <div className="flex justify-center mb-2">
-                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                  {insight.category}
-                </span>
-              </div>
-            )}
-
-            <h3 className="font-semibold text-gray-900 text-center mb-2 line-clamp-2">
-              {insight.market_title}
-            </h3>
-
-            <p className="text-sm text-gray-600 mb-3 line-clamp-3">
-              {insight.summary}
-            </p>
-
-            {insight.implied_probability && (
-              <p className="text-sm text-primary-600 font-medium mb-2">
-                {insight.implied_probability}
-              </p>
-            )}
-
-            {insight.recent_movement && (
-              <span className={`text-sm font-medium ${
-                insight.recent_movement.includes('+') ? 'text-green-600' :
-                insight.recent_movement.includes('-') ? 'text-red-600' : 'text-gray-500'
-              }`}>
-                {insight.recent_movement}
-              </span>
-            )}
-
-            {insight.volume_note && (
-              <p className="text-xs text-gray-500 mt-2">{insight.volume_note}</p>
-            )}
-          </div>
-
-          {/* Diagonal Footer */}
-          <div className="relative h-10 overflow-hidden">
-            <div
-              className="absolute inset-0"
-              style={{
-                background: `linear-gradient(115deg, white 0%, white 40%, ${platform.color} 40%, ${platform.color} 100%)`,
-              }}
-            />
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 z-10">
-              <Image
-                src={platform.logo}
-                alt={insight.platform}
-                width={18}
-                height={18}
-                className="object-contain"
-              />
-              <span className="text-sm font-medium text-gray-700 capitalize">
-                {insight.platform}
-              </span>
+    <div className="relative pt-14 mt-12">
+      {/* Floating Circle - Both logos for cross-platform */}
+      <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20">
+        <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br from-green-400 via-blue-500 to-purple-600">
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="flex items-center -space-x-2">
+              <Image src="/logos/kalshi-logo.png" alt="K" width={28} height={28} className="rounded-full border-2 border-white bg-white" />
+              <Image src="/logos/polymarket-logo.png" alt="P" width={28} height={28} className="rounded-full border-2 border-white bg-white" />
             </div>
           </div>
         </div>
       </div>
-    </Link>
+
+      {/* Card */}
+      <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow border border-gray-100 overflow-hidden">
+        <div className="px-4 pt-10 pb-4">
+          {/* Category + Gap */}
+          <div className="flex items-center justify-between mb-2">
+            {match.category && (
+              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                {match.category}
+              </span>
+            )}
+            <span className={`text-sm font-bold ${gapColor}`}>
+              {match.price_gap_cents.toFixed(1)}¢ gap
+            </span>
+          </div>
+
+          {/* Topic */}
+          <h3 className="font-semibold text-gray-900 text-center mb-3 line-clamp-2">
+            {match.topic}
+          </h3>
+
+          {/* Platform price boxes */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-green-50 rounded-lg py-2 px-3 text-center border border-green-100">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <Image src="/logos/kalshi-logo.png" alt="K" width={14} height={14} />
+                <span className="text-xs text-green-700 font-medium">Kalshi</span>
+              </div>
+              <p className="text-2xl font-bold text-green-700">{kalshiPercent}%</p>
+            </div>
+            <div className="bg-indigo-50 rounded-lg py-2 px-3 text-center border border-indigo-100">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <Image src="/logos/polymarket-logo.png" alt="P" width={14} height={14} />
+                <span className="text-xs text-indigo-700 font-medium">Polymarket</span>
+              </div>
+              <p className="text-2xl font-bold text-indigo-700">{polyPercent}%</p>
+            </div>
+          </div>
+
+          {/* Volume */}
+          <p className="text-sm text-gray-500 text-center">
+            ${(match.combined_volume / 1000).toFixed(0)}K combined
+          </p>
+        </div>
+
+        {/* Diagonal Footer - Split colors */}
+        <div className="relative h-10 overflow-hidden">
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(115deg, #00D26A 0%, #00D26A 50%, #6366F1 50%, #6366F1 100%)',
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <span className="text-white text-xs font-medium">Cross-Platform Match</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+**Replace `MatchCardSkeleton` with:**
+
+```tsx
+function MatchCardSkeleton() {
+  return (
+    <div className="relative pt-14 mt-12">
+      <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20">
+        <div className="w-20 h-20 rounded-full bg-gray-200 animate-pulse border-4 border-white shadow-xl" />
+      </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 pt-10 pb-4 space-y-3">
+          <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-16 bg-gray-200 rounded animate-pulse" />
+            <div className="h-16 bg-gray-200 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="h-10 bg-gray-100" />
+      </div>
+    </div>
   )
 }
 ```
 
 ---
 
-## ISSUE 4: Sidebar Still Shows "NO ACTIVE PLAN"
+## TASK 3: Add image_url to Market Type
 
-### Problem
-`trial_end_date` is null, so `daysLeft = 0`, which fails the `daysLeft > 0` check.
+**File:** `frontend/src/lib/types.ts`
 
-### Fix
+Add `image_url` to the Market interface:
 
-**File:** `frontend/src/components/Sidebar.tsx`
-
-**Replace the tier badge logic (the `{(() => {` block) with:**
-
-```tsx
-{(() => {
-  const status = user?.subscription_status?.toLowerCase()
-  const userTier = user?.subscription_tier?.toLowerCase()
-
-  const isTrialing = status === 'trialing'
-  const isActive = status === 'active'
-  const hasTier = !!userTier && userTier !== 'free'
-
-  // Calculate days left - try multiple field names, default to 7
-  const trialEndRaw = user?.trial_end_date || user?.trial_end || user?.subscription_end
-  let daysLeft = 7
-  
-  if (trialEndRaw) {
-    const trialEndDate = new Date(trialEndRaw)
-    if (!isNaN(trialEndDate.getTime())) {
-      daysLeft = Math.max(1, Math.ceil((trialEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-    }
-  }
-
-  // If trialing AND has a tier, ALWAYS show trial badge (removed daysLeft > 0 check)
-  if (isTrialing && hasTier) {
-    return (
-      <TierBadge
-        tier={userTier.toUpperCase() as 'BASIC' | 'PREMIUM' | 'PRO'}
-        daysLeft={daysLeft}
-      />
-    )
-  } else if (isActive && hasTier) {
-    return (
-      <TierBadge tier={userTier.toUpperCase() as 'BASIC' | 'PREMIUM' | 'PRO'} />
-    )
-  } else {
-    return (
-      <div className="bg-gray-800 rounded-lg p-4">
-        <p className="text-xs text-gray-400 uppercase tracking-wide">No Active Plan</p>
-        <p className="text-sm text-gray-300 mt-1">Start your 7-day free trial</p>
-        <Link
-          href="/settings"
-          className="mt-3 block text-center text-sm text-white bg-primary-600 hover:bg-primary-700 rounded-lg py-2 transition-colors"
-        >
-          Choose a Plan
-        </Link>
-      </div>
-    )
-  }
-})()}
+```typescript
+export interface Market {
+  id: string
+  title: string
+  platform: string
+  category?: string
+  yes_price?: number
+  no_price?: number
+  volume?: number
+  liquidity?: number
+  status: string
+  close_time?: string
+  image_url?: string  // ADD THIS LINE
+  created_at: string
+  updated_at: string
+}
 ```
 
 ---
 
-## ISSUE 5: Settings Shows "NaN days left"
+## SUMMARY
 
-### Problem
-`new Date(undefined)` creates Invalid Date, causing NaN.
-
-### Fix
-
-**File:** `frontend/src/app/(app)/settings/page.tsx`
-
-**Find the Current Plan section and replace the status text with:**
-
-```tsx
-<p className="text-sm text-gray-500">
-  {(() => {
-    const status = user?.subscription_status?.toLowerCase()
-    if (status === 'trialing') {
-      const trialEnd = user?.trial_end_date || user?.trial_end || user?.subscription_end
-      if (trialEnd) {
-        const endDate = new Date(trialEnd)
-        if (!isNaN(endDate.getTime())) {
-          const days = Math.max(0, Math.ceil((endDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-          return `Free trial - ${days} days left`
-        }
-      }
-      return 'Free trial active'
-    }
-    if (status === 'active') return 'Active subscription'
-    return 'Start a 7-day free trial below'
-  })()}
-</p>
-```
+| Task | File | Action |
+|------|------|--------|
+| Markets rows | `markets/page.tsx` | Add platform color bar + gradient to table rows (keep table layout) |
+| Cross-platform cards | `cross-platform/page.tsx` | Replace with full card layout (floating circle + diagonal footer) |
+| Market type | `lib/types.ts` | Add `image_url?: string` |
+| **Get images** | Backend | Re-run data collection |
 
 ---
 
-## ISSUE 6: Backend Not Returning trial_end_date
+## PROMPT FOR CLAUDE CODE
 
-### Fix
-
-**File:** `app/api/routes/auth.py`
-
-**Ensure `/me` endpoint returns trial fields:**
-
-```python
-@router.get("/me")
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    return {
-        "id": str(current_user.id),
-        "email": current_user.email,
-        "name": current_user.name,
-        "is_active": current_user.is_active,
-        "is_verified": current_user.is_verified,
-        "is_admin": current_user.is_admin,
-        "subscription_tier": current_user.subscription_tier.value if current_user.subscription_tier else None,
-        "subscription_status": current_user.subscription_status.value if current_user.subscription_status else "inactive",
-        "subscription_end": current_user.subscription_end.isoformat() if current_user.subscription_end else None,
-        "trial_end_date": current_user.trial_end.isoformat() if hasattr(current_user, 'trial_end') and current_user.trial_end else None,
-        "trial_start": current_user.trial_start.isoformat() if hasattr(current_user, 'trial_start') and current_user.trial_start else None,
-        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
-    }
 ```
+Read chat.md and implement:
 
-**Check User model has columns (if missing, add migration):**
+1. In markets/page.tsx - Keep the TABLE layout but update MarketRow to have a colored vertical bar on the left (Kalshi=#00D26A, Polymarket=#6366F1) and a subtle diagonal gradient on the right side of each row
 
-```python
-# app/models/user.py
-trial_start = Column(DateTime, nullable=True)
-trial_end = Column(DateTime, nullable=True)
+2. In cross-platform/page.tsx - Replace MatchCard and MatchCardSkeleton with the full card layout (floating circle with both platform logos, diagonal split-color footer)
+
+3. In lib/types.ts - Add image_url?: string to Market interface
 ```
-
----
-
-## SUMMARY - FILES TO MODIFY
-
-### Backend:
-1. `app/services/kalshi_client.py` - Add `get_event_metadata()`, call it in fetch loop
-2. `app/services/polymarket_client.py` - Try multiple image field names
-3. `app/schemas/insight.py` - Add `image_url` to AIInsight
-4. `app/api/routes/auth.py` - Return `trial_end_date` in `/me`
-5. `app/models/user.py` - Ensure `trial_start`, `trial_end` columns exist
-
-### Frontend:
-1. `frontend/src/lib/types.ts` - Add `image_url` to AIInsight type
-2. `frontend/src/app/(app)/opportunities/page.tsx` - Bigger circle: `w-20 h-20`, `-top-10`, `pt-14 mt-12`
-3. `frontend/src/app/(app)/dashboard/page.tsx` - Replace InsightCard with new design
-4. `frontend/src/components/Sidebar.tsx` - Remove `daysLeft > 0` check, default to 7
-5. `frontend/src/app/(app)/settings/page.tsx` - Handle null trial_end_date
-
----
-
-## API REFERENCE
-
-| Platform | Image Location | Endpoint |
-|----------|----------------|----------|
-| Kalshi | Separate metadata endpoint | `GET /events/{ticker}/metadata` → `{"image_url": "..."}` |
-| Polymarket | In event response | `event.image` or `event.icon` from `/events` |

@@ -1,0 +1,55 @@
+Kalshi Docs: 
+Base URL:
+    https://docs.kalshi.com/api-reference
+    exchange:
+        https://docs.kalshi.com/api-reference/exchange/get-exchange-status
+        https://docs.kalshi.com/api-reference/exchange/get-exchange-announcements
+        https://docs.kalshi.com/api-reference/exchange/get-series-fee-changes
+        https://docs.kalshi.com/api-reference/exchange/get-exchange-schedule
+        https://docs.kalshi.com/api-reference/exchange/get-user-data-timestamp
+    market:
+        https://docs.kalshi.com/api-reference/market/get-market-candlesticks
+        https://docs.kalshi.com/api-reference/market/get-trades
+        https://docs.kalshi.com/api-reference/market/get-market-orderbook
+        https://docs.kalshi.com/api-reference/market/get-series
+        https://docs.kalshi.com/api-reference/market/get-series-list
+        https://docs.kalshi.com/api-reference/market/get-markets
+        https://docs.kalshi.com/api-reference/market/get-market
+        https://docs.kalshi.com/api-reference/market/batch-get-market-candlesticks
+    events:
+        https://docs.kalshi.com/api-reference/events/get-event-candlesticks
+        https://docs.kalshi.com/api-reference/events/get-events
+
+Polymarket Docs:
+Base URL:
+    https://docs.polymarket.com/api-reference
+    REST API:
+        https://docs.polymarket.com/api-reference/orderbook/get-order-book-summary
+        https://docs.polymarket.com/api-reference/orderbook/get-multiple-order-books-summaries-by-request
+    Pricing:
+        https://docs.polymarket.com/api-reference/pricing/get-market-price
+        https://docs.polymarket.com/api-reference/pricing/get-multiple-market-prices
+        https://docs.polymarket.com/api-reference/pricing/get-multiple-market-prices-by-request
+        https://docs.polymarket.com/api-reference/pricing/get-midpoint-price
+        https://docs.polymarket.com/api-reference/pricing/get-price-history-for-a-traded-token
+    bid-ask-spreads:
+        https://docs.polymarket.com/api-reference/spreads/get-bid-ask-spread
+    Gamma markets:
+        https://docs.polymarket.com/developers/gamma-markets-api/overview
+        https://docs.polymarket.com/developers/gamma-markets-api/gamma-structure
+        https://docs.polymarket.com/developers/gamma-markets-api/fetch-markets-guide
+    sports:
+        https://docs.polymarket.com/api-reference/sports/list-teams
+        https://docs.polymarket.com/api-reference/sports/get-sports-metadata-information
+        https://docs.polymarket.com/api-reference/sports/get-valid-sports-market-types
+    events:
+        https://docs.polymarket.com/api-reference/events/list-events
+        https://docs.polymarket.com/api-reference/events/get-event-by-id
+        https://docs.polymarket.com/api-reference/events/get-event-tags
+        https://docs.polymarket.com/api-reference/events/get-event-by-slug
+    markets:
+        https://docs.polymarket.com/api-reference/markets/list-markets
+        https://docs.polymarket.com/api-reference/markets/get-market-by-id
+        https://docs.polymarket.com/api-reference/markets/get-market-tags-by-id
+        https://docs.polymarket.com/api-reference/markets/get-market-by-slug
+    

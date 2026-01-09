@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { TrendingUp, Bell, BarChart3, Shield, Clock, Check, Zap, User, LogOut } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import BrandPattern from '@/components/BrandPattern'
+import TierComparisonTable from '@/components/TierComparisonTable'
 
 const features = [
   {
@@ -198,10 +199,21 @@ export default function LandingPage() {
             {tiers.map((tier) => (
               <div
                 key={tier.name}
-                className={`relative bg-white p-6 rounded-xl border-2 ${
+                className={`relative bg-white p-6 rounded-xl border-2 overflow-hidden ${
                   tier.popular ? 'border-primary-500 shadow-lg' : 'border-gray-100'
                 }`}
               >
+                {/* Logo watermark */}
+                <div className="absolute bottom-2 right-2 opacity-10 pointer-events-none">
+                  <Image
+                    src="/oddwons-logo.png"
+                    alt=""
+                    width={60}
+                    height={60}
+                    className="rounded-lg"
+                  />
+                </div>
+
                 {tier.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <span className="bg-primary-600 text-white text-xs font-medium px-3 py-1 rounded-full">
@@ -226,7 +238,7 @@ export default function LandingPage() {
                 </ul>
                 <Link
                   href="/register"
-                  className={`mt-8 block text-center py-3 px-4 rounded-lg font-medium transition-colors ${
+                  className={`mt-8 block text-center py-3 px-4 rounded-lg font-medium transition-colors relative z-10 ${
                     tier.popular
                       ? 'bg-primary-600 text-white hover:bg-primary-700'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -236,6 +248,11 @@ export default function LandingPage() {
                 </Link>
               </div>
             ))}
+          </div>
+
+          {/* Tier Comparison Table */}
+          <div className="mt-12 max-w-4xl mx-auto">
+            <TierComparisonTable />
           </div>
         </div>
       </section>

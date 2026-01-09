@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Skills Reference
+
+When working on these areas, READ the corresponding skill file FIRST:
+
+| Task | Skill Location |
+|------|----------------|
+| API clients, data collection | `.claude/skills/prediction-market-apis/SKILL.md` |
+
+### How to Use Skills
+Before modifying `kalshi_client.py`, `polymarket_client.py`, or `data_collector.py`:
+1. Read `.claude/skills/prediction-market-apis/SKILL.md`
+2. Follow the schemas and patterns documented there
+3. Remember: Kalshi prices are CENTS, Polymarket prices are DECIMAL
+
 ## Project Overview
 
 OddWons is a subscription-based **research companion** for prediction market enthusiasts. We inform and contextualize prediction markets using AI - think Bloomberg Terminal for prediction markets, NOT a tipster.
