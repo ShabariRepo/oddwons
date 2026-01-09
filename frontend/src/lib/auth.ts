@@ -10,6 +10,8 @@ export interface User {
   subscription_tier?: 'basic' | 'premium' | 'pro'
   subscription_status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'inactive'
   subscription_end?: string
+  trial_end_date?: string
+  trial_start?: string
   created_at: string
 }
 
