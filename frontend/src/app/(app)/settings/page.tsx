@@ -221,37 +221,50 @@ export default function SettingsPage() {
           <h2 className="text-lg font-semibold text-gray-900">Available Plans</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {plans.map((plan) => {
-              const isCurrent = hasSubscription && plan.id === currentTier
-              const isTrialing = user?.subscription_status === 'trialing' && plan.id === currentTier
-              const currentIndex = hasSubscription ? plans.findIndex(p => p.id === currentTier) : -1
+              const isTrialing = user?.subscription_status === 'trialing'
+              const isActive = user?.subscription_status === 'active'
+              const isCurrent = (isActive || isTrialing) && plan.id === currentTier
+              const hasAnySubscription = isActive || isTrialing
+
+              // Calculate if this is an upgrade or downgrade
+              const currentIndex = hasAnySubscription ? plans.findIndex(p => p.id === currentTier) : -1
               const planIndex = plans.findIndex(p => p.id === plan.id)
-              const isUpgrade = !hasSubscription || planIndex > currentIndex
-              const isDowngrade = hasSubscription && planIndex < currentIndex
+              const isUpgrade = !hasAnySubscription || planIndex > currentIndex
+              const isDowngrade = hasAnySubscription && planIndex < currentIndex
+
+              // Determine button text
+              const getButtonText = () => {
+                if (isCurrent) return 'Current Plan'
+                if (!hasAnySubscription) return 'Start Free Trial'
+                if (isTrialing) return `Switch to ${plan.name}`
+                if (isUpgrade) return `Upgrade to ${plan.name}`
+                return `Downgrade to ${plan.name}`
+              }
 
               return (
                 <SparkleCard
                   key={plan.id}
-                  active={isCurrent || isTrialing}
+                  active={isCurrent}
                   className="rounded-2xl"
                 >
                   <div
                     className={clsx(
                       'card relative',
-                      isCurrent || isTrialing
-                        ? 'border-2 border-yellow-400 bg-gradient-to-b from-yellow-50 to-white'
+                      isCurrent
+                        ? 'border-2 border-yellow-400 shadow-[0_0_30px_rgba(251,191,36,0.3)] bg-gradient-to-b from-yellow-50 to-white'
                         : plan.recommended
                           ? 'ring-2 ring-primary-500'
                           : ''
                     )}
                   >
-                    {(isCurrent || isTrialing) && (
+                    {isCurrent && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                        <span className="bg-gradient-to-r from-yellow-400 to-amber-500 text-white text-xs font-bold px-4 py-1 rounded-full shadow-lg">
-                          {isTrialing ? '⏳ On Trial' : '✨ Current Plan'}
+                        <span className="bg-gradient-to-r from-yellow-400 to-amber-500 text-white text-xs font-bold px-4 py-1 rounded-full shadow-lg flex items-center gap-1">
+                          <span>👤</span> YOU
                         </span>
                       </div>
                     )}
-                    {plan.recommended && !isCurrent && !isTrialing && (
+                    {plan.recommended && !isCurrent && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                         <span className="bg-primary-600 text-white text-xs font-medium px-3 py-1 rounded-full">
                           Recommended
@@ -265,6 +278,13 @@ export default function SettingsPage() {
                       <span className="text-gray-500">/month</span>
                     </p>
 
+                    {/* Show trial status if on trial for this plan */}
+                    {isTrialing && isCurrent && (
+                      <p className="mt-1 text-xs text-amber-600 font-medium">
+                        Trial active
+                      </p>
+                    )}
+
                     <ul className="mt-6 space-y-3">
                       {plan.features.map((feature) => (
                         <li key={feature} className="flex items-start gap-2">
@@ -275,7 +295,7 @@ export default function SettingsPage() {
                     </ul>
 
                     <button
-                      onClick={() => isCurrent ? null : isDowngrade ? handleManageSubscription() : handleUpgrade(plan.id)}
+                      onClick={() => isCurrent ? undefined : isDowngrade ? handleManageSubscription() : handleUpgrade(plan.id)}
                       className={clsx(
                         'w-full mt-6 flex justify-center items-center gap-2',
                         isCurrent
@@ -287,14 +307,7 @@ export default function SettingsPage() {
                       disabled={isCurrent || loading === plan.id}
                     >
                       {loading === plan.id && <Loader2 className="w-4 h-4 animate-spin" />}
-                      {isCurrent
-                        ? 'Current Plan'
-                        : !hasSubscription
-                          ? 'Start Free Trial'
-                          : isUpgrade
-                            ? `Upgrade to ${plan.name}`
-                            : `Switch to ${plan.name}`
-                      }
+                      {getButtonText()}
                     </button>
                   </div>
                 </SparkleCard>
