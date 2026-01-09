@@ -40,9 +40,16 @@ function MarketRow({ market }: { market: Market }) {
 
   const handleExternalClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    // Strip platform prefix from ID for external URLs
+    let externalId = market.id
+    if (externalId.startsWith('kalshi_')) {
+      externalId = externalId.slice(7)
+    } else if (externalId.startsWith('poly_')) {
+      externalId = externalId.slice(5)
+    }
     const url = market.platform === 'kalshi'
-      ? `https://kalshi.com/markets/${market.id}`
-      : `https://polymarket.com/event/${market.id}`
+      ? `https://kalshi.com/markets/${externalId}`
+      : `https://polymarket.com/event/${externalId}`
     window.open(url, '_blank')
   }
 
