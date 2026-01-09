@@ -28,9 +28,9 @@ function InsightCard({ insight }: { insight: AIInsight }) {
 
   return (
     <Link href={`/insights/${insight.id}`}>
-      <div className="relative pt-14 mt-12">
-        {/* Floating Circular Image */}
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20">
+      <div className="relative pt-10 mt-8">
+        {/* Floating Circular Image - ~50% overlaps the card */}
+        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-30">
           <div className={`w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br ${platform.gradient}`}>
             {insight.image_url ? (
               <Image
@@ -49,9 +49,9 @@ function InsightCard({ insight }: { insight: AIInsight }) {
           </div>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow cursor-pointer border border-gray-100 overflow-hidden">
-          <div className="px-4 pt-10 pb-4">
+        {/* Card with hover effects */}
+        <GameCard className="bg-white rounded-xl shadow-sm cursor-pointer border border-gray-100 overflow-hidden" showWatermark={false}>
+          <div className="px-4 pt-12 pb-4">
             {insight.category && (
               <div className="flex justify-center mb-2">
                 <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
@@ -109,7 +109,7 @@ function InsightCard({ insight }: { insight: AIInsight }) {
               </span>
             </div>
           </div>
-        </div>
+        </GameCard>
       </div>
     </Link>
   )
