@@ -782,35 +782,36 @@ import MarketCard from '@/components/MarketCard'
 
 ---
 
-## Files Checklist
+## Files Checklist (COMPLETED Jan 8, 2026)
 
-### Create:
-- [ ] `app/services/email.py`
-- [ ] `frontend/src/components/SparkleCard.tsx`
-- [ ] `frontend/src/components/TierBadge.tsx`
-- [ ] `frontend/src/components/MarketCard.tsx`
-- [ ] `frontend/src/lib/platforms.ts`
-- [ ] `frontend/public/logos/kalshi-logo.svg`
-- [ ] `frontend/public/logos/kalshi-logo-white.svg`
-- [ ] `frontend/public/logos/polymarket-logo.svg`
-- [ ] `frontend/public/logos/polymarket-logo-white.svg`
+### Create: ✅
+- [x] `app/services/email.py` (as notifications.py)
+- [x] `frontend/src/components/SparkleCard.tsx`
+- [x] `frontend/src/components/TierBadge.tsx`
+- [x] `frontend/src/components/GameCard.tsx` (with pop-out hover effect)
+- [x] `frontend/src/components/MarketCard.tsx`
+- [x] `frontend/src/lib/platforms.ts`
+- [x] `frontend/public/logos/kalshi-logo.svg`
+- [x] `frontend/public/logos/kalshi-logo-white.svg`
+- [x] `frontend/public/logos/polymarket-logo.svg`
+- [x] `frontend/public/logos/polymarket-logo-white.svg`
 
-### Modify:
-- [ ] `app/main.py` - Add AI analysis + alert emails to scheduler
-- [ ] `app/api/routes/billing.py` - Trial persistence logic
-- [ ] `app/api/routes/auth.py` - Send welcome email on register
-- [ ] `app/models/user.py` - Add trial_start_date, email_alerts_enabled fields
-- [ ] `app/models/alert.py` - Add email_sent, email_sent_at fields
-- [ ] `app/models/market.py` - Add image_url field
-- [ ] `app/services/kalshi_client.py` - Extract image URLs
-- [ ] `app/services/polymarket_client.py` - Extract image URLs
-- [ ] `frontend/src/app/(app)/settings/page.tsx` - Use SparkleCard
-- [ ] `frontend/src/components/Sidebar.tsx` - Use TierBadge
-- [ ] `frontend/src/app/(app)/markets/page.tsx` - Use platform logos
-- [ ] `frontend/src/app/(app)/dashboard/page.tsx` - Use MarketCard
-- [ ] `frontend/src/app/(app)/opportunities/page.tsx` - Use MarketCard
-- [ ] `frontend/src/app/(app)/cross-platform/page.tsx` - Use platform logos
+### Modify: ✅
+- [x] `app/main.py` - Add AI analysis + alert emails to scheduler + image_url migration
+- [x] `app/api/routes/billing.py` - Trial persistence logic
+- [x] `app/api/routes/auth.py` - Send welcome email on register
+- [x] `app/models/user.py` - Add trial_start, email_alerts_enabled fields
+- [x] `app/models/alert.py` - Add email_sent, email_sent_at fields
+- [x] `app/models/market.py` - Add image_url field
+- [x] `app/services/kalshi_client.py` - Extract image URLs
+- [x] `app/services/polymarket_client.py` - Extract image URLs
+- [x] `frontend/src/app/(app)/settings/page.tsx` - Use SparkleCard
+- [x] `frontend/src/components/Sidebar.tsx` - Use TierBadge
+- [x] `frontend/src/app/(app)/markets/page.tsx` - Use platform logos
+- [x] `frontend/src/app/(app)/dashboard/page.tsx` - Use platform logos + GameCard
+- [x] `frontend/src/app/(app)/opportunities/page.tsx` - Use GameCard
+- [x] `frontend/src/app/(app)/cross-platform/page.tsx` - Use platform logos + GameCard
 
-### Run:
-- [ ] Alembic migration for new fields (image_url, trial_start_date, etc.)
-- [ ] Download/create platform logo SVGs
+### Run: ✅
+- [x] Database migration via /debug/migrate (trial_start, email fields, image_url)
+- [x] Created platform logo SVGs
