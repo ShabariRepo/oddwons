@@ -344,10 +344,17 @@ async def get_insight_detail(
 def _get_market_url(market) -> str:
     """Get direct link to market on platform."""
     platform_value = market.platform.value if hasattr(market.platform, 'value') else market.platform
+    # Strip platform prefix from ID for external URLs
+    external_id = market.id
+    if external_id.startswith("kalshi_"):
+        external_id = external_id[7:]
+    elif external_id.startswith("poly_"):
+        external_id = external_id[5:]
+
     if platform_value == "kalshi":
-        return f"https://kalshi.com/markets/{market.id}"
+        return f"https://kalshi.com/markets/{external_id}"
     else:
-        return f"https://polymarket.com/event/{market.id}"
+        return f"https://polymarket.com/event/{external_id}"
 
 
 @router.get("/arbitrage")
