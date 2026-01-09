@@ -51,17 +51,8 @@ function MarketRow({ market }: { market: Market }) {
       className="hover:bg-gray-50 cursor-pointer relative overflow-hidden transition-all duration-200 hover:scale-[1.01] hover:shadow-md hover:z-10"
       onClick={handleRowClick}
     >
-      {/* Diagonal gradient covering 50% of the entire row from the right */}
-      <td className="px-4 py-4 relative">
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none"
-          style={{
-            right: '-500%',  // Extend from this cell to cover the row
-            width: '550%',   // Wide enough to reach 50% of total row
-            background: `linear-gradient(115deg, transparent 0%, transparent 50%, ${platformColor}12 50%, ${platformColor}30 100%)`,
-          }}
-        />
-        <div className="flex items-start gap-3 relative z-10">
+      <td className="px-4 py-4">
+        <div className="flex items-start gap-3">
           {/* Platform logo + vertical color bar */}
           <div className="relative flex items-center gap-2 shrink-0">
             <div
@@ -106,6 +97,13 @@ function MarketRow({ market }: { market: Market }) {
         </span>
       </td>
       <td className="px-4 py-4 text-right">
+        {/* Diagonal gradient - 50% of entire row width, positioned relative to <tr> */}
+        <div
+          className="absolute right-0 top-0 bottom-0 w-1/2 pointer-events-none"
+          style={{
+            background: `linear-gradient(115deg, transparent 0%, transparent 30%, ${platformColor}15 30%, ${platformColor}35 100%)`,
+          }}
+        />
         <button
           className="text-gray-400 hover:text-gray-600 relative z-10"
           onClick={handleExternalClick}
