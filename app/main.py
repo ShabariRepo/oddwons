@@ -536,9 +536,22 @@ async def run_migrations():
             await session.execute(text('ALTER TABLE users ADD COLUMN trial_start TIMESTAMP'))
             results["users"].append("added trial_start")
 
+        # Check markets columns
+        result = await session.execute(text('''
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = :table_name
+        '''), {'table_name': 'markets'})
+        market_cols = [row[0] for row in result.fetchall()]
+        results["markets"] = []
+
+        if 'image_url' not in market_cols:
+            await session.execute(text('ALTER TABLE markets ADD COLUMN image_url VARCHAR'))
+            results["markets"].append("added image_url")
+
         await session.commit()
 
-    if not results["alerts"] and not results["users"]:
-        return {"status": "no changes needed", "alerts": alert_cols, "users": user_cols}
+    if not results["alerts"] and not results["users"] and not results.get("markets"):
+        return {"status": "no changes needed", "alerts": alert_cols, "users": user_cols, "markets": market_cols}
 
     return {"status": "migrations applied", "changes": results}

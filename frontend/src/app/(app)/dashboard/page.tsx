@@ -5,21 +5,29 @@ import { StatsCard, StatsCardSkeleton } from '@/components/StatsCard'
 import { useMarketStats, usePatternStats, useAIInsights, useCrossPlatformMatches, useInsightStats } from '@/hooks/useAPI'
 import { AIInsight, CrossPlatformMatch } from '@/lib/types'
 import Link from 'next/link'
+import Image from 'next/image'
 import BrandPattern from '@/components/BrandPattern'
 import GameCard from '@/components/GameCard'
+import { PLATFORMS } from '@/lib/platforms'
 
 function InsightCard({ insight }: { insight: AIInsight }) {
-  const platformColor = insight.platform === 'kalshi'
-    ? 'bg-blue-100 text-blue-800'
-    : 'bg-purple-100 text-purple-800'
+  const platform = PLATFORMS[insight.platform as keyof typeof PLATFORMS]
 
   return (
     <Link href={`/insights/${insight.id}`}>
       <GameCard className="card hover:shadow-md transition-shadow cursor-pointer">
         <div className="flex items-start justify-between mb-2">
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${platformColor}`}>
-            {insight.platform}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <Image
+              src={platform?.logo || PLATFORMS.kalshi.logo}
+              alt={platform?.name || insight.platform}
+              width={16}
+              height={16}
+            />
+            <span className="text-xs text-gray-600 font-medium">
+              {platform?.name || insight.platform}
+            </span>
+          </div>
           {insight.category && (
             <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
               {insight.category}
@@ -76,13 +84,29 @@ function CrossPlatformCard({ match }: { match: CrossPlatformMatch }) {
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div className="bg-blue-50 rounded-lg p-2">
-            <p className="text-xs text-blue-600 font-medium">Kalshi</p>
+            <div className="flex items-center gap-1.5 mb-1">
+              <Image
+                src={PLATFORMS.kalshi.logo}
+                alt="Kalshi"
+                width={12}
+                height={12}
+              />
+              <p className="text-xs text-blue-600 font-medium">Kalshi</p>
+            </div>
             <p className="text-lg font-bold text-blue-800">
               {match.kalshi_yes_price?.toFixed(0)}¢
             </p>
           </div>
           <div className="bg-purple-50 rounded-lg p-2">
-            <p className="text-xs text-purple-600 font-medium">Polymarket</p>
+            <div className="flex items-center gap-1.5 mb-1">
+              <Image
+                src={PLATFORMS.polymarket.logo}
+                alt="Polymarket"
+                width={12}
+                height={12}
+              />
+              <p className="text-xs text-purple-600 font-medium">Polymarket</p>
+            </div>
             <p className="text-lg font-bold text-purple-800">
               {match.polymarket_yes_price?.toFixed(0)}¢
             </p>

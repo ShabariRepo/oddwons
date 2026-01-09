@@ -6,7 +6,9 @@ import { useMarkets } from '@/hooks/useAPI'
 import { clsx } from 'clsx'
 import { Market } from '@/lib/types'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { PLATFORMS } from '@/lib/platforms'
 
 const platforms = [
   { id: '', name: 'All Platforms' },
@@ -42,14 +44,18 @@ function MarketRow({ market }: { market: Market }) {
     <tr className="hover:bg-gray-50 cursor-pointer" onClick={handleRowClick}>
       <td className="px-4 py-4">
         <div className="flex items-start gap-3">
-          <span className={clsx(
-            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
-            market.platform === 'kalshi'
-              ? 'bg-blue-100 text-blue-800'
-              : 'bg-purple-100 text-purple-800'
-          )}>
-            {market.platform === 'kalshi' ? 'K' : 'P'}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Image
+              src={PLATFORMS[market.platform as keyof typeof PLATFORMS]?.logo || PLATFORMS.kalshi.logo}
+              alt={PLATFORMS[market.platform as keyof typeof PLATFORMS]?.name || market.platform}
+              width={18}
+              height={18}
+              className="rounded-sm"
+            />
+            <span className="text-xs text-gray-500 hidden sm:inline">
+              {PLATFORMS[market.platform as keyof typeof PLATFORMS]?.name || market.platform}
+            </span>
+          </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900 truncate">
               {market.title}

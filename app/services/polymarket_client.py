@@ -124,6 +124,9 @@ class PolymarketClient:
         # Event-level volume24hr (applies to all markets in this event)
         event_volume_24h = float(event.get("volume24hr", 0) or 0)
 
+        # Event-level image (applies to all markets in this event)
+        event_image_url = event.get("image") or event.get("icon") or event.get("image_url")
+
         for market in event.get("markets", [event]):
             try:
                 outcomes = []
@@ -186,6 +189,12 @@ class PolymarketClient:
                     except (ValueError, TypeError):
                         pass
 
+                # Try to get image from market first, fall back to event
+                market_image_url = (
+                    market.get("image") or market.get("icon") or
+                    market.get("image_url") or event_image_url
+                )
+
                 markets.append(PolymarketMarketData(
                     condition_id=market.get("conditionId", market.get("condition_id", "")),
                     question=market.get("question", event.get("title", "")),
@@ -201,6 +210,7 @@ class PolymarketClient:
                     spread=spread,
                     best_ask=best_ask,
                     price_change_24h=price_change_24h,
+                    image_url=market_image_url,
                 ))
             except Exception as e:
                 logger.warning(f"Failed to parse Polymarket market: {e}")

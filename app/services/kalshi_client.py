@@ -122,7 +122,7 @@ class KalshiClient:
             logger.error(f"Kalshi event markets error for {event_ticker}: {e}")
             raise
 
-    def parse_market(self, data: Dict[str, Any]) -> KalshiMarketData:
+    def parse_market(self, data: Dict[str, Any], event_image_url: Optional[str] = None) -> KalshiMarketData:
         """Parse raw API response into structured data.
 
         Note: Kalshi API returns prices in cents (0-100), we convert to decimal (0-1)
@@ -135,6 +135,14 @@ class KalshiClient:
             if val is None:
                 return None
             return val / 100.0
+
+        # Try to get image URL from market, event, or passed-in event_image_url
+        image_url = (
+            market.get("image_url") or
+            market.get("event_image_url") or
+            market.get("strike_period_image") or
+            event_image_url
+        )
 
         return KalshiMarketData(
             ticker=market.get("ticker", ""),
@@ -149,6 +157,7 @@ class KalshiClient:
             status=market.get("status", "unknown"),
             close_time=datetime.fromisoformat(market["close_time"]) if market.get("close_time") else None,
             category=market.get("category"),
+            image_url=image_url,
         )
 
     async def fetch_all_markets(self, max_pages: int = 50) -> List[KalshiMarketData]:
@@ -176,10 +185,18 @@ class KalshiClient:
                     if not event_ticker:
                         continue
 
+                    # Extract event image URL
+                    event_image_url = event.get("image_url") or event.get("image")
+
                     # Get markets for this event
                     try:
                         event_markets = await self.get_event_markets(event_ticker)
                         markets = event_markets.get("markets", [])
+
+                        # Also try to get image from event detail
+                        event_detail = event_markets.get("event", {})
+                        if not event_image_url:
+                            event_image_url = event_detail.get("image_url") or event_detail.get("image")
 
                         for m in markets:
                             ticker = m.get("ticker", "")
@@ -188,7 +205,7 @@ class KalshiClient:
                             seen_tickers.add(ticker)
 
                             try:
-                                parsed = self.parse_market(m)
+                                parsed = self.parse_market(m, event_image_url=event_image_url)
                                 # Add category from event
                                 parsed.category = event.get("category")
                                 all_markets.append(parsed)

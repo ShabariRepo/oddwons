@@ -23,6 +23,7 @@ class Market(Base):
     title = Column(String, nullable=False)
     description = Column(Text)
     category = Column(String, index=True)
+    image_url = Column(String)  # Market/event image from API
 
     # Current state
     yes_price = Column(Float)  # Current YES price (0-1)

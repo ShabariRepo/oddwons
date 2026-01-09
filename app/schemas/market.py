@@ -14,6 +14,7 @@ class MarketBase(BaseModel):
     title: str
     description: Optional[str] = None
     category: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class MarketCreate(MarketBase):
@@ -136,6 +137,7 @@ class KalshiMarketData(BaseModel):
     status: str
     close_time: Optional[datetime] = None
     category: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class PolymarketMarketData(BaseModel):
@@ -153,6 +155,7 @@ class PolymarketMarketData(BaseModel):
     spread: Optional[float] = None  # spread field from API
     best_ask: Optional[float] = None  # bestAsk field from API
     price_change_24h: Optional[float] = None  # oneDayPriceChange from API
+    image_url: Optional[str] = None  # Event/market image from API
 
 
 # ============================================================================

@@ -5,7 +5,9 @@ import { Scale, TrendingUp, TrendingDown, ArrowRight, ExternalLink } from 'lucid
 import { useCrossPlatformMatches, useCrossPlatformStats } from '@/hooks/useAPI'
 import { CrossPlatformMatch } from '@/lib/types'
 import { clsx } from 'clsx'
+import Image from 'next/image'
 import GameCard from '@/components/GameCard'
+import { PLATFORMS } from '@/lib/platforms'
 
 function MatchCard({ match }: { match: CrossPlatformMatch }) {
   const gapColor = Math.abs(match.price_gap_cents) >= 5
@@ -45,7 +47,15 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
           match.gap_direction === 'kalshi_higher' ? 'bg-blue-100' : 'bg-blue-50'
         )}>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-blue-600 font-medium">Kalshi</p>
+            <div className="flex items-center gap-1.5">
+              <Image
+                src={PLATFORMS.kalshi.logo}
+                alt="Kalshi"
+                width={14}
+                height={14}
+              />
+              <p className="text-xs text-blue-600 font-medium">Kalshi</p>
+            </div>
             {match.gap_direction === 'kalshi_higher' && (
               <TrendingUp className="w-3 h-3 text-blue-600" />
             )}
@@ -63,7 +73,15 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
           match.gap_direction === 'polymarket_higher' ? 'bg-purple-100' : 'bg-purple-50'
         )}>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-purple-600 font-medium">Polymarket</p>
+            <div className="flex items-center gap-1.5">
+              <Image
+                src={PLATFORMS.polymarket.logo}
+                alt="Polymarket"
+                width={14}
+                height={14}
+              />
+              <p className="text-xs text-purple-600 font-medium">Polymarket</p>
+            </div>
             {match.gap_direction === 'polymarket_higher' && (
               <TrendingUp className="w-3 h-3 text-purple-600" />
             )}
