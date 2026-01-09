@@ -164,6 +164,7 @@ async def get_ai_insights(
             "summary": i.summary,
             "current_odds": i.current_odds,
             "implied_probability": i.implied_probability,
+            "image_url": i.image_url,
             "created_at": i.created_at.isoformat() if i.created_at else None,
         }
 
@@ -280,6 +281,7 @@ async def get_insight_detail(
         "summary": insight.summary,
         "current_odds": insight.current_odds,
         "implied_probability": insight.implied_probability,
+        "image_url": insight.image_url,
         "created_at": insight.created_at.isoformat() if insight.created_at else None,
     }
 

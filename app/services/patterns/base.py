@@ -107,6 +107,9 @@ class MarketData:
     price_history: List[Dict[str, Any]] = field(default_factory=list)
     volume_history: List[Dict[str, Any]] = field(default_factory=list)
 
+    # Image
+    image_url: Optional[str] = None
+
     @property
     def mid_price(self) -> Optional[float]:
         if self.best_bid and self.best_ask:

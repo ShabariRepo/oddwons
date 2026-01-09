@@ -32,6 +32,7 @@ class AIInsight(Base):
     market_title = Column(Text)  # Store title for display
     platform = Column(String(50), nullable=False)
     category = Column(String(50))  # politics, sports, crypto, etc.
+    image_url = Column(Text)  # Market/event image URL from platform
 
     # Market Summary (COMPANION STYLE)
     summary = Column(Text, nullable=False)  # What this market is about

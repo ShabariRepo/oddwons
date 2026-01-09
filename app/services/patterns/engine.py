@@ -101,6 +101,7 @@ class PatternEngine:
                 spread=snapshots[-1].spread if snapshots else None,
                 price_history=price_history,
                 volume_history=volume_history,
+                image_url=market.image_url,
             )
             market_data_list.append(market_data)
 
@@ -298,6 +299,7 @@ class PatternEngine:
                 "no_price": market.no_price,
                 "volume": market.volume,
                 "price_history": market.price_history[-5:] if market.price_history else [],
+                "image_url": market.image_url,
             })
 
         # Group patterns by category (for additional context)
@@ -363,7 +365,15 @@ class PatternEngine:
 
                 # COMPANION: Save highlights (not opportunities)
                 if result and result.get("highlights"):
+                    # Build a lookup dict for image_url by market_id
+                    image_lookup = {m["market_id"]: m.get("image_url") for m in category_markets}
+
                     for highlight in result["highlights"]:
+                        # Add image_url from original market data
+                        market_id = highlight.get("market_id")
+                        if market_id and not highlight.get("image_url"):
+                            highlight["image_url"] = image_lookup.get(market_id)
+
                         await self.save_market_highlight(
                             highlight, category, session, news_context
                         )
@@ -490,6 +500,7 @@ class PatternEngine:
                 market_title=highlight.get("market_title", ""),
                 platform=highlight.get("platform", "unknown"),
                 category=category,
+                image_url=highlight.get("image_url"),
 
                 # Market summary (COMPANION STYLE)
                 summary=highlight.get("summary", "Market analysis pending"),
