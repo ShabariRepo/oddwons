@@ -11,6 +11,7 @@ export interface User {
   subscription_status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'inactive'
   subscription_end?: string
   trial_end_date?: string
+  trial_end?: string
   trial_start?: string
   created_at: string
 }
