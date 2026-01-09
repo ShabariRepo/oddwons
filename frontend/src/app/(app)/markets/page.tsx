@@ -97,10 +97,11 @@ function MarketRow({ market }: { market: Market }) {
         </span>
       </td>
       <td className="px-4 py-4 text-right">
-        {/* Diagonal gradient - 50% of entire row width, positioned relative to <tr> */}
+        {/* Diagonal gradient - 65% of entire row width, positioned relative to <tr> */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-1/2 pointer-events-none"
+          className="absolute right-0 top-0 bottom-0 pointer-events-none"
           style={{
+            width: '65%',
             background: `linear-gradient(115deg, transparent 0%, transparent 30%, ${platformColor}15 30%, ${platformColor}35 100%)`,
           }}
         />
