@@ -203,13 +203,13 @@ export default function LandingPage() {
                   tier.popular ? 'border-primary-500 shadow-lg' : 'border-gray-100'
                 }`}
               >
-                {/* Logo watermark */}
-                <div className="absolute bottom-2 right-2 opacity-10 pointer-events-none">
+                {/* Logo watermark - centered */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
                   <Image
                     src="/oddwons-logo.png"
                     alt=""
-                    width={60}
-                    height={60}
+                    width={80}
+                    height={80}
                     className="rounded-lg"
                   />
                 </div>
