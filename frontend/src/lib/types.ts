@@ -113,6 +113,7 @@ export interface AIInsight {
   movement_context?: string
   upcoming_catalyst?: string
   analyst_note?: string
+  image_url?: string
   created_at: string
 }
 

@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Sparkles, Filter, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react'
+import { Sparkles, Filter, RefreshCw } from 'lucide-react'
 import { useAIInsights } from '@/hooks/useAPI'
 import { AIInsight } from '@/lib/types'
 import { clsx } from 'clsx'
 import Link from 'next/link'
-import GameCard from '@/components/GameCard'
+import Image from 'next/image'
 
 const categories = [
   { id: '', name: 'All Categories' },
@@ -19,9 +19,21 @@ const categories = [
 ]
 
 function InsightCard({ insight }: { insight: AIInsight }) {
-  const platformColor = insight.platform === 'kalshi'
-    ? 'bg-blue-100 text-blue-800'
-    : 'bg-purple-100 text-purple-800'
+  // Platform colors
+  const platformConfig = {
+    kalshi: {
+      color: '#00D26A',
+      logo: '/logos/kalshi-logo.png',
+      gradient: 'from-green-400 to-emerald-600',
+    },
+    polymarket: {
+      color: '#6366F1',
+      logo: '/logos/polymarket-logo.png',
+      gradient: 'from-indigo-400 to-purple-600',
+    },
+  }
+
+  const platform = platformConfig[insight.platform as keyof typeof platformConfig] || platformConfig.polymarket
 
   const movementColor = insight.recent_movement?.includes('+')
     ? 'text-green-600'
@@ -31,95 +43,110 @@ function InsightCard({ insight }: { insight: AIInsight }) {
 
   return (
     <Link href={`/insights/${insight.id}`}>
-      <GameCard className="card hover:shadow-md transition-shadow cursor-pointer">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${platformColor}`}>
-              {insight.platform}
-            </span>
-            {insight.category && (
-              <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-                {insight.category}
-              </span>
+      {/* Container with padding for floating image */}
+      <div className="relative pt-10 mt-8">
+
+        {/* Floating Circular Image */}
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20">
+          <div className={`w-16 h-16 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gradient-to-br ${platform.gradient}`}>
+            {insight.image_url ? (
+              <Image
+                src={insight.image_url}
+                alt=""
+                width={64}
+                height={64}
+                className="object-cover w-full h-full"
+                unoptimized
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-white text-xl font-bold">
+                {insight.market_title?.charAt(0) || '?'}
+              </div>
             )}
           </div>
-          {insight.recent_movement && (
-            <span className={`flex items-center gap-1 text-sm font-medium ${movementColor}`}>
-              {insight.recent_movement.includes('+') ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : insight.recent_movement.includes('-') ? (
-                <TrendingDown className="w-3 h-3" />
-              ) : null}
-              {insight.recent_movement}
-            </span>
-          )}
         </div>
 
-        {/* Title */}
-        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
-          {insight.market_title}
-        </h3>
+        {/* Card */}
+        <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow cursor-pointer border border-gray-100 overflow-hidden">
 
-        {/* Summary */}
-        <p className="text-sm text-gray-600 mb-4 line-clamp-3">
-          {insight.summary}
-        </p>
-
-        {/* Odds */}
-        {insight.current_odds && (
-          <div className="flex items-center gap-4 mb-3">
-            <div className="flex-1 bg-green-50 rounded-lg p-2 text-center">
-              <p className="text-xs text-green-600">Yes</p>
-              <p className="text-lg font-bold text-green-700">
-                {(insight.current_odds.yes * 100).toFixed(0)}%
-              </p>
+          {/* Card Body */}
+          <div className="px-4 pt-8 pb-4">
+            {/* Category Badge - centered */}
+            <div className="flex justify-center mb-2">
+              {insight.category && (
+                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                  {insight.category}
+                </span>
+              )}
             </div>
-            <div className="flex-1 bg-red-50 rounded-lg p-2 text-center">
-              <p className="text-xs text-red-600">No</p>
-              <p className="text-lg font-bold text-red-700">
-                {(insight.current_odds.no * 100).toFixed(0)}%
-              </p>
+
+            {/* Title */}
+            <h3 className="font-semibold text-gray-900 text-center mb-2 line-clamp-2">
+              {insight.market_title}
+            </h3>
+
+            {/* Summary */}
+            <p className="text-sm text-gray-600 mb-4 line-clamp-3 text-center">
+              {insight.summary}
+            </p>
+
+            {/* Odds */}
+            {insight.current_odds && (
+              <div className="flex items-center gap-4 mb-3">
+                <div className="flex-1 bg-green-50 rounded-lg p-2 text-center">
+                  <p className="text-xs text-green-600">Yes</p>
+                  <p className="text-lg font-bold text-green-700">
+                    {(insight.current_odds.yes * 100).toFixed(0)}%
+                  </p>
+                </div>
+                <div className="flex-1 bg-red-50 rounded-lg p-2 text-center">
+                  <p className="text-xs text-red-600">No</p>
+                  <p className="text-lg font-bold text-red-700">
+                    {(insight.current_odds.no * 100).toFixed(0)}%
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Movement */}
+            {insight.recent_movement && (
+              <div className={`text-center text-sm font-medium ${movementColor} mb-2`}>
+                {insight.recent_movement}
+              </div>
+            )}
+
+            {/* Volume Note */}
+            {insight.volume_note && (
+              <p className="text-xs text-gray-500 text-center">{insight.volume_note}</p>
+            )}
+          </div>
+
+          {/* DIAGONAL FOOTER WITH PLATFORM LOGO */}
+          <div className="relative h-12 overflow-hidden">
+            {/* Diagonal gradient background */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `linear-gradient(115deg, white 0%, white 40%, ${platform.color} 40%, ${platform.color} 100%)`,
+              }}
+            />
+
+            {/* Platform logo and name on left */}
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 z-10">
+              <Image
+                src={platform.logo}
+                alt={insight.platform}
+                width={20}
+                height={20}
+                className="object-contain"
+              />
+              <span className="text-sm font-medium text-gray-700 capitalize">
+                {insight.platform}
+              </span>
             </div>
           </div>
-        )}
-
-        {/* Implied Probability */}
-        {insight.implied_probability && (
-          <p className="text-sm text-primary-600 font-medium mb-2">
-            {insight.implied_probability}
-          </p>
-        )}
-
-        {/* Volume Note */}
-        {insight.volume_note && (
-          <p className="text-xs text-gray-500 mb-2">{insight.volume_note}</p>
-        )}
-
-        {/* Movement Context (Premium+) */}
-        {insight.movement_context && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs text-gray-500 font-medium mb-1">Why it moved</p>
-            <p className="text-sm text-gray-600">{insight.movement_context}</p>
-          </div>
-        )}
-
-        {/* Upcoming Catalyst (Premium+) */}
-        {insight.upcoming_catalyst && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs text-gray-500 font-medium mb-1">Upcoming</p>
-            <p className="text-sm text-gray-600">{insight.upcoming_catalyst}</p>
-          </div>
-        )}
-
-        {/* Analyst Note (Pro) */}
-        {insight.analyst_note && (
-          <div className="mt-3 pt-3 border-t border-gray-100 bg-yellow-50 -mx-4 -mb-4 px-4 py-3 rounded-b-lg">
-            <p className="text-xs text-yellow-700 font-medium mb-1">Analyst Note</p>
-            <p className="text-sm text-yellow-800">{insight.analyst_note}</p>
-          </div>
-        )}
-      </GameCard>
+        </div>
+      </div>
     </Link>
   )
 }

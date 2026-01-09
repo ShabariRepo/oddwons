@@ -1,235 +1,326 @@
-# OddWons - Claude Code Tasks
+# OddWons - EXPLICIT FIX INSTRUCTIONS
 
-_Last updated: January 8, 2025_
+**CRITICAL: The opportunities page uses `InsightCard` (inline component), NOT `MarketCard`. You must update `InsightCard` in the opportunities page file itself.**
 
 ---
 
-## CRITICAL ISSUES TO FIX
+## PROBLEM 1: AI Highlights Cards Don't Have New Design
 
-### ISSUE 1: Market Card Layout - Image Overlapping Top
+**File:** `frontend/src/app/(app)/opportunities/page.tsx`
 
-The market cards need a new design where the market image floats/overlaps the top of the card (like a profile picture that sits half above, half inside the card).
+**Issue:** The `InsightCard` component on lines 25-120 is an inline component that doesn't have:
+- Floating circular image at top
+- Diagonal platform footer with logo
 
-**Current:** No image, or image inside card
-**Wanted:** Circular/rounded image centered at top, overlapping the card boundary by ~50%
-
-```
-         ┌─────────┐
-         │  IMAGE  │  ← Image overlaps card top
-         │ (circle)│
-    ┌────┴─────────┴────┐
-    │                   │
-    │   Market Title    │
-    │   Details...      │
-    │                   │
-    ├───────────────────┤
-    │[LOGO]▓▓▓▓▓▓▓▓▓▓▓▓▓│  ← Diagonal footer
-    └───────────────────┘
-```
-
-**Implementation:**
+**FIX:** Replace the entire `InsightCard` function (lines 25-120) with this:
 
 ```tsx
-// MarketCard.tsx
-
-<div className="relative pt-12 mt-8"> {/* Extra padding for overlapping image */}
-  {/* Overlapping Image */}
-  <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-10">
-    <div className="w-20 h-20 rounded-full border-4 border-white shadow-lg overflow-hidden bg-gradient-to-br from-gray-200 to-gray-300">
-      {market.image_url ? (
-        <Image src={market.image_url} alt="" fill className="object-cover" />
-      ) : (
-        <div className={`w-full h-full ${fallbackGradient}`} />
-      )}
-    </div>
-  </div>
+function InsightCard({ insight }: { insight: AIInsight }) {
+  // Platform colors
+  const platformConfig = {
+    kalshi: {
+      color: '#00D26A',
+      logo: '/logos/kalshi-logo.png',
+      gradient: 'from-green-400 to-emerald-600',
+    },
+    polymarket: {
+      color: '#6366F1', 
+      logo: '/logos/polymarket-logo.png',
+      gradient: 'from-indigo-400 to-purple-600',
+    },
+  }
   
-  {/* Card Body */}
-  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-    {/* Content with top padding to account for image */}
-    <div className="pt-12 px-4 pb-4">
-      <h3 className="font-semibold text-center">{market.title}</h3>
-      {/* ... rest of content */}
-    </div>
-    
-    {/* Diagonal Footer - see Issue 2 */}
-  </div>
-</div>
-```
+  const platform = platformConfig[insight.platform as keyof typeof platformConfig] || platformConfig.polymarket
 
-**Get images from APIs:**
-- Kalshi: Check `image_url` field in event/market response
-- Polymarket: Check `image` or `icon` field in event response
+  const movementColor = insight.recent_movement?.includes('+')
+    ? 'text-green-600'
+    : insight.recent_movement?.includes('-')
+    ? 'text-red-600'
+    : 'text-gray-500'
 
----
-
-### ISSUE 2: Card Footer - Diagonal Gradient with Platform Logo
-
-The card footer should have a diagonal/angled design with the platform logo on the left and the platform brand color filling diagonally to the right.
-
-**Platform Assets:**
-- Kalshi logo: `/logos/kalshi-logo.png`
-- Kalshi color: `#00D26A` (mint green)
-- Polymarket logo: `/logos/polymarket-logo.png`  
-- Polymarket color: `#6366F1` (deep blue/indigo)
-
-**Implementation using clip-path:**
-
-```tsx
-// Card Footer
-<div className="relative h-12 overflow-hidden">
-  {/* Background color layer - diagonal */}
-  <div 
-    className="absolute inset-0"
-    style={{ 
-      backgroundColor: platform === 'kalshi' ? '#00D26A' : '#6366F1',
-      clipPath: 'polygon(30% 0, 100% 0, 100% 100%, 0% 100%)'
-    }}
-  />
-  
-  {/* Logo on left side */}
-  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 z-10">
-    <Image 
-      src={platform === 'kalshi' ? '/logos/kalshi-logo.png' : '/logos/polymarket-logo.png'}
-      alt={platform}
-      width={24}
-      height={24}
-      className="object-contain"
-    />
-    <span className="text-sm font-medium text-gray-700 capitalize">{platform}</span>
-  </div>
-</div>
-```
-
-**Alternative using linear-gradient:**
-
-```tsx
-<div 
-  className="h-12 flex items-center px-3"
-  style={{
-    background: platform === 'kalshi' 
-      ? 'linear-gradient(115deg, white 35%, #00D26A 35%)'
-      : 'linear-gradient(115deg, white 35%, #6366F1 35%)'
-  }}
->
-  <Image src={`/logos/${platform}-logo.png`} ... />
-  <span>{platform}</span>
-</div>
-```
-
----
-
-### ISSUE 3: Sidebar - Trial Days / Tier Badge NOT Showing
-
-**Current:** Shows "NO ACTIVE PLAN - Start your 7-day free trial" even for subscribed users
-**Wanted:** Dynamic badge based on user state
-
-**Logic:**
-
-```tsx
-// In Sidebar.tsx - bottom section
-
-{user.subscription_status === 'TRIALING' && user.trial_end ? (
-  // ON TRIAL - Show countdown
-  <div className="mx-3 mb-4 p-3 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl">
-    <div className="flex items-center gap-2">
-      <span className="text-lg">⏳</span>
-      <div>
-        <p className="text-sm font-semibold text-amber-800">
-          {daysLeft} day{daysLeft !== 1 ? 's' : ''} left on trial
-        </p>
-        <p className="text-xs text-amber-600">{user.subscription_tier} plan</p>
-      </div>
-    </div>
-  </div>
-) : user.subscription_tier && user.subscription_tier !== 'FREE' && user.subscription_status === 'ACTIVE' ? (
-  // PAID USER - Show tier ribbon with bubbles for PREMIUM/PRO
-  <TierBadge tier={user.subscription_tier} />
-) : (
-  // FREE/NO SUBSCRIPTION - Show upgrade prompt
-  <Link href="/settings" className="mx-3 mb-4 block p-3 bg-primary-500 text-white rounded-xl text-center">
-    🚀 Start your 7-day free trial
-  </Link>
-)}
-```
-
-**Calculate days left:**
-```tsx
-const daysLeft = user.trial_end 
-  ? Math.max(0, Math.ceil((new Date(user.trial_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-  : 0
-```
-
----
-
-### ISSUE 4: Settings Page - Current Plan Gold Sparkles NOT Working
-
-**Current:** All plan cards look the same, no indication of current plan
-**Wanted:** Current plan highlighted with gold border, sparkle animation, and "YOU" badge
-
-**Implementation:**
-
-```tsx
-// settings/page.tsx
-
-{tiers.map((tier) => {
-  const isCurrentPlan = user?.subscription_tier?.toUpperCase() === tier.id.toUpperCase()
-  
   return (
-    <div key={tier.id} className="relative">
-      {/* Sparkle container for current plan */}
-      {isCurrentPlan && <SparkleEffect />}
-      
-      <div className={`relative p-6 rounded-2xl border-2 transition-all ${
-        isCurrentPlan 
-          ? 'border-yellow-400 bg-gradient-to-b from-yellow-50 to-white shadow-[0_0_30px_rgba(255,215,0,0.3)]' 
-          : 'border-gray-200 bg-white'
-      }`}>
+    <Link href={`/insights/${insight.id}`}>
+      {/* Container with padding for floating image */}
+      <div className="relative pt-10 mt-8">
         
-        {/* "YOU" Badge for current plan */}
-        {isCurrentPlan && (
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-            <span className="bg-gradient-to-r from-yellow-400 to-amber-500 text-white text-xs font-bold px-4 py-1 rounded-full shadow-lg">
-              ✨ YOU
-            </span>
+        {/* Floating Circular Image */}
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20">
+          <div className={`w-16 h-16 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gradient-to-br ${platform.gradient}`}>
+            {insight.image_url ? (
+              <Image
+                src={insight.image_url}
+                alt=""
+                width={64}
+                height={64}
+                className="object-cover w-full h-full"
+                unoptimized
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-white text-xl font-bold">
+                {insight.market_title?.charAt(0) || '?'}
+              </div>
+            )}
           </div>
-        )}
-        
-        {/* Plan content */}
-        <h3>{tier.name}</h3>
-        <p>${tier.price}/month</p>
-        {/* features... */}
-        
-        {/* Button - CONDITIONAL */}
-        {isCurrentPlan ? (
-          <button disabled className="w-full py-3 bg-gray-100 text-gray-400 rounded-lg cursor-not-allowed">
-            Current Plan
-          </button>
-        ) : (
-          <button onClick={() => handlePlanChange(tier.id)} className="w-full py-3 bg-primary-600 text-white rounded-lg">
-            {getTierLevel(tier.id) > getTierLevel(user?.subscription_tier) ? 'Upgrade' : 'Switch'}
-          </button>
-        )}
+        </div>
+
+        {/* Card */}
+        <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow cursor-pointer border border-gray-100 overflow-hidden">
+          
+          {/* Card Body */}
+          <div className="px-4 pt-8 pb-4">
+            {/* Category Badge - centered */}
+            <div className="flex justify-center mb-2">
+              {insight.category && (
+                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                  {insight.category}
+                </span>
+              )}
+            </div>
+
+            {/* Title */}
+            <h3 className="font-semibold text-gray-900 text-center mb-2 line-clamp-2">
+              {insight.market_title}
+            </h3>
+
+            {/* Summary */}
+            <p className="text-sm text-gray-600 mb-4 line-clamp-3 text-center">
+              {insight.summary}
+            </p>
+
+            {/* Odds */}
+            {insight.current_odds && (
+              <div className="flex items-center gap-4 mb-3">
+                <div className="flex-1 bg-green-50 rounded-lg p-2 text-center">
+                  <p className="text-xs text-green-600">Yes</p>
+                  <p className="text-lg font-bold text-green-700">
+                    {(insight.current_odds.yes * 100).toFixed(0)}%
+                  </p>
+                </div>
+                <div className="flex-1 bg-red-50 rounded-lg p-2 text-center">
+                  <p className="text-xs text-red-600">No</p>
+                  <p className="text-lg font-bold text-red-700">
+                    {(insight.current_odds.no * 100).toFixed(0)}%
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Movement */}
+            {insight.recent_movement && (
+              <div className={`text-center text-sm font-medium ${movementColor} mb-2`}>
+                {insight.recent_movement}
+              </div>
+            )}
+
+            {/* Volume Note */}
+            {insight.volume_note && (
+              <p className="text-xs text-gray-500 text-center">{insight.volume_note}</p>
+            )}
+          </div>
+
+          {/* DIAGONAL FOOTER WITH PLATFORM LOGO */}
+          <div className="relative h-12 overflow-hidden">
+            {/* Diagonal gradient background */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `linear-gradient(115deg, white 0%, white 40%, ${platform.color} 40%, ${platform.color} 100%)`,
+              }}
+            />
+            
+            {/* Platform logo and name on left */}
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 z-10">
+              <Image
+                src={platform.logo}
+                alt={insight.platform}
+                width={20}
+                height={20}
+                className="object-contain"
+              />
+              <span className="text-sm font-medium text-gray-700 capitalize">
+                {insight.platform}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </Link>
   )
-})}
+}
 ```
 
-**SparkleEffect component:**
+**ALSO ADD this import at the top of the file (after existing imports):**
 
 ```tsx
-function SparkleEffect() {
-  const containerRef = useRef<HTMLDivElement>(null)
+import Image from 'next/image'
+```
+
+---
+
+## PROBLEM 2: Sidebar Shows "NO ACTIVE PLAN" for Subscribed Users
+
+**File:** `frontend/src/components/Sidebar.tsx`
+
+**Issue:** The subscription_status comparison might be failing due to case sensitivity. The API returns uppercase ('TRIALING', 'ACTIVE') but code checks lowercase.
+
+**FIX:** Find the tier badge section (around line 72) and replace the entire `{(() => {` block with:
+
+```tsx
+{(() => {
+  // Normalize to lowercase for comparison
+  const status = user?.subscription_status?.toLowerCase()
+  const tier = user?.subscription_tier?.toLowerCase()
   
+  const isTrialing = status === 'trialing'
+  const isActive = status === 'active'
+  const hasTier = !!tier && tier !== 'free'
+
+  // Calculate days left for trial
+  const trialEnd = user?.trial_end_date || user?.trial_end
+  const daysLeft = trialEnd
+    ? Math.max(0, Math.ceil((new Date(trialEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0
+
+  console.log('Sidebar Debug:', { status, tier, isTrialing, isActive, hasTier, daysLeft, trialEnd })
+
+  if (isTrialing && hasTier && daysLeft > 0) {
+    // On trial - show countdown
+    return (
+      <TierBadge
+        tier={tier.toUpperCase() as 'BASIC' | 'PREMIUM' | 'PRO'}
+        daysLeft={daysLeft}
+      />
+    )
+  } else if (isActive && hasTier) {
+    // Paid user - show tier badge
+    return (
+      <TierBadge tier={tier.toUpperCase() as 'BASIC' | 'PREMIUM' | 'PRO'} />
+    )
+  } else {
+    // No subscription
+    return (
+      <div className="bg-gray-800 rounded-lg p-4">
+        <p className="text-xs text-gray-400 uppercase tracking-wide">No Active Plan</p>
+        <p className="text-sm text-gray-300 mt-1">Start your 7-day free trial</p>
+        <Link
+          href="/settings"
+          className="mt-3 block text-center text-sm text-white bg-primary-600 hover:bg-primary-700 rounded-lg py-2 transition-colors"
+        >
+          🚀 Choose a Plan
+        </Link>
+      </div>
+    )
+  }
+})()}
+```
+
+---
+
+## PROBLEM 3: Settings Page - Current Plan Section Shows Wrong Info
+
+**File:** `frontend/src/app/(app)/settings/page.tsx`
+
+**Issue:** Same case sensitivity problem. Also "Current Plan" card shows wrong status.
+
+**FIX 1:** Find the "Current Plan" card section (around line 130) and update the conditions:
+
+```tsx
+<div className="card">
+  <h2 className="text-lg font-semibold text-gray-900 mb-4">Current Plan</h2>
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-4">
+      <div className={clsx(
+        'p-3 rounded-lg',
+        (user?.subscription_status?.toLowerCase() === 'active' || user?.subscription_status?.toLowerCase() === 'trialing')
+          ? 'bg-primary-100' 
+          : 'bg-gray-100'
+      )}>
+        <CreditCard className={clsx(
+          'w-6 h-6',
+          (user?.subscription_status?.toLowerCase() === 'active' || user?.subscription_status?.toLowerCase() === 'trialing')
+            ? 'text-primary-600' 
+            : 'text-gray-400'
+        )} />
+      </div>
+      <div>
+        <p className="font-medium text-gray-900">
+          {user?.subscription_tier
+            ? `${user.subscription_tier.charAt(0).toUpperCase() + user.subscription_tier.slice(1)} Plan`
+            : 'No Active Plan'}
+        </p>
+        <p className="text-sm text-gray-500">
+          {user?.subscription_status?.toLowerCase() === 'trialing'
+            ? `Free trial - ${Math.max(0, Math.ceil((new Date(user.trial_end_date || user.trial_end || '').getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days left`
+            : user?.subscription_status?.toLowerCase() === 'active'
+              ? 'Active subscription'
+              : 'Start a 7-day free trial below'}
+        </p>
+      </div>
+    </div>
+    {(user?.subscription_status?.toLowerCase() === 'active' || user?.subscription_status?.toLowerCase() === 'trialing') && (
+      <button
+        onClick={handleManageSubscription}
+        disabled={loading === 'portal'}
+        className="btn-secondary flex items-center gap-2"
+      >
+        {loading === 'portal' && <Loader2 className="w-4 h-4 animate-spin" />}
+        <ExternalLink className="w-4 h-4" />
+        Manage Billing
+      </button>
+    )}
+  </div>
+</div>
+```
+
+**FIX 2:** In the plans.map section, update the conditions (around line 170):
+
+```tsx
+{plans.map((plan) => {
+  // NORMALIZE TO LOWERCASE
+  const userStatus = user?.subscription_status?.toLowerCase()
+  const userTier = user?.subscription_tier?.toLowerCase()
+  
+  const isTrialing = userStatus === 'trialing'
+  const isActive = userStatus === 'active'
+  const isCurrent = (isActive || isTrialing) && plan.id.toLowerCase() === userTier
+  const hasAnySubscription = isActive || isTrialing
+
+  // ... rest of the code stays the same but uses these normalized variables
+```
+
+---
+
+## PROBLEM 4: SparkleCard Animation Not Working
+
+**File:** `frontend/src/components/SparkleCard.tsx`
+
+**FIX:** Replace entire file with:
+
+```tsx
+'use client'
+
+import { useEffect, useRef } from 'react'
+
+interface SparkleCardProps {
+  children: React.ReactNode
+  active?: boolean
+  className?: string
+}
+
+export default function SparkleCard({ children, active = false, className = '' }: SparkleCardProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
-    if (!containerRef.current) return
-    
+    if (!active || !containerRef.current) return
+
     const container = containerRef.current
-    const interval = setInterval(() => {
+    
+    const createSparkle = () => {
+      if (!container) return
+      
       const sparkle = document.createElement('div')
       const x = Math.random() * container.offsetWidth
-      const size = 4 + Math.random() * 4
+      const size = 4 + Math.random() * 6
       
       sparkle.style.cssText = `
         position: absolute;
@@ -237,26 +328,45 @@ function SparkleEffect() {
         bottom: 0;
         width: ${size}px;
         height: ${size}px;
-        background: radial-gradient(circle, #ffd700, transparent);
+        background: radial-gradient(circle, #ffd700 0%, #ffec80 50%, transparent 70%);
         border-radius: 50%;
         pointer-events: none;
-        animation: sparkle-rise 3s ease-out forwards;
-        box-shadow: 0 0 ${size}px #ffd700;
+        z-index: 50;
+        box-shadow: 0 0 ${size * 2}px #ffd700;
+        animation: sparkle-float ${2 + Math.random() * 2}s ease-out forwards;
       `
       
       container.appendChild(sparkle)
-      setTimeout(() => sparkle.remove(), 3000)
-    }, 150)
+      setTimeout(() => sparkle.remove(), 4000)
+    }
     
+    // Create initial sparkles
+    for (let i = 0; i < 5; i++) {
+      setTimeout(createSparkle, i * 200)
+    }
+    
+    const interval = setInterval(createSparkle, 150)
     return () => clearInterval(interval)
-  }, [])
-  
+  }, [active])
+
   return (
-    <div ref={containerRef} className="absolute inset-0 overflow-visible pointer-events-none z-10">
+    <div
+      ref={containerRef}
+      className={`relative ${className}`}
+      style={{ overflow: 'visible' }}
+    >
+      {children}
+      
       <style jsx global>{`
-        @keyframes sparkle-rise {
-          0% { transform: translateY(0) scale(1); opacity: 1; }
-          100% { transform: translateY(-150px) scale(0); opacity: 0; }
+        @keyframes sparkle-float {
+          0% {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(-150px) scale(0);
+            opacity: 0;
+          }
         }
       `}</style>
     </div>
@@ -266,124 +376,50 @@ function SparkleEffect() {
 
 ---
 
-### ISSUE 5: "Start Free Trial" Button Should NOT Show for Existing Subscribers
+## PROBLEM 5: Button Text Logic
 
-**Current:** All plans show "Start Free Trial" button
-**Wanted:** Button text/action changes based on user state
+**File:** `frontend/src/app/(app)/settings/page.tsx`
 
-**Logic:**
+In the `getButtonText` function, make sure it uses normalized lowercase values:
 
 ```tsx
-// Determine button state
-const userTier = user?.subscription_tier?.toUpperCase()
-const userStatus = user?.subscription_status?.toUpperCase()
-const isOnTrial = userStatus === 'TRIALING'
-const isPaying = userStatus === 'ACTIVE' && !isOnTrial
-const isCurrentPlan = userTier === tier.id.toUpperCase()
-const hasHadTrial = user?.trial_start != null  // User already used their trial
-
-// Button rendering
-{isCurrentPlan ? (
-  <button disabled className="bg-gray-100 text-gray-400 cursor-not-allowed">
-    Current Plan
-  </button>
-) : isOnTrial ? (
-  // ON TRIAL - can switch plans, trial continues
-  <button onClick={() => handlePlanSwitch(tier.id)} className="bg-primary-600 text-white">
-    Switch to {tier.name}
-  </button>
-) : isPaying ? (
-  // PAYING - upgrade/downgrade
-  <button onClick={() => handlePlanChange(tier.id)} className="bg-primary-600 text-white">
-    {getTierLevel(tier.id) > getTierLevel(userTier) ? 'Upgrade' : 'Downgrade'} to {tier.name}
-  </button>
-) : hasHadTrial ? (
-  // USED TRIAL BEFORE - no more free trial
-  <button onClick={() => handleSubscribe(tier.id)} className="bg-primary-600 text-white">
-    Subscribe to {tier.name}
-  </button>
-) : (
-  // NEW USER - can start trial
-  <button onClick={() => handleStartTrial(tier.id)} className="bg-primary-600 text-white">
-    Start Free Trial
-  </button>
-)}
-```
-
----
-
-## FILES TO MODIFY
-
-### Frontend:
-
-1. **`frontend/src/components/MarketCard.tsx`** - Create/update with:
-   - Overlapping circular image at top
-   - Diagonal footer with platform logo and brand color
-   - Use `/logos/kalshi-logo.png` and `/logos/polymarket-logo.png`
-
-2. **`frontend/src/components/Sidebar.tsx`** - Update bottom section:
-   - Show trial countdown if `subscription_status === 'TRIALING'`
-   - Show tier badge if paid (`subscription_status === 'ACTIVE'`)
-   - Only show "Start free trial" if no subscription
-
-3. **`frontend/src/app/(app)/settings/page.tsx`** - Update plan cards:
-   - Add SparkleEffect component for current plan
-   - Add "YOU" badge on current plan
-   - Gold border + glow on current plan
-   - Conditional button text (not "Start Free Trial" for existing subscribers)
-
-4. **`frontend/src/components/SparkleEffect.tsx`** - Create sparkle animation component
-
-### Backend:
-
-5. **`app/services/kalshi_client.py`** - Extract `image_url` from market/event data
-
-6. **`app/services/polymarket_client.py`** - Extract `image` from event data
-
-7. **`app/models/market.py`** - Add `image_url` column if not exists
-
----
-
-## PLATFORM COLORS REFERENCE
-
-```typescript
-const PLATFORMS = {
-  kalshi: {
-    color: '#00D26A',      // Mint green
-    logo: '/logos/kalshi-logo.png',
-  },
-  polymarket: {
-    color: '#6366F1',      // Deep indigo/blue
-    logo: '/logos/polymarket-logo.png',
-  },
+const getButtonText = () => {
+  if (isCurrent) return 'Current Plan'
+  if (!hasAnySubscription) return 'Start Free Trial'
+  if (isTrialing) return `Switch to ${plan.name}`
+  if (isUpgrade) return `Upgrade to ${plan.name}`
+  return `Downgrade to ${plan.name}`
 }
 ```
 
 ---
 
-## VISUAL REFERENCE
+## VERIFICATION CHECKLIST
 
-**Card Layout:**
-```
-              ┌──────┐
-              │ IMG  │  ← Circular image, overlaps top by 50%
-         ┌────┴──────┴────┐
-         │                │
-         │  Market Title  │
-         │                │
-         │  Yes: 65%      │
-         │  ████████░░    │
-         │                │
-         ├────────────────┤
-         │[🟢]    ▓▓▓▓▓▓▓▓│  ← Logo left, diagonal color fill right
-         └────────────────┘
-```
+After making changes, verify in browser console:
 
-**Diagonal Footer (using clip-path):**
-```
-┌────────────────────────────────┐
-│ [LOGO] Kalshi      ████████████│  ← White left, green diagonal right
-└────────────────────────────────┘
-                     ↑
-              clip-path: polygon(40% 0, 100% 0, 100% 100%, 20% 100%)
-```
+1. Open browser DevTools (F12)
+2. Go to Console tab
+3. Look for "Sidebar Debug:" log
+4. It should show: `{ status: 'trialing', tier: 'basic', isTrialing: true, ... }`
+
+If `status` shows `'TRIALING'` (uppercase), that confirms the case sensitivity issue.
+
+---
+
+## FILES TO MODIFY (IN ORDER)
+
+1. `frontend/src/components/SparkleCard.tsx` - Replace entire file
+2. `frontend/src/components/Sidebar.tsx` - Fix tier badge logic (normalize case)
+3. `frontend/src/app/(app)/settings/page.tsx` - Fix current plan + button logic (normalize case)
+4. `frontend/src/app/(app)/opportunities/page.tsx` - Replace InsightCard with new design (add Image import)
+
+---
+
+## QUICK TEST
+
+After deploying, the user (who has BASIC tier on trial) should see:
+- **Sidebar:** "X days left on trial - BASIC plan" (not "NO ACTIVE PLAN")
+- **Settings Current Plan:** "Basic Plan - Free trial - X days left" (not "No Active Plan")
+- **Settings Plan Cards:** BASIC card should have gold border + sparkles + "YOU" badge
+- **AI Highlights:** Cards should have circular image at top + diagonal colored footer

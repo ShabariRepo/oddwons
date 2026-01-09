@@ -63,8 +63,8 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
-  const currentTier = user?.subscription_tier
-  const hasSubscription = currentTier && user?.subscription_status === 'active'
+  const currentTier = user?.subscription_tier?.toLowerCase()
+  const hasSubscription = currentTier && user?.subscription_status?.toLowerCase() === 'active'
 
   const handleUpgrade = async (planId: string) => {
 
@@ -182,29 +182,33 @@ export default function SettingsPage() {
               <div className="flex items-center gap-4">
                 <div className={clsx(
                   'p-3 rounded-lg',
-                  hasSubscription ? 'bg-primary-100' : 'bg-gray-100'
+                  (user?.subscription_status?.toLowerCase() === 'active' || user?.subscription_status?.toLowerCase() === 'trialing')
+                    ? 'bg-primary-100'
+                    : 'bg-gray-100'
                 )}>
                   <CreditCard className={clsx(
                     'w-6 h-6',
-                    hasSubscription ? 'text-primary-600' : 'text-gray-400'
+                    (user?.subscription_status?.toLowerCase() === 'active' || user?.subscription_status?.toLowerCase() === 'trialing')
+                      ? 'text-primary-600'
+                      : 'text-gray-400'
                   )} />
                 </div>
                 <div>
                   <p className="font-medium text-gray-900">
-                    {hasSubscription
-                      ? `${currentTier!.charAt(0).toUpperCase() + currentTier!.slice(1)} Plan`
+                    {currentTier
+                      ? `${currentTier.charAt(0).toUpperCase() + currentTier.slice(1)} Plan`
                       : 'No Active Plan'}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {user?.subscription_status === 'trialing'
-                      ? 'Free trial active'
-                      : user?.subscription_status === 'active'
+                    {user?.subscription_status?.toLowerCase() === 'trialing'
+                      ? `Free trial - ${Math.max(0, Math.ceil((new Date(user.trial_end_date || '').getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days left`
+                      : user?.subscription_status?.toLowerCase() === 'active'
                         ? 'Active subscription'
                         : 'Start a 7-day free trial below'}
                   </p>
                 </div>
               </div>
-              {hasSubscription && (
+              {(user?.subscription_status?.toLowerCase() === 'active' || user?.subscription_status?.toLowerCase() === 'trialing') && (
                 <button
                   onClick={handleManageSubscription}
                   disabled={loading === 'portal'}
@@ -221,8 +225,8 @@ export default function SettingsPage() {
           <h2 className="text-lg font-semibold text-gray-900">Available Plans</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {plans.map((plan) => {
-              const isTrialing = user?.subscription_status === 'trialing'
-              const isActive = user?.subscription_status === 'active'
+              const isTrialing = user?.subscription_status?.toLowerCase() === 'trialing'
+              const isActive = user?.subscription_status?.toLowerCase() === 'active'
               const isCurrent = (isActive || isTrialing) && plan.id === currentTier
               const hasAnySubscription = isActive || isTrialing
 
