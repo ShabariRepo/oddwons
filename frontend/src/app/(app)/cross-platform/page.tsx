@@ -10,124 +10,101 @@ import GameCard from '@/components/GameCard'
 import { PLATFORMS } from '@/lib/platforms'
 
 function MatchCard({ match }: { match: CrossPlatformMatch }) {
-  const gapColor = Math.abs(match.price_gap_cents) >= 5
-    ? 'text-green-600 bg-green-50'
-    : Math.abs(match.price_gap_cents) >= 2
-    ? 'text-yellow-600 bg-yellow-50'
-    : 'text-gray-600 bg-gray-50'
-
-  const higherPlatform = match.gap_direction === 'kalshi_higher' ? 'Kalshi' : 'Polymarket'
+  const kalshiPercent = match.kalshi_yes_price ? Math.round(match.kalshi_yes_price) : 50
+  const polyPercent = match.polymarket_yes_price ? Math.round(match.polymarket_yes_price) : 50
+  const gapColor = Math.abs(match.price_gap_cents) >= 5 ? 'text-green-600' : 'text-yellow-600'
 
   return (
-    <GameCard className="card hover:shadow-md transition-shadow">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Scale className="w-4 h-4 text-primary-500" />
-          {match.category && (
-            <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-              {match.category}
+    <div className="relative pt-10 mt-8">
+      {/* Floating Circle - Both logos for cross-platform */}
+      <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20">
+        <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br from-green-400 via-blue-500 to-purple-600">
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="flex items-center -space-x-2">
+              <Image src="/logos/kalshi-logo.png" alt="K" width={28} height={28} className="rounded-full border-2 border-white bg-white" />
+              <Image src="/logos/polymarket-logo.png" alt="P" width={28} height={28} className="rounded-full border-2 border-white bg-white" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Card */}
+      <GameCard className="bg-white rounded-xl shadow-sm cursor-pointer border border-gray-100 overflow-hidden" showWatermark={false}>
+        <div className="px-4 pt-12 pb-4">
+          {/* Category + Gap */}
+          <div className="flex items-center justify-between mb-2">
+            {match.category && (
+              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                {match.category}
+              </span>
+            )}
+            <span className={`text-sm font-bold ${gapColor}`}>
+              {match.price_gap_cents.toFixed(1)}¢ gap
             </span>
-          )}
-        </div>
-        <span className={`px-2 py-1 rounded text-xs font-medium ${gapColor}`}>
-          {match.price_gap_cents.toFixed(1)}¢ gap
-        </span>
-      </div>
-
-      {/* Topic */}
-      <h3 className="font-medium text-gray-900 mb-4">
-        {match.topic}
-      </h3>
-
-      {/* Price Comparison */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className={clsx(
-          'rounded-lg p-3',
-          match.gap_direction === 'kalshi_higher' ? 'bg-blue-100' : 'bg-blue-50'
-        )}>
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-1.5">
-              <Image
-                src={PLATFORMS.kalshi.logo}
-                alt="Kalshi"
-                width={14}
-                height={14}
-              />
-              <p className="text-xs text-blue-600 font-medium">Kalshi</p>
-            </div>
-            {match.gap_direction === 'kalshi_higher' && (
-              <TrendingUp className="w-3 h-3 text-blue-600" />
-            )}
           </div>
-          <p className="text-2xl font-bold text-blue-800">
-            {match.kalshi_yes_price?.toFixed(0)}¢
-          </p>
-          <p className="text-xs text-blue-600 mt-1">
-            ${((match.kalshi_volume || 0) / 1000).toFixed(0)}K volume
-          </p>
-        </div>
 
-        <div className={clsx(
-          'rounded-lg p-3',
-          match.gap_direction === 'polymarket_higher' ? 'bg-purple-100' : 'bg-purple-50'
-        )}>
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-1.5">
-              <Image
-                src={PLATFORMS.polymarket.logo}
-                alt="Polymarket"
-                width={14}
-                height={14}
-              />
-              <p className="text-xs text-purple-600 font-medium">Polymarket</p>
+          {/* Topic */}
+          <h3 className="font-semibold text-gray-900 text-center mb-3 line-clamp-2">
+            {match.topic}
+          </h3>
+
+          {/* Platform price boxes */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-green-50 rounded-lg py-2 px-3 text-center border border-green-100">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <Image src="/logos/kalshi-logo.png" alt="K" width={14} height={14} />
+                <span className="text-xs text-green-700 font-medium">Kalshi</span>
+              </div>
+              <p className="text-2xl font-bold text-green-700">{kalshiPercent}%</p>
             </div>
-            {match.gap_direction === 'polymarket_higher' && (
-              <TrendingUp className="w-3 h-3 text-purple-600" />
-            )}
+            <div className="bg-indigo-50 rounded-lg py-2 px-3 text-center border border-indigo-100">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <Image src="/logos/polymarket-logo.png" alt="P" width={14} height={14} />
+                <span className="text-xs text-indigo-700 font-medium">Polymarket</span>
+              </div>
+              <p className="text-2xl font-bold text-indigo-700">{polyPercent}%</p>
+            </div>
           </div>
-          <p className="text-2xl font-bold text-purple-800">
-            {match.polymarket_yes_price?.toFixed(0)}¢
-          </p>
-          <p className="text-xs text-purple-600 mt-1">
-            ${((match.polymarket_volume || 0) / 1000).toFixed(0)}K volume
-          </p>
-        </div>
-      </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <div className="text-xs text-gray-500">
-          <span className="font-medium">{higherPlatform}</span> priced higher
+          {/* Volume */}
+          <p className="text-sm text-gray-500 text-center">
+            ${(match.combined_volume / 1000).toFixed(0)}K combined
+          </p>
         </div>
-        <div className="text-xs text-gray-500">
-          ${(match.combined_volume / 1000).toFixed(0)}K combined
-        </div>
-      </div>
 
-      {/* Match quality indicator */}
-      {match.similarity_score && (
-        <div className="mt-2 text-xs text-gray-400">
-          {(match.similarity_score * 100).toFixed(0)}% match confidence
+        {/* Diagonal Footer - Split colors */}
+        <div className="relative h-10 overflow-hidden">
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(115deg, #00D26A 0%, #00D26A 50%, #6366F1 50%, #6366F1 100%)',
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <span className="text-white text-xs font-medium">Cross-Platform Match</span>
+          </div>
         </div>
-      )}
-    </GameCard>
+      </GameCard>
+    </div>
   )
 }
 
 function MatchCardSkeleton() {
   return (
-    <div className="card animate-pulse">
-      <div className="flex justify-between mb-3">
-        <div className="h-5 w-20 bg-gray-200 rounded" />
-        <div className="h-5 w-16 bg-gray-200 rounded" />
+    <div className="relative pt-10 mt-8">
+      <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20">
+        <div className="w-20 h-20 rounded-full bg-gray-200 animate-pulse border-4 border-white shadow-xl" />
       </div>
-      <div className="h-6 w-full bg-gray-200 rounded mb-4" />
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="h-24 bg-gray-200 rounded" />
-        <div className="h-24 bg-gray-200 rounded" />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 pt-12 pb-4 space-y-3">
+          <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-16 bg-gray-200 rounded animate-pulse" />
+            <div className="h-16 bg-gray-200 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="h-10 bg-gray-100" />
       </div>
-      <div className="h-4 w-full bg-gray-200 rounded" />
     </div>
   )
 }

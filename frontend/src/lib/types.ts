@@ -10,6 +10,7 @@ export interface Market {
   liquidity?: number
   status: string
   close_time?: string
+  image_url?: string
   created_at: string
   updated_at: string
 }

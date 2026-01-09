@@ -21,6 +21,12 @@ function MarketRow({ market }: { market: Market }) {
   const yesPrice = market.yes_price ? (market.yes_price * 100).toFixed(1) : '-'
   const noPrice = market.no_price ? (market.no_price * 100).toFixed(1) : '-'
 
+  // Platform colors
+  const platformColor = market.platform === 'kalshi' ? '#00D26A' : '#6366F1'
+  const platformLogo = market.platform === 'kalshi'
+    ? '/logos/kalshi-logo.png'
+    : '/logos/polymarket-logo.png'
+
   const formatVolume = (vol?: number) => {
     if (!vol) return '-'
     if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`
@@ -41,20 +47,25 @@ function MarketRow({ market }: { market: Market }) {
   }
 
   return (
-    <tr className="hover:bg-gray-50 cursor-pointer" onClick={handleRowClick}>
+    <tr
+      className="hover:bg-gray-50 cursor-pointer relative overflow-hidden"
+      onClick={handleRowClick}
+    >
       <td className="px-4 py-4">
         <div className="flex items-start gap-3">
-          <div className="flex items-center gap-1.5 shrink-0">
+          {/* Platform logo + vertical color bar */}
+          <div className="relative flex items-center gap-2 shrink-0">
+            <div
+              className="w-1 h-10 rounded-full"
+              style={{ backgroundColor: platformColor }}
+            />
             <Image
-              src={PLATFORMS[market.platform as keyof typeof PLATFORMS]?.logo || PLATFORMS.kalshi.logo}
-              alt={PLATFORMS[market.platform as keyof typeof PLATFORMS]?.name || market.platform}
-              width={18}
-              height={18}
+              src={platformLogo}
+              alt={market.platform}
+              width={20}
+              height={20}
               className="rounded-sm"
             />
-            <span className="text-xs text-gray-500 hidden sm:inline">
-              {PLATFORMS[market.platform as keyof typeof PLATFORMS]?.name || market.platform}
-            </span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900 truncate">
@@ -85,9 +96,16 @@ function MarketRow({ market }: { market: Market }) {
           {market.status}
         </span>
       </td>
-      <td className="px-4 py-4 text-right">
+      {/* Diagonal gradient on the right side of row */}
+      <td className="px-4 py-4 text-right relative">
+        <div
+          className="absolute right-0 top-0 bottom-0 w-16 pointer-events-none"
+          style={{
+            background: `linear-gradient(115deg, transparent 0%, transparent 30%, ${platformColor}20 30%, ${platformColor}40 100%)`,
+          }}
+        />
         <button
-          className="text-gray-400 hover:text-gray-600"
+          className="text-gray-400 hover:text-gray-600 relative z-10"
           onClick={handleExternalClick}
           title="Open on platform"
         >
