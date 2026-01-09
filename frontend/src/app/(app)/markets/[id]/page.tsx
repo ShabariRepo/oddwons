@@ -153,9 +153,9 @@ export default function MarketDetailPage() {
       </div>
 
       {/* Additional Stats */}
-      {(market.price_change_7d !== undefined || market.volume_rank !== undefined) && (
+      {(market.price_change_7d != null || market.volume_rank != null) && (
         <div className="grid grid-cols-2 gap-4">
-          {market.price_change_7d !== undefined && (
+          {market.price_change_7d != null && (
             <div className="card">
               <p className="text-sm text-gray-500">7-Day Change</p>
               <p className={`text-xl font-bold ${
@@ -165,7 +165,7 @@ export default function MarketDetailPage() {
               </p>
             </div>
           )}
-          {market.volume_rank !== undefined && market.volume_rank !== null && (
+          {market.volume_rank != null && (
             <div className="card">
               <p className="text-sm text-gray-500">Volume Rank (Category)</p>
               <p className="text-xl font-bold text-gray-900">
