@@ -60,7 +60,16 @@ export default function GameCard({ children, className = '', showWatermark = tru
       ref={cardRef}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`relative overflow-hidden transition-all duration-200 ${isHovered ? 'animate-card-shake' : ''} ${className}`}
+      className={`relative overflow-visible transition-all duration-300 ease-out ${
+        isHovered
+          ? 'transform -translate-y-2 scale-[1.02]'
+          : ''
+      } ${className}`}
+      style={{
+        boxShadow: isHovered
+          ? '0 20px 40px -10px rgba(0, 0, 0, 0.15), 0 10px 20px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+          : undefined
+      }}
     >
       {/* Logo watermark */}
       {showWatermark && (
@@ -94,23 +103,6 @@ export default function GameCard({ children, className = '', showWatermark = tru
             transform: translateY(-60px) scale(0.5);
             opacity: 0;
           }
-        }
-
-        @keyframes card-shake {
-          0%, 100% { transform: translateX(0); }
-          10% { transform: translateX(-2px) rotate(-0.5deg); }
-          20% { transform: translateX(2px) rotate(0.5deg); }
-          30% { transform: translateX(-2px) rotate(-0.5deg); }
-          40% { transform: translateX(2px) rotate(0.5deg); }
-          50% { transform: translateX(-1px); }
-          60% { transform: translateX(1px); }
-          70% { transform: translateX(-1px); }
-          80% { transform: translateX(1px); }
-          90% { transform: translateX(0); }
-        }
-
-        .animate-card-shake {
-          animation: card-shake 0.5s ease-in-out;
         }
       `}</style>
     </div>
