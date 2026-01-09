@@ -199,12 +199,12 @@ export default function LandingPage() {
             {tiers.map((tier) => (
               <div
                 key={tier.name}
-                className={`relative bg-white p-6 rounded-xl border-2 overflow-hidden ${
+                className={`relative bg-white p-6 rounded-xl border-2 ${
                   tier.popular ? 'border-primary-500 shadow-lg' : 'border-gray-100'
                 }`}
               >
                 {/* Logo watermark - centered */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+                <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none overflow-hidden rounded-xl">
                   <Image
                     src="/oddwons-logo.png"
                     alt=""
