@@ -125,7 +125,14 @@ class PolymarketClient:
         event_volume_24h = float(event.get("volume24hr", 0) or 0)
 
         # Event-level image (applies to all markets in this event)
-        event_image_url = event.get("image") or event.get("icon") or event.get("image_url")
+        event_image_url = (
+            event.get("image") or
+            event.get("icon") or
+            event.get("image_url") or
+            event.get("imageUrl") or
+            event.get("banner") or
+            event.get("thumbnail")
+        )
 
         for market in event.get("markets", [event]):
             try:

@@ -11,58 +11,106 @@ import GameCard from '@/components/GameCard'
 import { PLATFORMS } from '@/lib/platforms'
 
 function InsightCard({ insight }: { insight: AIInsight }) {
-  const platform = PLATFORMS[insight.platform as keyof typeof PLATFORMS]
+  const platformConfig = {
+    kalshi: {
+      color: '#00D26A',
+      logo: '/logos/kalshi-logo.png',
+      gradient: 'from-green-400 to-emerald-600',
+    },
+    polymarket: {
+      color: '#6366F1',
+      logo: '/logos/polymarket-logo.png',
+      gradient: 'from-indigo-400 to-purple-600',
+    },
+  }
+
+  const platform = platformConfig[insight.platform as keyof typeof platformConfig] || platformConfig.polymarket
 
   return (
     <Link href={`/insights/${insight.id}`}>
-      <GameCard className="card hover:shadow-md transition-shadow cursor-pointer">
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center gap-1.5">
-            <Image
-              src={platform?.logo || PLATFORMS.kalshi.logo}
-              alt={platform?.name || insight.platform}
-              width={16}
-              height={16}
-            />
-            <span className="text-xs text-gray-600 font-medium">
-              {platform?.name || insight.platform}
-            </span>
+      <div className="relative pt-14 mt-12">
+        {/* Floating Circular Image */}
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20">
+          <div className={`w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br ${platform.gradient}`}>
+            {insight.image_url ? (
+              <Image
+                src={insight.image_url}
+                alt=""
+                width={80}
+                height={80}
+                className="object-cover w-full h-full"
+                unoptimized
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-white text-2xl font-bold">
+                {insight.market_title?.charAt(0) || '?'}
+              </div>
+            )}
           </div>
-          {insight.category && (
-            <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-              {insight.category}
-            </span>
-          )}
         </div>
 
-        <h3 className="font-medium text-gray-900 line-clamp-2 mb-2">
-          {insight.market_title}
-        </h3>
+        {/* Card */}
+        <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow cursor-pointer border border-gray-100 overflow-hidden">
+          <div className="px-4 pt-10 pb-4">
+            {insight.category && (
+              <div className="flex justify-center mb-2">
+                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                  {insight.category}
+                </span>
+              </div>
+            )}
 
-        <p className="text-sm text-gray-600 line-clamp-3 mb-3">
-          {insight.summary}
-        </p>
+            <h3 className="font-semibold text-gray-900 text-center mb-2 line-clamp-2">
+              {insight.market_title}
+            </h3>
 
-        <div className="flex items-center justify-between text-sm">
-          {insight.implied_probability && (
-            <span className="text-primary-600 font-medium">
-              {insight.implied_probability}
-            </span>
-          )}
-          {insight.recent_movement && (
-            <span className={`${
-              insight.recent_movement.includes('+') ? 'text-green-600' :
-              insight.recent_movement.includes('-') ? 'text-red-600' : 'text-gray-500'
-            }`}>
-              {insight.recent_movement}
-            </span>
-          )}
+            <p className="text-sm text-gray-600 mb-3 line-clamp-3">
+              {insight.summary}
+            </p>
+
+            {insight.implied_probability && (
+              <p className="text-sm text-primary-600 font-medium mb-2">
+                {insight.implied_probability}
+              </p>
+            )}
+
+            {insight.recent_movement && (
+              <span className={`text-sm font-medium ${
+                insight.recent_movement.includes('+') ? 'text-green-600' :
+                insight.recent_movement.includes('-') ? 'text-red-600' : 'text-gray-500'
+              }`}>
+                {insight.recent_movement}
+              </span>
+            )}
+
+            {insight.volume_note && (
+              <p className="text-xs text-gray-500 mt-2">{insight.volume_note}</p>
+            )}
+          </div>
+
+          {/* Diagonal Footer */}
+          <div className="relative h-10 overflow-hidden">
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `linear-gradient(115deg, white 0%, white 40%, ${platform.color} 40%, ${platform.color} 100%)`,
+              }}
+            />
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 z-10">
+              <Image
+                src={platform.logo}
+                alt={insight.platform}
+                width={18}
+                height={18}
+                className="object-contain"
+              />
+              <span className="text-sm font-medium text-gray-700 capitalize">
+                {insight.platform}
+              </span>
+            </div>
+          </div>
         </div>
-
-        {insight.volume_note && (
-          <p className="text-xs text-gray-500 mt-2">{insight.volume_note}</p>
-        )}
-      </GameCard>
+      </div>
     </Link>
   )
 }

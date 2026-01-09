@@ -122,6 +122,17 @@ class KalshiClient:
             logger.error(f"Kalshi event markets error for {event_ticker}: {e}")
             raise
 
+    async def get_event_metadata(self, event_ticker: str) -> Dict[str, Any]:
+        """Fetch event metadata including image_url."""
+        client = await self._get_client()
+        try:
+            response = await client.get(f"/events/{event_ticker}/metadata")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.warning(f"Kalshi event metadata error for {event_ticker}: {e}")
+            return {}
+
     def parse_market(self, data: Dict[str, Any], event_image_url: Optional[str] = None) -> KalshiMarketData:
         """Parse raw API response into structured data.
 
@@ -185,8 +196,17 @@ class KalshiClient:
                     if not event_ticker:
                         continue
 
-                    # Extract event image URL
-                    event_image_url = event.get("image_url") or event.get("image")
+                    # Fetch event metadata to get image_url (Kalshi stores images in separate endpoint)
+                    event_image_url = None
+                    try:
+                        metadata = await self.get_event_metadata(event_ticker)
+                        event_image_url = metadata.get("image_url")
+                    except Exception as e:
+                        logger.debug(f"Could not fetch metadata for {event_ticker}: {e}")
+
+                    # Fallback to event fields if metadata failed
+                    if not event_image_url:
+                        event_image_url = event.get("image_url") or event.get("image")
 
                     # Get markets for this event
                     try:

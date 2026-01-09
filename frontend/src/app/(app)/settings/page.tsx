@@ -200,11 +200,22 @@ export default function SettingsPage() {
                       : 'No Active Plan'}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {user?.subscription_status?.toLowerCase() === 'trialing'
-                      ? `Free trial - ${Math.max(0, Math.ceil((new Date(user.trial_end_date || '').getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days left`
-                      : user?.subscription_status?.toLowerCase() === 'active'
-                        ? 'Active subscription'
-                        : 'Start a 7-day free trial below'}
+                    {(() => {
+                      const status = user?.subscription_status?.toLowerCase()
+                      if (status === 'trialing') {
+                        const trialEnd = user?.trial_end_date || user?.trial_end || user?.subscription_end
+                        if (trialEnd) {
+                          const endDate = new Date(trialEnd)
+                          if (!isNaN(endDate.getTime())) {
+                            const days = Math.max(0, Math.ceil((endDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+                            return `Free trial - ${days} days left`
+                          }
+                        }
+                        return 'Free trial active'
+                      }
+                      if (status === 'active') return 'Active subscription'
+                      return 'Start a 7-day free trial below'
+                    })()}
                   </p>
                 </div>
               </div>

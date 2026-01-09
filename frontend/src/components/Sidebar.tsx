@@ -98,7 +98,6 @@ export function Sidebar() {
       {/* Tier Badge */}
       <div className="p-4 border-t border-gray-800">
         {(() => {
-          // Normalize to lowercase for comparison
           const status = user?.subscription_status?.toLowerCase()
           const userTier = user?.subscription_tier?.toLowerCase()
 
@@ -106,16 +105,19 @@ export function Sidebar() {
           const isActive = status === 'active'
           const hasTier = !!userTier && userTier !== 'free'
 
-          // Calculate days left for trial
-          const trialEnd = user?.trial_end_date
-          const daysLeft = trialEnd
-            ? Math.max(0, Math.ceil((new Date(trialEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-            : 0
+          // Calculate days left - try multiple field names, default to 7
+          const trialEndRaw = user?.trial_end_date || user?.trial_end || user?.subscription_end
+          let daysLeft = 7
 
-          console.log('Sidebar Debug:', { status, userTier, isTrialing, isActive, hasTier, daysLeft, trialEnd })
+          if (trialEndRaw) {
+            const trialEndDate = new Date(trialEndRaw)
+            if (!isNaN(trialEndDate.getTime())) {
+              daysLeft = Math.max(1, Math.ceil((trialEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+            }
+          }
 
-          if (isTrialing && hasTier && daysLeft > 0) {
-            // On trial - show countdown
+          // If trialing AND has a tier, ALWAYS show trial badge (removed daysLeft > 0 check)
+          if (isTrialing && hasTier) {
             return (
               <TierBadge
                 tier={userTier.toUpperCase() as 'BASIC' | 'PREMIUM' | 'PRO'}
@@ -123,12 +125,10 @@ export function Sidebar() {
               />
             )
           } else if (isActive && hasTier) {
-            // Paid user - show tier badge
             return (
               <TierBadge tier={userTier.toUpperCase() as 'BASIC' | 'PREMIUM' | 'PRO'} />
             )
           } else {
-            // No subscription
             return (
               <div className="bg-gray-800 rounded-lg p-4">
                 <p className="text-xs text-gray-400 uppercase tracking-wide">No Active Plan</p>

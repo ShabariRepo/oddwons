@@ -97,10 +97,23 @@ async def login(
     )
 
 
-@router.get("/me", response_model=UserProfile)
+@router.get("/me")
 async def get_me(user: User = Depends(get_current_user)):
     """Get current user profile."""
-    return user
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "name": user.name,
+        "is_active": user.is_active,
+        "is_verified": user.is_verified,
+        "is_admin": user.is_admin,
+        "subscription_tier": user.subscription_tier.value if user.subscription_tier else None,
+        "subscription_status": user.subscription_status.value if user.subscription_status else "inactive",
+        "subscription_end": user.subscription_end.isoformat() if user.subscription_end else None,
+        "trial_end_date": user.trial_end.isoformat() if hasattr(user, 'trial_end') and user.trial_end else None,
+        "trial_start": user.trial_start.isoformat() if hasattr(user, 'trial_start') and user.trial_start else None,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+    }
 
 
 @router.patch("/me", response_model=UserResponse)

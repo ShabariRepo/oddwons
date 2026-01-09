@@ -44,22 +44,22 @@ function InsightCard({ insight }: { insight: AIInsight }) {
   return (
     <Link href={`/insights/${insight.id}`}>
       {/* Container with padding for floating image */}
-      <div className="relative pt-10 mt-8">
+      <div className="relative pt-14 mt-12">
 
         {/* Floating Circular Image */}
-        <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20">
-          <div className={`w-16 h-16 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gradient-to-br ${platform.gradient}`}>
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20">
+          <div className={`w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br ${platform.gradient}`}>
             {insight.image_url ? (
               <Image
                 src={insight.image_url}
                 alt=""
-                width={64}
-                height={64}
+                width={80}
+                height={80}
                 className="object-cover w-full h-full"
                 unoptimized
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-white text-xl font-bold">
+              <div className="w-full h-full flex items-center justify-center text-white text-2xl font-bold">
                 {insight.market_title?.charAt(0) || '?'}
               </div>
             )}
