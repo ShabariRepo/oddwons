@@ -259,6 +259,10 @@ export interface MarketDetailResponse {
   ai_insight: {
     id: number
     summary?: string
+    current_odds?: { yes: number; no: number }
+    implied_probability?: string
+    volume_note?: string
+    recent_movement?: string
     analyst_note?: string
     upcoming_catalyst?: string
     movement_context?: string
@@ -274,4 +278,5 @@ export interface MarketDetailResponse {
     polymarket_price?: number
     price_gap?: number
   } | null
+  tier: string
 }
