@@ -17,7 +17,7 @@ from app.schemas.market import (
     SnapshotResponse,
 )
 from app.models.user import User, SubscriptionTier
-from app.services.auth import get_current_user_optional
+from app.services.auth import get_current_user_optional, get_effective_tier
 
 router = APIRouter(prefix="/markets", tags=["markets"])
 
@@ -268,8 +268,8 @@ async def get_market(
     )
     ai_insight = ai_insight_result.scalar_one_or_none()
 
-    # Get user tier for gating
-    tier = current_user.subscription_tier if current_user else SubscriptionTier.FREE
+    # Get user tier for gating (trial users get PRO access)
+    tier = get_effective_tier(current_user)
 
     # Build tier-gated AI insight data
     ai_insight_data = None

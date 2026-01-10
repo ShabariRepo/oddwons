@@ -179,3 +179,25 @@ async def require_admin(user: User = Depends(get_current_user)) -> User:
             detail="Admin access required",
         )
     return user
+
+
+def get_effective_tier(user: Optional[User]) -> SubscriptionTier:
+    """Get the effective tier for feature access.
+
+    Trial users get FULL (PRO) access - as promised in welcome email.
+    Active subscribers get their paid tier.
+    Everyone else gets FREE.
+    """
+    if not user:
+        return SubscriptionTier.FREE
+
+    # Trial = full access (PRO level)
+    if user.subscription_status == SubscriptionStatus.TRIALING:
+        return SubscriptionTier.PRO
+
+    # Active subscription = their paid tier
+    if user.subscription_status == SubscriptionStatus.ACTIVE:
+        return user.subscription_tier or SubscriptionTier.FREE
+
+    # Cancelled, expired, past_due, null = FREE
+    return SubscriptionTier.FREE

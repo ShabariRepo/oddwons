@@ -72,16 +72,37 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
           </p>
         </div>
 
-        {/* Diagonal Footer - Split colors */}
-        <div className="relative h-10 overflow-hidden">
+        {/* Diagonal Footer - Split colors with platform links */}
+        <div className="relative h-12 overflow-hidden">
           <div
             className="absolute inset-0"
             style={{
               background: 'linear-gradient(115deg, #00D26A 0%, #00D26A 50%, #6366F1 50%, #6366F1 100%)',
             }}
           />
-          <div className="absolute inset-0 flex items-center justify-center z-10">
-            <span className="text-white text-xs font-medium">Cross-Platform Match</span>
+          <div className="absolute inset-0 flex items-center justify-between px-4 z-10">
+            {match.kalshi_market_id && (
+              <a
+                href={`https://kalshi.com/events/${match.kalshi_market_id.replace('kalshi_', '').split('-')[0]}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-white text-xs font-medium hover:underline flex items-center gap-1"
+              >
+                Trade on Kalshi <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+            {match.polymarket_market_id && (
+              <a
+                href="https://polymarket.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-white text-xs font-medium hover:underline flex items-center gap-1"
+              >
+                Trade on Polymarket <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
           </div>
         </div>
       </GameCard>

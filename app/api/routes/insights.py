@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.models.user import User, SubscriptionTier
 from app.models.ai_insight import AIInsight, ArbitrageOpportunity, DailyDigest
-from app.services.auth import get_current_user, require_subscription, require_admin
+from app.services.auth import get_current_user, require_subscription, require_admin, get_effective_tier
 from app.services.patterns.engine import pattern_engine
 from app.services.cross_platform import CrossPlatformService
 
@@ -38,7 +38,7 @@ async def get_ai_insights(
     - PREMIUM: All highlights + movement analysis + catalysts
     - PRO: Everything + full analyst notes + price gaps
     """
-    tier = user.subscription_tier
+    tier = get_effective_tier(user)
 
     # FREE tier - limited preview
     if tier == SubscriptionTier.FREE or tier is None:
@@ -221,7 +221,7 @@ async def get_insight_detail(
     from app.models.market import Market, MarketSnapshot
     from app.models.cross_platform_match import CrossPlatformMatch
 
-    tier = user.subscription_tier
+    tier = get_effective_tier(user)
 
     # Get the insight
     result = await db.execute(
@@ -397,7 +397,7 @@ async def get_arbitrage_opportunities(
         }
 
         # Pro gets execution steps
-        if user.subscription_tier == SubscriptionTier.PRO:
+        if get_effective_tier(user) == SubscriptionTier.PRO:
             opp_data["execution_steps"] = opp.execution_steps
             opp_data["risks"] = opp.risks
             opp_data["kalshi_market_id"] = opp.kalshi_market_id
@@ -408,7 +408,7 @@ async def get_arbitrage_opportunities(
     return {
         "arbitrage_opportunities": response_opps,
         "count": len(response_opps),
-        "tier": user.subscription_tier.value,
+        "tier": get_effective_tier(user).value,
     }
 
 
@@ -421,7 +421,7 @@ async def get_daily_digest(
     Get the daily market briefing based on subscription tier.
     COMPANION APPROACH: News briefing, not betting tips.
     """
-    tier = user.subscription_tier
+    tier = get_effective_tier(user)
 
     if tier == SubscriptionTier.FREE or tier is None:
         return {
