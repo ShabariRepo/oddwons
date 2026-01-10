@@ -14,17 +14,19 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
   const polyPercent = match.polymarket_yes_price ? Math.round(match.polymarket_yes_price) : 50
   const gapColor = Math.abs(match.price_gap_cents) >= 5 ? 'text-green-600' : 'text-yellow-600'
 
-  // Construct Kalshi URL from market ID (e.g., "kalshi_FED-26JAN29" -> "FED")
-  const kalshiUrl = match.kalshi_market_id
+  // Use URLs from API, with fallbacks
+  const kalshiUrl = match.kalshi_url || (match.kalshi_market_id
     ? `https://kalshi.com/events/${match.kalshi_market_id.replace('kalshi_', '').split('-')[0]}`
-    : null
+    : 'https://kalshi.com')
+
+  const polymarketUrl = match.polymarket_url || 'https://polymarket.com'
 
   const openKalshi = () => {
-    if (kalshiUrl) window.open(kalshiUrl, '_blank')
+    window.open(kalshiUrl, '_blank')
   }
 
   const openPolymarket = () => {
-    window.open('https://polymarket.com', '_blank')
+    window.open(polymarketUrl, '_blank')
   }
 
   return (

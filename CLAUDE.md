@@ -9,12 +9,18 @@ When working on these areas, READ the corresponding skill file FIRST:
 | Task | Skill Location |
 |------|----------------|
 | API clients, data collection | `.claude/skills/prediction-market-apis/SKILL.md` |
+| Local dev setup, Stripe webhooks, testing subscriptions | `.claude/skills/local-dev-setup/SKILL.md` |
 
 ### How to Use Skills
 Before modifying `kalshi_client.py`, `polymarket_client.py`, or `data_collector.py`:
 1. Read `.claude/skills/prediction-market-apis/SKILL.md`
 2. Follow the schemas and patterns documented there
 3. Remember: Kalshi prices are CENTS, Polymarket prices are DECIMAL
+
+Before setting up local dev, debugging Stripe, or testing subscription flows:
+1. Read `.claude/skills/local-dev-setup/SKILL.md`
+2. Ensure all 4 terminals are running (Docker, Stripe CLI, Backend, Frontend)
+3. The `whsec_` secret stays the same between `stripe listen` runs
 
 ## Project Overview
 

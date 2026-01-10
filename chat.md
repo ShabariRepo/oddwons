@@ -2,80 +2,154 @@
 
 ---
 
-## ISSUE 1: Market Detail Page Shows Premium Content to Basic Users (BUG!)
+## ISSUE 1: Trial Users Should Get FULL Access (PRO-level)
 
-**Problem:** The `/markets/{id}` endpoint returns ALL AI insight fields without checking user tier. A BASIC user can see analyst_note, movement_context, upcoming_catalyst, and source_articles.
+**Problem:** The welcome email says "Full access to all features" but trial users are being tier-gated based on their selected plan tier. A user trialing BASIC only sees BASIC features, which contradicts the promise.
+
+**Fix:** When `subscription_status == 'trialing'`, treat user as PRO tier for feature access.
+
+### Backend Logic Change
+
+**In every place that checks tier for gating, add trial check:**
+
+```python
+def get_effective_tier(user) -> SubscriptionTier:
+    """Get the effective tier for feature access.
+    
+    Trial users get FULL (PRO) access.
+    Active subscribers get their paid tier.
+    Everyone else gets FREE.
+    """
+    from app.models.user import SubscriptionStatus, SubscriptionTier
+    
+    # Trial = full access (PRO)
+    if user.subscription_status == SubscriptionStatus.TRIALING:
+        return SubscriptionTier.PRO
+    
+    # Active subscription = their tier
+    if user.subscription_status == SubscriptionStatus.ACTIVE:
+        return user.subscription_tier or SubscriptionTier.FREE
+    
+    # Everything else (cancelled, expired, null) = FREE
+    return SubscriptionTier.FREE
+```
+
+### Files to Update
+
+**1. `app/api/routes/insights.py`**
+
+Replace all `tier = user.subscription_tier` with:
+
+```python
+from app.services.auth import get_effective_tier
+
+# In get_ai_insights()
+tier = get_effective_tier(user)
+
+# In get_insight_detail()
+tier = get_effective_tier(user)
+
+# In get_daily_digest()
+tier = get_effective_tier(user)
+```
+
+**2. `app/api/routes/markets.py`**
+
+In the `get_market` endpoint, use effective tier:
+
+```python
+from app.services.auth import get_effective_tier
+
+# In get_market()
+tier = get_effective_tier(current_user) if current_user else SubscriptionTier.FREE
+```
+
+**3. `app/services/auth.py`**
+
+Add the helper function:
+
+```python
+from app.models.user import User, SubscriptionStatus, SubscriptionTier
+
+def get_effective_tier(user: User) -> SubscriptionTier:
+    """Get the effective tier for feature access.
+    
+    Trial users get FULL (PRO) access - as promised in welcome email.
+    Active subscribers get their paid tier.
+    Everyone else gets FREE.
+    """
+    if not user:
+        return SubscriptionTier.FREE
+    
+    # Trial = full access (PRO level)
+    if user.subscription_status == SubscriptionStatus.TRIALING:
+        return SubscriptionTier.PRO
+    
+    # Active subscription = their paid tier
+    if user.subscription_status == SubscriptionStatus.ACTIVE:
+        return user.subscription_tier or SubscriptionTier.FREE
+    
+    # Cancelled, expired, past_due, null = FREE
+    return SubscriptionTier.FREE
+```
+
+**4. Also add `get_current_user_optional` to `app/services/auth.py`:**
+
+```python
+from fastapi.security import OAuth2PasswordBearer
+
+# Add this scheme that doesn't require auth
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
+
+async def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Get current user if authenticated, otherwise return None."""
+    if not token:
+        return None
+    try:
+        return await get_current_user(token, db)
+    except HTTPException:
+        return None
+```
+
+---
+
+## ISSUE 2: Market Detail Page Not Tier-Gated
+
+**Problem:** `/markets/{id}` returns ALL AI insight fields without checking user tier.
 
 **File:** `app/api/routes/markets.py`
 
-**Fix:** Add authentication and tier-gating to the market detail endpoint.
+**Fix:** Update `get_market` to use authentication and tier-gate AI insight fields.
 
-**Replace the `get_market` function (around line 150) with:**
+Add imports at top:
+```python
+from typing import Optional
+from app.models.user import User, SubscriptionTier
+from app.services.auth import get_current_user_optional, get_effective_tier
+```
+
+Update the function signature and add tier-gating:
 
 ```python
 @router.get("/{market_id}")
 async def get_market(
     market_id: str,
-    history_limit: int = Query(100, ge=1, le=1000, description="Number of historical snapshots"),
+    history_limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """
-    Get full market details with price history, AI insight (if exists), and cross-platform match.
-    AI insight fields are tier-gated.
-    """
-    from app.models.cross_platform_match import CrossPlatformMatch
-    from app.models.user import SubscriptionTier
+    # ... existing market fetch code ...
 
-    result = await db.execute(
-        select(Market).where(Market.id == market_id)
-    )
-    market = result.scalar_one_or_none()
-
-    if not market:
-        raise HTTPException(status_code=404, detail="Market not found")
-
-    # Fetch snapshots
-    snapshot_result = await db.execute(
-        select(MarketSnapshot)
-        .where(MarketSnapshot.market_id == market_id)
-        .order_by(MarketSnapshot.timestamp.desc())
-        .limit(history_limit)
-    )
-    snapshots = snapshot_result.scalars().all()
-
-    # Compute enriched fields for this single market
-    enriched = await compute_enriched_fields([market], db)
-
-    # Build price history
-    price_history = [
-        {
-            "timestamp": s.timestamp.isoformat() if s.timestamp else None,
-            "yes_price": s.yes_price,
-            "no_price": s.no_price,
-            "volume": s.volume,
-            "volume_24h": s.volume_24h,
-        }
-        for s in reversed(snapshots)
-    ]
-
-    # Check for AI insight
-    ai_insight_result = await db.execute(
-        select(AIInsight)
-        .where(AIInsight.market_id == market_id)
-        .where(AIInsight.status == "active")
-        .order_by(AIInsight.created_at.desc())
-        .limit(1)
-    )
-    ai_insight = ai_insight_result.scalar_one_or_none()
-
-    # Get user tier for gating
-    tier = current_user.subscription_tier if current_user else None
+    # Get effective tier (trial = PRO)
+    tier = get_effective_tier(current_user) if current_user else SubscriptionTier.FREE
 
     # Build tier-gated AI insight data
     ai_insight_data = None
     if ai_insight:
-        # Base data - ALL TIERS see summary
+        # Base data - ALL TIERS
         ai_insight_data = {
             "id": ai_insight.id,
             "summary": ai_insight.summary,
@@ -85,7 +159,7 @@ async def get_market(
         }
 
         # BASIC+ get volume and movement
-        if tier and tier != SubscriptionTier.FREE:
+        if tier != SubscriptionTier.FREE:
             ai_insight_data["volume_note"] = ai_insight.volume_note
             ai_insight_data["recent_movement"] = ai_insight.recent_movement
 
@@ -99,308 +173,158 @@ async def get_market(
         if tier == SubscriptionTier.PRO:
             ai_insight_data["analyst_note"] = ai_insight.analyst_note
 
-    # Check for cross-platform match
-    cross_platform = None
-    match_result = await db.execute(
-        select(CrossPlatformMatch)
-        .where(
-            (CrossPlatformMatch.kalshi_market_id == market_id) |
-            (CrossPlatformMatch.polymarket_market_id == market_id)
-        )
-        .limit(1)
-    )
-    cross_match = match_result.scalar_one_or_none()
-    if cross_match:
-        cross_platform = {
-            "match_id": cross_match.match_id,
-            "topic": cross_match.topic,
-            "kalshi_market_id": cross_match.kalshi_market_id,
-            "polymarket_market_id": cross_match.polymarket_market_id,
-            "kalshi_price": cross_match.kalshi_yes_price,
-            "polymarket_price": cross_match.polymarket_yes_price,
-            "price_gap": abs(
-                (cross_match.kalshi_yes_price or 0) - (cross_match.polymarket_yes_price or 0)
-            ) if cross_match.kalshi_yes_price and cross_match.polymarket_yes_price else None,
-        }
-
-    # Use stored market URL (should be set during collection)
-    market_url = market.url
-
-    # Build response
-    enriched_market = enriched[0]
-
-    # Get volume_24h from latest snapshot
-    volume_24h = None
-    if snapshots:
-        volume_24h = snapshots[0].volume_24h
-
+    # ... rest of response building ...
+    
     return {
-        "market": {
-            "id": enriched_market.id,
-            "title": enriched_market.title,
-            "platform": enriched_market.platform.value if hasattr(enriched_market.platform, 'value') else enriched_market.platform,
-            "yes_price": enriched_market.yes_price,
-            "no_price": enriched_market.no_price,
-            "volume": enriched_market.volume,
-            "volume_24h": volume_24h,
-            "status": enriched_market.status,
-            "category": enriched_market.category,
-            "close_time": enriched_market.close_time.isoformat() if enriched_market.close_time else None,
-            "url": market_url,
-            "implied_probability": enriched_market.implied_probability,
-            "price_change_24h": enriched_market.price_change_24h,
-            "price_change_7d": enriched_market.price_change_7d,
-            "volume_rank": enriched_market.volume_rank,
-            "has_ai_highlight": enriched_market.has_ai_highlight,
-            "created_at": enriched_market.created_at.isoformat() if enriched_market.created_at else None,
-            "updated_at": enriched_market.updated_at.isoformat() if enriched_market.updated_at else None,
-        },
-        "price_history": price_history,
+        # ... existing fields ...
         "ai_insight": ai_insight_data,
-        "cross_platform": cross_platform,
         "tier": tier.value if tier else "free",
     }
 ```
 
-**Also add these imports at the top of markets.py:**
-
-```python
-from typing import Optional
-from app.models.user import User, SubscriptionTier
-from app.services.auth import get_current_user_optional
-```
-
-**Create the `get_current_user_optional` function in `app/services/auth.py`:**
-
-```python
-async def get_current_user_optional(
-    token: Optional[str] = Depends(oauth2_scheme_optional),
-    db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
-    """Get current user if authenticated, otherwise return None."""
-    if not token:
-        return None
-    try:
-        return await get_current_user(token, db)
-    except HTTPException:
-        return None
-
-# Also add this OAuth scheme that doesn't require auth:
-oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
-```
-
 ---
 
-## ISSUE 2: External Links to Kalshi/Polymarket Don't Work
+## ISSUE 3: External Links to Kalshi/Polymarket Don't Work
 
 **Problem:** 
-- Polymarket URLs need the market SLUG, not the condition_id
-- Kalshi URLs need the EVENT ticker, not the market ticker
+- Polymarket URLs use condition_id but need SLUG
+- Kalshi URLs use market ticker but need EVENT ticker
 
-**Current broken examples:**
-- Kalshi: `https://kalshi.com/markets/KXOSCARNOMPIC-26-WIC` → 404
-- Polymarket: `https://polymarket.com/event/0xe93c89c41d...` → 404
+**Fix in `app/services/data_collector.py`:**
 
-**Correct formats:**
-- Kalshi: `https://kalshi.com/events/KXOSCARNOMPIC` (event ticker, not market ticker)
-- Polymarket: `https://polymarket.com/event/slug-name-here` (slug, not condition_id)
+Add URL helper functions:
 
-### Fix Part A: Store correct URLs during data collection
-
-**File:** `app/services/data_collector.py`
-
-Find where markets are saved and ensure the `url` field is populated correctly from the API response.
-
-**For Polymarket** - the API returns a `slug` field. Use it:
 ```python
-# In polymarket collection
-market_url = f"https://polymarket.com/event/{event_data.get('slug', '')}"
-```
-
-**For Kalshi** - extract event ticker from market ticker:
-```python
-# In kalshi collection  
-# Market ticker: KXOSCARNOMPIC-26-WIC
-# Event ticker: KXOSCARNOMPIC (everything before first hyphen followed by numbers)
 import re
-event_ticker = re.match(r'^([A-Z]+)', market_data.ticker).group(1) if market_data.ticker else ''
-market_url = f"https://kalshi.com/events/{event_ticker}"
-```
 
-### Fix Part B: Update data_collector.py
-
-**File:** `app/services/data_collector.py`
-
-Find the section where markets are saved to the database and add URL construction:
-
-```python
-# For Kalshi markets - extract event ticker
-def get_kalshi_url(ticker: str) -> str:
-    """Get Kalshi event URL from market ticker."""
-    # Market ticker format: KXOSCARNOMPIC-26-WIC or FED-26JAN29
-    # We need just the event part
-    if not ticker:
-        return None
-    # Try to find event ticker (letters before first number or hyphen)
-    import re
-    match = re.match(r'^([A-Z]+(?:-[A-Z]+)?)', ticker)
-    if match:
-        event_ticker = match.group(1)
+def get_kalshi_url(ticker: str, event_ticker: str = None) -> str:
+    """Get Kalshi URL. Uses event ticker for /events/ URL."""
+    if event_ticker:
         return f"https://kalshi.com/events/{event_ticker}"
+    # Fallback: extract event ticker from market ticker
+    # KXOSCARNOMPIC-26-WIC -> KXOSCARNOMPIC
+    if ticker:
+        match = re.match(r'^([A-Z]+(?:-[A-Z]+)*)', ticker)
+        if match:
+            return f"https://kalshi.com/events/{match.group(1)}"
     return f"https://kalshi.com/markets/{ticker}"
 
-# For Polymarket markets - use slug from API
-def get_polymarket_url(slug: str, condition_id: str) -> str:
-    """Get Polymarket URL from slug or condition_id."""
+def get_polymarket_url(slug: str = None, condition_id: str = None) -> str:
+    """Get Polymarket URL. Uses slug if available."""
     if slug:
         return f"https://polymarket.com/event/{slug}"
-    return f"https://polymarket.com/markets/{condition_id}"
+    # condition_id doesn't work for URLs
+    return None
 ```
 
-### Fix Part C: Update Polymarket client to return slug
-
-**File:** `app/services/polymarket_client.py`
-
-Ensure the `PolymarketMarketData` schema includes `slug`:
+**When saving markets, populate the `url` field:**
 
 ```python
-@dataclass
-class PolymarketMarketData:
-    # ... existing fields ...
-    slug: Optional[str] = None  # ADD THIS
+# For Kalshi
+market_url = get_kalshi_url(market_data.ticker, event_ticker)
+
+# For Polymarket  
+market_url = get_polymarket_url(
+    slug=event_data.get('slug'),
+    condition_id=market_data.condition_id
+)
 ```
 
-And populate it during parsing:
+**Also update `app/services/polymarket_client.py`** to capture the slug:
+
 ```python
+# In PolymarketMarketData dataclass, add:
+slug: Optional[str] = None
+
+# When parsing, extract slug:
 slug=market.get("slug") or event.get("slug"),
 ```
 
 ---
 
-## ISSUE 3: Search Bar Doesn't Work
+## ISSUE 4: Search Bar Doesn't Work
 
-**Problem:** The search bar in the header is just a placeholder and doesn't actually search anything.
+**Problem:** The search bar in the header is a placeholder.
 
-**File:** `frontend/src/components/Header.tsx` or wherever the search bar is
+**Fix:** Either make it functional or remove it.
 
-**Option A: Make it functional** - Connect to markets search API:
+**Option A - Make functional:**
 
 ```tsx
-'use client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Search } from 'lucide-react'
-
-function SearchBar() {
-  const [query, setQuery] = useState('')
-  const router = useRouter()
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (query.trim()) {
-      router.push(`/markets?search=${encodeURIComponent(query.trim())}`)
-    }
+// In the header component
+const handleSearch = (e: React.FormEvent) => {
+  e.preventDefault()
+  if (query.trim()) {
+    router.push(`/markets?search=${encodeURIComponent(query.trim())}`)
   }
-
-  return (
-    <form onSubmit={handleSearch} className="relative">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-      <input
-        type="text"
-        placeholder="Search markets..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-      />
-    </form>
-  )
 }
 ```
 
-**Option B: Remove it** - If search isn't needed, remove the non-functional element to avoid confusing users.
+**Option B - Remove it** if search isn't a priority feature right now.
 
 ---
 
-## ISSUE 4: Frontend Market Detail - Show Upgrade Prompts
+## ISSUE 5: Cross-Platform Cards Not Clickable
+
+**Problem:** Cards have `cursor-pointer` but no click action.
+
+**Fix:** Add external link buttons to the footer.
+
+**File:** `frontend/src/app/(app)/cross-platform/page.tsx`
+
+Update the `MatchCard` footer to include clickable links:
+
+```tsx
+{/* Diagonal Footer with links */}
+<div className="relative h-12 overflow-hidden">
+  <div
+    className="absolute inset-0"
+    style={{
+      background: 'linear-gradient(115deg, #00D26A 0%, #00D26A 50%, #6366F1 50%, #6366F1 100%)',
+    }}
+  />
+  <div className="absolute inset-0 flex items-center justify-between px-4 z-10">
+    {match.kalshi_market_id && (
+      <a
+        href={`https://kalshi.com/events/${match.kalshi_market_id.replace('kalshi_', '').split('-')[0]}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="text-white text-xs font-medium hover:underline flex items-center gap-1"
+      >
+        Kalshi <ExternalLink className="w-3 h-3" />
+      </a>
+    )}
+    {match.polymarket_market_id && (
+      <a
+        href={`https://polymarket.com/event/${match.polymarket_slug || ''}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="text-white text-xs font-medium hover:underline flex items-center gap-1"
+      >
+        Polymarket <ExternalLink className="w-3 h-3" />
+      </a>
+    )}
+  </div>
+</div>
+```
+
+Note: We need to store `polymarket_slug` in the CrossPlatformMatch model/response for the URL to work.
+
+---
+
+## ISSUE 6: Frontend Upgrade Prompts on Market Detail
 
 **File:** `frontend/src/app/(app)/markets/[id]/page.tsx`
 
-Update the AI insight section to show upgrade prompts for gated content:
+Show upgrade prompts when content is gated:
 
 ```tsx
-{/* AI Insight - if exists */}
-{ai_insight && (
-  <div className="card border-l-4 border-purple-500">
-    <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-      <Brain className="w-5 h-5 text-purple-500" />
-      AI Analysis
-    </h2>
-    
-    {/* Summary - all tiers */}
-    {ai_insight.summary && (
-      <p className="text-gray-600 mb-3">{ai_insight.summary}</p>
-    )}
-    
-    {/* Analyst note - PRO only */}
-    {ai_insight.analyst_note ? (
-      <p className="text-gray-700 whitespace-pre-wrap mb-4">{ai_insight.analyst_note}</p>
-    ) : data.tier !== 'pro' && (
-      <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
-        <span className="font-medium">Full AI analysis</span> available on Pro tier
-      </div>
-    )}
-
-    {/* Upcoming Catalyst - PREMIUM+ */}
-    {ai_insight.upcoming_catalyst ? (
-      <div className="p-3 bg-yellow-50 rounded-lg mb-4">
-        <p className="text-sm font-medium text-yellow-800">Upcoming Catalyst</p>
-        <p className="text-yellow-700 mt-1">{ai_insight.upcoming_catalyst}</p>
-      </div>
-    ) : data.tier === 'basic' && (
-      <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
-        <span className="font-medium">Upcoming catalysts</span> available on Premium+
-      </div>
-    )}
-
-    {/* Movement Context - PREMIUM+ */}
-    {ai_insight.movement_context ? (
-      <div className="p-3 bg-blue-50 rounded-lg mb-4">
-        <p className="text-sm font-medium text-blue-800">Why It Moved</p>
-        <p className="text-blue-700 mt-1">{ai_insight.movement_context}</p>
-      </div>
-    ) : data.tier === 'basic' && (
-      <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
-        <span className="font-medium">Movement context</span> available on Premium+
-      </div>
-    )}
-
-    {/* Source Articles - PREMIUM+ */}
-    {ai_insight.source_articles && ai_insight.source_articles.length > 0 ? (
-      <div className="border-t pt-4">
-        <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-          <Newspaper className="w-4 h-4" />
-          Sources (our homework)
-        </p>
-        <div className="space-y-2">
-          {ai_insight.source_articles.map((article: any, i: number) => (
-            <div key={i} className="text-sm text-gray-600">
-              {article.title} <span className="text-gray-400">({article.source})</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    ) : data.tier === 'basic' && (
-      <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">
-        <span className="font-medium">Source articles</span> available on Premium+
-      </div>
-    )}
-
-    <Link
-      href={`/insights/${ai_insight.id}`}
-      className="text-sm text-purple-600 hover:underline mt-3 inline-block"
-    >
-      View full insight
-    </Link>
+{/* Show upgrade prompt if content is gated */}
+{!ai_insight.analyst_note && data.tier !== 'pro' && (
+  <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
+    <span className="font-medium">Full AI analysis</span> - <Link href="/settings" className="text-primary-600 hover:underline">Upgrade to Pro</Link>
   </div>
 )}
 ```
@@ -409,39 +333,137 @@ Update the AI insight section to show upgrade prompts for gated content:
 
 ## SUMMARY
 
-| Issue | File | Fix |
-|-------|------|-----|
-| 1. Tier gating on market detail | `app/api/routes/markets.py` | Add user auth + tier-gate ai_insight fields |
-| 1b. Optional auth helper | `app/services/auth.py` | Add `get_current_user_optional` |
-| 2. Broken Kalshi URLs | `app/services/data_collector.py` | Extract event ticker, use `/events/` URL |
-| 2. Broken Polymarket URLs | `app/services/data_collector.py` | Use slug field from API |
-| 3. Search bar | `frontend/src/components/Header.tsx` | Either make functional or remove |
-| 4. Frontend upgrade prompts | `frontend/src/app/(app)/markets/[id]/page.tsx` | Show upgrade prompts for gated content |
+| Issue | Priority | Fix |
+|-------|----------|-----|
+| 1. Trial = Full Access | **CRITICAL** | Add `get_effective_tier()` - trial users get PRO |
+| 2. Market detail tier-gating | **HIGH** | Add auth + tier-gate AI insight in markets.py |
+| 3. Broken external URLs | **HIGH** | Use event ticker (Kalshi) and slug (Polymarket) |
+| 4. Search bar | LOW | Make functional or remove |
+| 5. Cross-platform cards | MEDIUM | Add external links to footer |
+| 6. Frontend upgrade prompts | LOW | Show gated content hints |
+
+---
+
+## HOW STRIPE WEBHOOKS WORK (Already Implemented ✅)
+
+Your webhook handler in `app/api/routes/billing.py` already handles these events:
+
+| Stripe Event | Your Handler | Updates |
+|--------------|--------------|---------|
+| `customer.subscription.created` | `handle_subscription_created()` | Sets `subscription_status` to ACTIVE or TRIALING |
+| `customer.subscription.updated` | `handle_subscription_updated()` | Updates status (active, past_due, canceled, trialing) |
+| `customer.subscription.deleted` | `handle_subscription_deleted()` | Sets status to INACTIVE, tier to FREE |
+| `invoice.payment_failed` | Sends email | No status change |
+| `invoice.paid` | Logs | No status change |
+
+**Status mapping in your code:**
+```python
+status_map = {
+    "active": SubscriptionStatus.ACTIVE,
+    "past_due": SubscriptionStatus.PAST_DUE,
+    "canceled": SubscriptionStatus.CANCELED,
+    "trialing": SubscriptionStatus.TRIALING,
+    "unpaid": SubscriptionStatus.INACTIVE,
+}
+```
+
+**Production is working** - webhooks hit `https://oddwons.ai/api/v1/billing/webhook`
+
+---
+
+## LOCAL DEVELOPMENT: Stripe CLI Setup
+
+**Problem:** No webhook in Stripe sandbox means local dev doesn't receive subscription updates.
+
+### Setup Stripe CLI
+
+```bash
+# 1. Install Stripe CLI
+brew install stripe/stripe-cli/stripe
+
+# 2. Login to your Stripe account
+stripe login
+
+# 3. Forward webhooks to your local server
+stripe listen --forward-to localhost:8000/api/v1/billing/webhook
+```
+
+This outputs a webhook signing secret like:
+```
+Ready! Your webhook signing secret is whsec_xxxxxxxxxxxxx
+```
+
+### Add to local `.env`
+
+```bash
+STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
+```
+
+### Test it works
+
+```bash
+# In another terminal, trigger a test event
+stripe trigger customer.subscription.created
+```
+
+You should see:
+- Stripe CLI shows the event was forwarded
+- Your FastAPI logs show "Received Stripe webhook: customer.subscription.created"
+
+### Alternative: Manual Sync
+
+If you don't want to set up Stripe CLI, call the sync endpoint after checkout:
+
+```bash
+# After completing checkout, sync from Stripe
+curl -X POST http://localhost:8000/api/v1/billing/sync \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+This pulls the current subscription status directly from Stripe API.
+
+### Quick Testing: Direct DB Update
+
+For fast local testing without Stripe:
+
+```sql
+-- Set user to trialing (full access)
+UPDATE users SET subscription_status = 'trialing', subscription_tier = 'BASIC' WHERE email = 'test@example.com';
+
+-- Set user to active paid tier
+UPDATE users SET subscription_status = 'active', subscription_tier = 'PREMIUM' WHERE email = 'test@example.com';
+
+-- Set user to free (trial/subscription ended)
+UPDATE users SET subscription_status = 'inactive', subscription_tier = 'FREE' WHERE email = 'test@example.com';
+```
 
 ---
 
 ## PROMPT FOR CLAUDE CODE
 
 ```
-Read chat.md and implement all 4 fixes:
+Read chat.md and implement these fixes in order of priority:
 
-1. BACKEND TIER GATING (CRITICAL):
-   - In app/api/routes/markets.py, update get_market endpoint to tier-gate AI insight fields
+1. TRIAL = FULL ACCESS (CRITICAL):
+   - Add get_effective_tier() function to app/services/auth.py
+   - If subscription_status == 'trialing', return PRO tier (full access)
+   - If subscription_status == 'active', return their paid tier
+   - Otherwise return FREE
+   - Update app/api/routes/insights.py to use get_effective_tier(user) instead of user.subscription_tier
+   - Update app/api/routes/markets.py get_market endpoint to use get_effective_tier()
+
+2. MARKET DETAIL TIER-GATING:
    - Add get_current_user_optional to app/services/auth.py
-   - FREE: only summary, current_odds, implied_probability
-   - BASIC: add volume_note, recent_movement  
-   - PREMIUM: add movement_context, upcoming_catalyst, source_articles
-   - PRO: add analyst_note
+   - Update get_market in markets.py to accept optional auth and tier-gate AI insight fields
 
-2. FIX EXTERNAL URLS:
-   - In data_collector.py, construct correct URLs:
-     - Kalshi: https://kalshi.com/events/{EVENT_TICKER} (not market ticker)
-     - Polymarket: https://polymarket.com/event/{SLUG} (not condition_id)
-   - Store the URL in the market.url field during collection
+3. FIX EXTERNAL URLS:
+   - In data_collector.py, store correct URLs during collection
+   - Kalshi: https://kalshi.com/events/{EVENT_TICKER}
+   - Polymarket: https://polymarket.com/event/{SLUG}
 
-3. SEARCH BAR:
-   - Either connect it to /markets?search= or remove it if not needed
+4. CROSS-PLATFORM CARDS:
+   - Add external link buttons to the card footer in cross-platform/page.tsx
 
-4. FRONTEND UPGRADE PROMPTS:
-   - In markets/[id]/page.tsx, show "available on Premium+" messages for gated content
+5. SEARCH BAR:
+   - Either connect to /markets?search= or remove the non-functional element
 ```

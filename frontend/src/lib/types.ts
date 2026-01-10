@@ -135,10 +135,12 @@ export interface CrossPlatformMatch {
   kalshi_title?: string
   kalshi_yes_price?: number
   kalshi_volume?: number
+  kalshi_url?: string
   polymarket_market_id?: string
   polymarket_title?: string
   polymarket_yes_price?: number
   polymarket_volume?: number
+  polymarket_url?: string
   price_gap_cents: number
   gap_direction: string
   combined_volume: number

@@ -161,11 +161,13 @@ class MatchedMarket:
     kalshi_price: Optional[float] = None
     kalshi_volume: Optional[float] = None
     kalshi_close_time: Optional[datetime] = None
+    kalshi_url: Optional[str] = None
     poly_id: Optional[str] = None
     poly_title: Optional[str] = None
     poly_price: Optional[float] = None
     poly_volume: Optional[float] = None
     poly_close_time: Optional[datetime] = None
+    polymarket_url: Optional[str] = None
 
 
 class CrossPlatformService:
@@ -191,26 +193,30 @@ class CrossPlatformService:
         # Filter out resolved markets (prices at 0% or 100%)
         result = await self.db.execute(text("""
             SELECT
-                match_id,
-                topic,
-                category,
-                kalshi_market_id,
-                kalshi_title,
-                kalshi_yes_price,
-                kalshi_volume,
-                kalshi_close_time,
-                polymarket_market_id,
-                polymarket_title,
-                polymarket_yes_price,
-                polymarket_volume,
-                polymarket_close_time,
-                similarity_score
-            FROM cross_platform_matches
-            WHERE is_active = TRUE
-              AND combined_volume >= :min_vol
-              AND kalshi_yes_price > 0.02 AND kalshi_yes_price < 0.98
-              AND polymarket_yes_price > 0.02 AND polymarket_yes_price < 0.98
-            ORDER BY combined_volume DESC
+                cpm.match_id,
+                cpm.topic,
+                cpm.category,
+                cpm.kalshi_market_id,
+                cpm.kalshi_title,
+                cpm.kalshi_yes_price,
+                cpm.kalshi_volume,
+                cpm.kalshi_close_time,
+                cpm.polymarket_market_id,
+                cpm.polymarket_title,
+                cpm.polymarket_yes_price,
+                cpm.polymarket_volume,
+                cpm.polymarket_close_time,
+                cpm.similarity_score,
+                km.url as kalshi_url,
+                pm.url as polymarket_url
+            FROM cross_platform_matches cpm
+            LEFT JOIN markets km ON cpm.kalshi_market_id = km.id
+            LEFT JOIN markets pm ON cpm.polymarket_market_id = pm.id
+            WHERE cpm.is_active = TRUE
+              AND cpm.combined_volume >= :min_vol
+              AND cpm.kalshi_yes_price > 0.02 AND cpm.kalshi_yes_price < 0.98
+              AND cpm.polymarket_yes_price > 0.02 AND cpm.polymarket_yes_price < 0.98
+            ORDER BY cpm.combined_volume DESC
         """), {"min_vol": min_volume})
 
         rows = result.fetchall()
@@ -230,11 +236,13 @@ class CrossPlatformService:
                 kalshi_price=row[5],
                 kalshi_volume=row[6],
                 kalshi_close_time=row[7],
+                kalshi_url=row[14],  # From JOIN with markets table
                 poly_id=row[8],
                 poly_title=row[9],
                 poly_price=row[10],
                 poly_volume=row[11],
                 poly_close_time=row[12],
+                polymarket_url=row[15],  # From JOIN with markets table
             )
             matches.append(matched)
 
