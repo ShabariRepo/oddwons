@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # Database
   postgres:
     image: postgres:16-alpine
     container_name: oddwons-postgres
@@ -18,6 +19,7 @@ services:
       timeout: 5s
       retries: 5
 
+  # Cache
   redis:
     image: redis:7-alpine
     container_name: oddwons-redis
@@ -30,6 +32,47 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # API Server (fast, responsive - no background tasks)
+  api:
+    build: .
+    container_name: oddwons-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://oddwons:oddwons_dev@postgres:5432/oddwons
+      - REDIS_URL=redis://redis:6379
+      - RUN_SCHEDULER=false
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Background Worker (handles AI analysis, data collection)
+  worker:
+    build: .
+    container_name: oddwons-worker
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://oddwons:oddwons_dev@postgres:5432/oddwons
+      - REDIS_URL=redis://redis:6379
+      - WORKER_INTERVAL_MINUTES=15
+      - WORKER_RUN_ON_START=true
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: python worker.py
 
 volumes:
   postgres_data:

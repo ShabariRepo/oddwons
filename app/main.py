@@ -250,57 +250,66 @@ async def process_alert_emails():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
+    import os
+
     # Startup
     logger.info("Starting OddWons API...")
     await init_db()
     logger.info("Database initialized")
 
-    # Start scheduler
-    scheduler.add_job(
-        scheduled_collection,
-        "interval",
-        minutes=settings.collection_interval_minutes,
-        id="data_collection",
-        replace_existing=True,
-    )
+    # Check if scheduler should run (disabled when using separate worker service)
+    run_scheduler = os.getenv("RUN_SCHEDULER", "true").lower() == "true"
 
-    # Trial reminder emails - daily at 10:00 AM UTC
-    scheduler.add_job(
-        send_trial_reminders,
-        "cron",
-        hour=10,
-        minute=0,
-        id="trial_reminders",
-        replace_existing=True,
-    )
+    if run_scheduler:
+        # Start scheduler (only in standalone mode, not when using worker container)
+        scheduler.add_job(
+            scheduled_collection,
+            "interval",
+            minutes=settings.collection_interval_minutes,
+            id="data_collection",
+            replace_existing=True,
+        )
 
-    # Daily digest emails - daily at 8:00 AM UTC
-    scheduler.add_job(
-        send_daily_digest_emails,
-        "cron",
-        hour=8,
-        minute=0,
-        id="daily_digest",
-        replace_existing=True,
-    )
+        # Trial reminder emails - daily at 10:00 AM UTC
+        scheduler.add_job(
+            send_trial_reminders,
+            "cron",
+            hour=10,
+            minute=0,
+            id="trial_reminders",
+            replace_existing=True,
+        )
 
-    # Process alert emails - every 5 minutes
-    scheduler.add_job(
-        process_alert_emails,
-        "interval",
-        minutes=5,
-        id="alert_emails",
-        replace_existing=True,
-    )
+        # Daily digest emails - daily at 8:00 AM UTC
+        scheduler.add_job(
+            send_daily_digest_emails,
+            "cron",
+            hour=8,
+            minute=0,
+            id="daily_digest",
+            replace_existing=True,
+        )
 
-    scheduler.start()
-    logger.info(f"Scheduler started (collection: {settings.collection_interval_minutes} min, digest: 8am UTC, trial reminders: 10am UTC, alerts: every 5 min)")
+        # Process alert emails - every 5 minutes
+        scheduler.add_job(
+            process_alert_emails,
+            "interval",
+            minutes=5,
+            id="alert_emails",
+            replace_existing=True,
+        )
+
+        scheduler.start()
+        logger.info(f"Scheduler started (collection: {settings.collection_interval_minutes} min, digest: 8am UTC, trial reminders: 10am UTC, alerts: every 5 min)")
+    else:
+        logger.info("Scheduler DISABLED (RUN_SCHEDULER=false) - use worker service for background tasks")
 
     yield
 
     # Shutdown
     logger.info("Shutting down OddWons API...")
-    scheduler.shutdown(wait=False)
+    if run_scheduler:
+        scheduler.shutdown(wait=False)
     await kalshi_client.close()
     await polymarket_client.close()
     await close_db()

@@ -788,3 +788,69 @@ For each gated field (movement_context, upcoming_catalyst, source_articles, anal
 - Feature list with icons
 - Dark footer with navigation links
 - Branded CTA button
+
+### Worker Service Architecture (Jan 10, 2026)
+**MAJOR IMPROVEMENT:** Separated API server from background tasks to prevent blocking.
+
+**Problem:** Single-threaded FastAPI was blocked by long-running AI analysis (15+ minutes), causing login and other API requests to hang.
+
+**Solution:** Separate worker service for background tasks.
+
+**New Files:**
+- `worker.py` - Background worker with APScheduler
+- `Dockerfile` - Containerization for both API and Worker
+- `docker-compose.yml` - Updated with api + worker services
+
+**Local Development (Docker Compose):**
+```bash
+# Start all services (postgres, redis, api, worker)
+docker-compose up --build
+
+# API server: http://localhost:8000 (no background tasks)
+# Worker: Runs data collection, AI analysis, market matching every 15 min
+```
+
+**API Service (`docker-compose.yml`):**
+```yaml
+api:
+  environment:
+    - RUN_SCHEDULER=false  # Disable scheduler in API
+  command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Worker Service (`docker-compose.yml`):**
+```yaml
+worker:
+  environment:
+    - WORKER_INTERVAL_MINUTES=15
+    - WORKER_RUN_ON_START=true
+  command: python worker.py
+```
+
+**Railway Production Setup:**
+1. **API Service:**
+   - Build command: `pip install -r requirements.txt`
+   - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - Environment: `RUN_SCHEDULER=false`
+
+2. **Worker Service (Cron-based):**
+   - Build command: `pip install -r requirements.txt`
+   - Start command: `python worker.py`
+   - Environment: `WORKER_RUN_ONCE=true`
+   - Cron schedule: `*/15 * * * *` (every 15 minutes)
+   - OR use Railway's built-in cron job feature
+
+**Worker Environment Variables:**
+```bash
+WORKER_INTERVAL_MINUTES=15      # Interval for continuous mode
+WORKER_RUN_ON_START=true        # Run pipeline immediately on startup
+WORKER_RUN_ONCE=false           # Set true for Railway cron mode (run once, exit)
+```
+
+**worker.py Pipeline:**
+```python
+async def run_full_pipeline():
+    await run_data_collection()   # Fetch markets from Kalshi/Polymarket
+    await run_analysis()          # Pattern detection + AI insights
+    await run_market_matching()   # Cross-platform fuzzy matching
+```
