@@ -340,9 +340,16 @@ async def health_check():
     return {"status": "healthy", "version": "0.1.0"}
 
 
+# ============================================================================
+# ADMIN-ONLY DEBUG ENDPOINTS
+# ============================================================================
+from app.services.auth import require_admin, get_current_user
+from app.models.user import User
+
+
 @app.get("/debug/db")
-async def debug_db():
-    """Debug database tables."""
+async def debug_db(admin: User = Depends(require_admin)):
+    """Debug database tables. ADMIN ONLY."""
     from sqlalchemy import text
     from app.core.database import AsyncSessionLocal
 
@@ -361,8 +368,8 @@ async def debug_db():
 
 
 @app.get("/debug/apis")
-async def debug_apis():
-    """Debug API clients - fetch just one page to test connectivity."""
+async def debug_apis(admin: User = Depends(require_admin)):
+    """Debug API clients - fetch just one page to test connectivity. ADMIN ONLY."""
     results = {"kalshi": None, "polymarket": None}
 
     try:
@@ -383,7 +390,7 @@ async def debug_apis():
 
 
 @app.post("/debug/test-collect")
-async def debug_test_collect():
+async def debug_test_collect(admin: User = Depends(require_admin)):
     """Test collecting just a few markets to debug collection issues."""
     from app.core.database import AsyncSessionLocal
     from app.models.market import Market, Platform
@@ -477,15 +484,15 @@ async def root():
 
 
 @app.post("/api/v1/collect")
-async def trigger_collection():
-    """Manually trigger data collection."""
+async def trigger_collection(admin: User = Depends(require_admin)):
+    """Manually trigger data collection. ADMIN ONLY."""
     result = await data_collector.run_collection()
     return {"status": "completed", "result": result}
 
 
 @app.post("/api/v1/analyze")
-async def trigger_analysis():
-    """Manually trigger AI analysis (generates fresh insights)."""
+async def trigger_analysis(admin: User = Depends(require_admin)):
+    """Manually trigger AI analysis (generates fresh insights). ADMIN ONLY."""
     from app.services.patterns.engine import pattern_engine
 
     try:
@@ -496,8 +503,8 @@ async def trigger_analysis():
 
 
 @app.post("/debug/migrate")
-async def run_migrations():
-    """Add missing columns to database tables."""
+async def run_migrations(admin: User = Depends(require_admin)):
+    """Add missing columns to database tables. ADMIN ONLY."""
     from sqlalchemy import text
     from app.core.database import AsyncSessionLocal
 

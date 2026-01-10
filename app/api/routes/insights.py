@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.models.user import User, SubscriptionTier
 from app.models.ai_insight import AIInsight, ArbitrageOpportunity, DailyDigest
-from app.services.auth import get_current_user, require_subscription
+from app.services.auth import get_current_user, require_subscription, require_admin
 from app.services.patterns.engine import pattern_engine
 from app.services.cross_platform import CrossPlatformService
 
@@ -580,12 +580,12 @@ async def get_insight_stats(
 
 @router.post("/refresh")
 async def trigger_analysis(
-    user: User = Depends(require_subscription(SubscriptionTier.PRO)),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Manually trigger AI analysis.
-    Pro tier only - prevents abuse.
+    ADMIN ONLY - prevents abuse of expensive AI operations.
     """
     try:
         results = await pattern_engine.run_full_analysis(with_ai=True)

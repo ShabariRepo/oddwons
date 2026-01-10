@@ -6,9 +6,11 @@ from datetime import datetime, timedelta
 
 from app.core.database import get_db, get_redis
 from app.models.market import Pattern, Alert
+from app.models.user import User
 from app.services.patterns.engine import pattern_engine
 from app.services.patterns.scoring import PatternScorer
 from app.services.alerts import alert_generator
+from app.services.auth import get_current_user, require_admin
 
 router = APIRouter(prefix="/patterns", tags=["patterns"])
 
@@ -22,8 +24,9 @@ async def list_patterns(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """List detected patterns with optional filters."""
+    """List detected patterns with optional filters. Requires authentication."""
     query = select(Pattern).where(Pattern.status == status)
 
     if pattern_type:
@@ -85,8 +88,9 @@ async def get_top_opportunities(
     tier: str = Query("basic", description="Subscription tier (basic, premium, pro)"),
     limit: int = Query(10, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get top opportunities for a subscription tier."""
+    """Get top opportunities for a subscription tier. Requires authentication."""
     # Get active patterns
     result = await db.execute(
         select(Pattern)
@@ -140,9 +144,10 @@ async def get_top_opportunities(
 
 @router.post("/analyze")
 async def run_analysis(
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Trigger pattern analysis on current market data."""
+    """Trigger pattern analysis on current market data. ADMIN ONLY."""
     try:
         result = await pattern_engine.run_full_analysis()
         return {
@@ -156,8 +161,9 @@ async def run_analysis(
 @router.get("/stats")
 async def get_pattern_stats(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get pattern detection statistics."""
+    """Get pattern detection statistics. Requires authentication."""
     now = datetime.utcnow()
     day_ago = now - timedelta(days=1)
 
@@ -212,8 +218,9 @@ async def list_pattern_types():
 async def get_alerts(
     tier: str = Query("basic", description="Subscription tier"),
     limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
 ):
-    """Get recent alerts for a subscription tier."""
+    """Get recent alerts for a subscription tier. Requires authentication."""
     alerts = await alert_generator.get_alerts_for_tier(tier, limit)
     return {
         "tier": tier,
@@ -223,8 +230,10 @@ async def get_alerts(
 
 
 @router.get("/alerts/stats")
-async def get_alert_stats():
-    """Get alert generation statistics."""
+async def get_alert_stats(
+    current_user: User = Depends(get_current_user),
+):
+    """Get alert generation statistics. Requires authentication."""
     stats = await alert_generator.get_alert_stats()
     return stats
 
