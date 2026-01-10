@@ -14,8 +14,19 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
   const polyPercent = match.polymarket_yes_price ? Math.round(match.polymarket_yes_price) : 50
   const gapColor = Math.abs(match.price_gap_cents) >= 5 ? 'text-green-600' : 'text-yellow-600'
 
+  // Construct Kalshi URL from market ID (e.g., "kalshi_FED-26JAN29" -> "FED")
+  const kalshiUrl = match.kalshi_market_id
+    ? `https://kalshi.com/events/${match.kalshi_market_id.replace('kalshi_', '').split('-')[0]}`
+    : null
+
+  const handleCardClick = () => {
+    if (kalshiUrl) {
+      window.open(kalshiUrl, '_blank')
+    }
+  }
+
   return (
-    <div className="relative pt-10 mt-8">
+    <div className="relative pt-10 mt-8" onClick={handleCardClick}>
       {/* Floating Circle - Both logos for cross-platform */}
       <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20">
         <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br from-green-400 via-blue-500 to-purple-600">
@@ -81,9 +92,9 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
             }}
           />
           <div className="absolute inset-0 flex items-center justify-between px-4 z-10">
-            {match.kalshi_market_id && (
+            {kalshiUrl && (
               <a
-                href={`https://kalshi.com/events/${match.kalshi_market_id.replace('kalshi_', '').split('-')[0]}`}
+                href={kalshiUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
