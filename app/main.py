@@ -483,6 +483,18 @@ async def trigger_collection():
     return {"status": "completed", "result": result}
 
 
+@app.post("/api/v1/analyze")
+async def trigger_analysis():
+    """Manually trigger AI analysis (generates fresh insights)."""
+    from app.services.patterns.engine import pattern_engine
+
+    try:
+        result = await pattern_engine.run_full_analysis(with_ai=True)
+        return {"status": "completed", "result": result}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 @app.post("/debug/migrate")
 async def run_migrations():
     """Add missing columns to database tables."""
