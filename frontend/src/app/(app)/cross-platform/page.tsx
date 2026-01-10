@@ -19,14 +19,16 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
     ? `https://kalshi.com/events/${match.kalshi_market_id.replace('kalshi_', '').split('-')[0]}`
     : null
 
-  const handleCardClick = () => {
-    if (kalshiUrl) {
-      window.open(kalshiUrl, '_blank')
-    }
+  const openKalshi = () => {
+    if (kalshiUrl) window.open(kalshiUrl, '_blank')
+  }
+
+  const openPolymarket = () => {
+    window.open('https://polymarket.com', '_blank')
   }
 
   return (
-    <div className="relative pt-10 mt-8" onClick={handleCardClick}>
+    <div className="relative pt-10 mt-8">
       {/* Floating Circle - Both logos for cross-platform */}
       <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20">
         <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br from-green-400 via-blue-500 to-purple-600">
@@ -40,7 +42,7 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
       </div>
 
       {/* Card */}
-      <GameCard className="bg-white rounded-xl shadow-sm cursor-pointer border border-gray-100 overflow-hidden" showWatermark={false}>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-4 pt-12 pb-4">
           {/* Category + Gap */}
           <div className="flex items-center justify-between mb-2">
@@ -59,22 +61,30 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
             {match.topic}
           </h3>
 
-          {/* Platform price boxes */}
+          {/* Platform price boxes - CLICKABLE */}
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="bg-green-50 rounded-lg py-2 px-3 text-center border border-green-100">
+            <button
+              onClick={openKalshi}
+              className="bg-green-50 rounded-lg py-2 px-3 text-center border border-green-100 hover:bg-green-100 hover:border-green-200 transition-colors cursor-pointer group"
+            >
               <div className="flex items-center justify-center gap-1 mb-1">
                 <Image src="/logos/kalshi-logo.png" alt="K" width={14} height={14} />
                 <span className="text-xs text-green-700 font-medium">Kalshi</span>
+                <ExternalLink className="w-3 h-3 text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <p className="text-2xl font-bold text-green-700">{kalshiPercent}%</p>
-            </div>
-            <div className="bg-indigo-50 rounded-lg py-2 px-3 text-center border border-indigo-100">
+            </button>
+            <button
+              onClick={openPolymarket}
+              className="bg-indigo-50 rounded-lg py-2 px-3 text-center border border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200 transition-colors cursor-pointer group"
+            >
               <div className="flex items-center justify-center gap-1 mb-1">
                 <Image src="/logos/polymarket-logo.png" alt="P" width={14} height={14} />
                 <span className="text-xs text-indigo-700 font-medium">Polymarket</span>
+                <ExternalLink className="w-3 h-3 text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <p className="text-2xl font-bold text-indigo-700">{polyPercent}%</p>
-            </div>
+            </button>
           </div>
 
           {/* Volume */}
@@ -92,31 +102,21 @@ function MatchCard({ match }: { match: CrossPlatformMatch }) {
             }}
           />
           <div className="absolute inset-0 flex items-center justify-between px-4 z-10">
-            {kalshiUrl && (
-              <a
-                href={kalshiUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-white text-xs font-medium hover:underline flex items-center gap-1"
-              >
-                Trade on Kalshi <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
-            {match.polymarket_market_id && (
-              <a
-                href="https://polymarket.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-white text-xs font-medium hover:underline flex items-center gap-1"
-              >
-                Trade on Polymarket <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
+            <button
+              onClick={openKalshi}
+              className="text-white text-xs font-medium hover:underline flex items-center gap-1"
+            >
+              Trade on Kalshi <ExternalLink className="w-3 h-3" />
+            </button>
+            <button
+              onClick={openPolymarket}
+              className="text-white text-xs font-medium hover:underline flex items-center gap-1"
+            >
+              Trade on Polymarket <ExternalLink className="w-3 h-3" />
+            </button>
           </div>
         </div>
-      </GameCard>
+      </div>
     </div>
   )
 }
