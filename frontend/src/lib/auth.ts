@@ -51,13 +51,19 @@ async function authFetch<T>(endpoint: string, options?: RequestInit): Promise<T>
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      ...headers,
-      ...options?.headers,
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: {
+        ...headers,
+        ...options?.headers,
+      },
+    })
+  } catch (err) {
+    // Network error - backend unreachable
+    throw new Error('Unable to connect to server. Please check your connection.')
+  }
 
   if (res.status === 401) {
     removeToken()
@@ -68,8 +74,8 @@ async function authFetch<T>(endpoint: string, options?: RequestInit): Promise<T>
   }
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Request failed' }))
-    throw new Error(error.detail || 'Request failed')
+    const error = await res.json().catch(() => ({ detail: `Request failed (${res.status})` }))
+    throw new Error(error.detail || `Request failed (${res.status})`)
   }
 
   return res.json()
