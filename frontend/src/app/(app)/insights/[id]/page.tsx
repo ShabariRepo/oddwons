@@ -165,8 +165,8 @@ export default function InsightDetailPage() {
         </div>
       )}
 
-      {/* AI Analysis - The Good Stuff */}
-      {insight.analyst_note && (
+      {/* AI Analysis - PRO only */}
+      {insight.analyst_note ? (
         <div className="card border-l-4 border-primary-500">
           <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <Brain className="w-5 h-5 text-primary-500" />
@@ -174,10 +174,21 @@ export default function InsightDetailPage() {
           </h2>
           <p className="text-gray-700 whitespace-pre-wrap">{insight.analyst_note}</p>
         </div>
+      ) : data.tier !== 'pro' && (
+        <div className="card border-l-4 border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Brain className="w-5 h-5 text-gray-400" />
+            AI Analysis
+          </h2>
+          <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">
+            <span className="font-medium">Full analyst notes</span> available on Pro
+            <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
+          </div>
+        </div>
       )}
 
-      {/* Movement Context */}
-      {insight.movement_context && (
+      {/* Movement Context - PREMIUM+ */}
+      {insight.movement_context ? (
         <div className="card bg-blue-50">
           <p className="text-sm font-medium text-blue-800 flex items-center gap-2 mb-2">
             <TrendingUp className="w-4 h-4" />
@@ -185,10 +196,21 @@ export default function InsightDetailPage() {
           </p>
           <p className="text-blue-700">{insight.movement_context}</p>
         </div>
+      ) : (data.tier === 'free' || data.tier === 'basic') && (
+        <div className="card">
+          <p className="text-sm font-medium text-gray-500 flex items-center gap-2 mb-2">
+            <TrendingUp className="w-4 h-4" />
+            Why It Moved
+          </p>
+          <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">
+            <span className="font-medium">Movement context</span> available on Premium+
+            <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
+          </div>
+        </div>
       )}
 
-      {/* Upcoming Catalyst */}
-      {insight.upcoming_catalyst && (
+      {/* Upcoming Catalyst - PREMIUM+ */}
+      {insight.upcoming_catalyst ? (
         <div className="card bg-yellow-50">
           <p className="text-sm font-medium text-yellow-800 flex items-center gap-2 mb-2">
             <Calendar className="w-4 h-4" />
@@ -196,10 +218,21 @@ export default function InsightDetailPage() {
           </p>
           <p className="text-yellow-700">{insight.upcoming_catalyst}</p>
         </div>
+      ) : (data.tier === 'free' || data.tier === 'basic') && (
+        <div className="card">
+          <p className="text-sm font-medium text-gray-500 flex items-center gap-2 mb-2">
+            <Calendar className="w-4 h-4" />
+            Upcoming Catalyst
+          </p>
+          <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">
+            <span className="font-medium">Upcoming catalysts</span> available on Premium+
+            <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
+          </div>
+        </div>
       )}
 
-      {/* Source Articles - THE HOMEWORK */}
-      {source_articles && source_articles.length > 0 && (
+      {/* Source Articles - PREMIUM+ */}
+      {source_articles && source_articles.length > 0 ? (
         <div className="card">
           <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <Newspaper className="w-5 h-5" />
@@ -221,6 +254,18 @@ export default function InsightDetailPage() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      ) : (data.tier === 'free' || data.tier === 'basic') && (
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Newspaper className="w-5 h-5 text-gray-400" />
+            Source Articles
+            <span className="text-xs text-gray-500 font-normal">(our homework)</span>
+          </h2>
+          <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">
+            <span className="font-medium">Source articles</span> available on Premium+
+            <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
           </div>
         </div>
       )}
@@ -254,10 +299,18 @@ export default function InsightDetailPage() {
         </div>
       )}
 
-      {/* Volume Note */}
-      {insight.volume_note && (
+      {/* Volume Note - BASIC+ */}
+      {insight.volume_note ? (
         <div className="card">
           <p className="text-sm text-gray-500">Volume: {insight.volume_note}</p>
+        </div>
+      ) : data.tier === 'free' && (
+        <div className="card">
+          <p className="text-sm text-gray-500">Volume Analysis</p>
+          <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500 mt-2">
+            <span className="font-medium">Volume analysis</span> available on Basic+
+            <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
+          </div>
         </div>
       )}
 
