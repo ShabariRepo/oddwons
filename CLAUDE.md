@@ -716,3 +716,69 @@ def calculate_trial_days(user: User) -> int:
         return 0  # Trial expired
     return (trial_end_date - datetime.utcnow()).days
 ```
+
+### Tier-Gated Market Detail API (Jan 10, 2026)
+**AI insight fields are now tier-gated on the `/markets/{id}` endpoint.**
+
+**Tier Gating:**
+- FREE: summary, current_odds, implied_probability only
+- BASIC: + volume_note, recent_movement
+- PREMIUM: + movement_context, upcoming_catalyst, source_articles
+- PRO: + analyst_note
+
+**Files Changed:**
+- `app/api/routes/markets.py` - Added `get_current_user_optional` dependency, tier-gated AI insight fields
+- `app/services/auth.py` - Already had `get_current_user_optional` function
+
+**Response now includes `tier` field:**
+```json
+{
+  "market": {...},
+  "price_history": [...],
+  "ai_insight": {...},  // Fields filtered by tier
+  "cross_platform": {...},
+  "tier": "basic"  // User's current tier
+}
+```
+
+### Fixed External Platform URLs (Jan 10, 2026)
+**Kalshi and Polymarket URLs now work correctly.**
+
+**Previous (broken):**
+- Kalshi: `https://kalshi.com/markets/KXOSCARNOMPIC-26-WIC` (404)
+- Polymarket: `https://polymarket.com/event/0xe93c89c41d...` (404)
+
+**Fixed:**
+- Kalshi: `https://kalshi.com/events/KXOSCARNOMPIC` (event ticker)
+- Polymarket: `https://polymarket.com/event/slug-name-here` (slug)
+
+**Files Changed:**
+- `app/services/kalshi_client.py` - `parse_market()` now accepts `event_ticker` param, constructs `/events/` URL
+- `app/services/polymarket_client.py` - Already correct (uses slug)
+
+### Functional Search Bar (Jan 10, 2026)
+**Header search bar now navigates to markets page with search query.**
+
+**Files Changed:**
+- `frontend/src/components/Header.tsx` - Added search form, navigates to `/markets?search=query`
+- `frontend/src/app/(app)/markets/page.tsx` - Reads `search` from URL params
+
+### Frontend Upgrade Prompts (Jan 10, 2026)
+**Market detail page now shows "available on Premium+" messages for gated content.**
+
+**File:** `frontend/src/app/(app)/markets/[id]/page.tsx`
+
+For each gated field (movement_context, upcoming_catalyst, source_articles, analyst_note), if the field is missing and the user's tier is too low, a gray box with upgrade link is shown instead.
+
+### Branded Email Templates (Jan 10, 2026)
+**Welcome emails now use branded template with logo, sky blue theme, and professional styling.**
+
+**Files Changed:**
+- `app/services/notifications.py` - Added `BRAND` constants, `get_email_base_template()`, updated `send_welcome_email()`
+
+**Template Features:**
+- Sky blue gradient header (#0ea5e9)
+- Logo placeholder (https://oddwons.ai/oddwons-logo.png)
+- Feature list with icons
+- Dark footer with navigation links
+- Branded CTA button

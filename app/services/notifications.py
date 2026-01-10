@@ -11,6 +11,119 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Brand constants for email templates
+BRAND = {
+    "logo_url": "https://oddwons.ai/oddwons-logo.png",  # Must be publicly accessible
+    "primary": "#0ea5e9",      # Sky blue
+    "primary_dark": "#0284c7",
+    "primary_gradient": "linear-gradient(135deg, #0ea5e9 0%, #0284c7 50%, #0369a1 100%)",
+    "success": "#22c55e",
+    "warning": "#eab308",
+    "danger": "#ef4444",
+    "dark": "#0f172a",
+    "gray": "#64748b",
+    "light_bg": "#f8fafc",
+    "accent": "#06b6d4",  # Cyan accent
+}
+
+def get_email_base_template(content: str, title: str = "") -> str:
+    """Wrap email content in branded base template."""
+    return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: {BRAND["light_bg"]}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #1e293b;">
+    <!-- Outer container with pattern background -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: {BRAND["light_bg"]};">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+                <!-- Main email container -->
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);">
+                    <!-- Header with logo and gradient -->
+                    <tr>
+                        <td style="background: {BRAND["primary_gradient"]}; padding: 32px 40px; text-align: center;">
+                            <!-- Logo -->
+                            <img src="{BRAND["logo_url"]}" alt="OddWons" width="150" style="max-width: 150px; height: auto; margin-bottom: 16px;">
+                            <!-- Decorative dots pattern -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 8px;">
+                                <tr>
+                                    <td align="center">
+                                        <span style="display: inline-block; width: 6px; height: 6px; background: rgba(255,255,255,0.3); border-radius: 50%; margin: 0 4px;"></span>
+                                        <span style="display: inline-block; width: 6px; height: 6px; background: rgba(255,255,255,0.5); border-radius: 50%; margin: 0 4px;"></span>
+                                        <span style="display: inline-block; width: 6px; height: 6px; background: rgba(255,255,255,0.7); border-radius: 50%; margin: 0 4px;"></span>
+                                        <span style="display: inline-block; width: 6px; height: 6px; background: rgba(255,255,255,0.5); border-radius: 50%; margin: 0 4px;"></span>
+                                        <span style="display: inline-block; width: 6px; height: 6px; background: rgba(255,255,255,0.3); border-radius: 50%; margin: 0 4px;"></span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <!-- Content area -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            {content}
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background: {BRAND["dark"]}; padding: 32px 40px; text-align: center;">
+                            <p style="margin: 0 0 16px 0; color: #94a3b8; font-size: 14px;">
+                                Your prediction market research companion
+                            </p>
+                            <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 0 auto 16px auto;">
+                                <tr>
+                                    <td style="padding: 0 8px;">
+                                        <a href="https://oddwons.ai/dashboard" style="color: {BRAND["accent"]}; text-decoration: none; font-size: 13px;">Dashboard</a>
+                                    </td>
+                                    <td style="color: #475569;">|</td>
+                                    <td style="padding: 0 8px;">
+                                        <a href="https://oddwons.ai/settings" style="color: {BRAND["accent"]}; text-decoration: none; font-size: 13px;">Settings</a>
+                                    </td>
+                                    <td style="color: #475569;">|</td>
+                                    <td style="padding: 0 8px;">
+                                        <a href="mailto:support@oddwons.ai" style="color: {BRAND["accent"]}; text-decoration: none; font-size: 13px;">Support</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="margin: 0; color: #64748b; font-size: 12px;">
+                                &copy; {datetime.utcnow().year} OddWons. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>'''
+
+
+def get_button_html(text: str, url: str, color: str = None) -> str:
+    """Generate a branded CTA button."""
+    bg_color = color or BRAND["primary"]
+    return f'''<table role="presentation" cellspacing="0" cellpadding="0" style="margin: 24px 0;">
+        <tr>
+            <td style="background: {bg_color}; border-radius: 8px; text-align: center;">
+                <a href="{url}" style="display: inline-block; padding: 14px 32px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px;">{text}</a>
+            </td>
+        </tr>
+    </table>'''
+
+
+def get_highlight_box(content: str, border_color: str = None) -> str:
+    """Generate a highlighted info box."""
+    color = border_color or BRAND["primary"]
+    return f'''<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 20px 0;">
+        <tr>
+            <td style="background: {BRAND["light_bg"]}; border-left: 4px solid {color}; padding: 16px 20px; border-radius: 0 8px 8px 0;">
+                {content}
+            </td>
+        </tr>
+    </table>'''
+
 
 class NotificationService:
     """Service for sending notifications via email, SMS, etc."""
@@ -92,61 +205,115 @@ class NotificationService:
         user_name: Optional[str] = None
     ) -> bool:
         """Send welcome email to new users."""
-        subject = "Welcome to OddWons!"
+        subject = "Welcome to OddWons! 🎯"
 
-        greeting = f"Hi {user_name}," if user_name else "Hi there,"
+        greeting = f"Hi {user_name}," if user_name else "Hey there,"
 
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
-                .content {{ background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }}
-                .button {{ display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
-                .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Welcome to OddWons!</h1>
-                </div>
-                <div class="content">
-                    <p>{greeting}</p>
-                    <p>Thank you for joining OddWons! We're excited to help you find profitable prediction market opportunities.</p>
-                    <p><strong>What to expect:</strong></p>
-                    <ul>
-                        <li>AI-powered market analysis for Kalshi and Polymarket</li>
-                        <li>Real-time pattern detection and alerts</li>
-                        <li>Cross-platform arbitrage opportunities</li>
-                        <li>Personalized opportunity scoring</li>
-                    </ul>
-                    <p>Your 7-day free trial starts now. Explore the dashboard to see today's top opportunities!</p>
-                    <a href="https://oddwons.ai/dashboard" class="button">Go to Dashboard</a>
-                </div>
-                <div class="footer">
-                    <p>&copy; {datetime.utcnow().year} OddWons. All rights reserved.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        content = f'''
+            <h1 style="margin: 0 0 8px 0; font-size: 28px; font-weight: 700; color: {BRAND["dark"]};">Welcome aboard!</h1>
+            <p style="margin: 0 0 24px 0; color: {BRAND["gray"]}; font-size: 16px;">You've just unlocked smarter prediction market research.</p>
+
+            <p style="margin: 0 0 16px 0; font-size: 16px;">{greeting}</p>
+            <p style="margin: 0 0 24px 0; font-size: 16px;">Thanks for joining OddWons! We're here to help you stay on top of prediction markets across Kalshi and Polymarket.</p>
+
+            {get_highlight_box(f"""
+                <p style="margin: 0 0 8px 0; font-weight: 600; color: {BRAND["dark"]};">🎉 Your 7-day free trial is now active!</p>
+                <p style="margin: 0; color: {BRAND["gray"]}; font-size: 14px;">Full access to all features. No credit card required.</p>
+            """, BRAND["success"])}
+
+            <p style="margin: 24px 0 12px 0; font-size: 16px; font-weight: 600; color: {BRAND["dark"]};">What you get:</p>
+
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;">
+                        <table role="presentation" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td style="width: 32px; vertical-align: top;">
+                                    <span style="display: inline-block; width: 24px; height: 24px; background: {BRAND["light_bg"]}; border-radius: 6px; text-align: center; line-height: 24px;">🤖</span>
+                                </td>
+                                <td style="padding-left: 12px;">
+                                    <strong style="color: {BRAND["dark"]};">AI Market Insights</strong><br>
+                                    <span style="color: {BRAND["gray"]}; font-size: 14px;">Daily analysis of what's moving and why</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;">
+                        <table role="presentation" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td style="width: 32px; vertical-align: top;">
+                                    <span style="display: inline-block; width: 24px; height: 24px; background: {BRAND["light_bg"]}; border-radius: 6px; text-align: center; line-height: 24px;">⚡</span>
+                                </td>
+                                <td style="padding-left: 12px;">
+                                    <strong style="color: {BRAND["dark"]};">Cross-Platform Comparison</strong><br>
+                                    <span style="color: {BRAND["gray"]}; font-size: 14px;">See price differences between Kalshi & Polymarket</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;">
+                        <table role="presentation" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td style="width: 32px; vertical-align: top;">
+                                    <span style="display: inline-block; width: 24px; height: 24px; background: {BRAND["light_bg"]}; border-radius: 6px; text-align: center; line-height: 24px;">📊</span>
+                                </td>
+                                <td style="padding-left: 12px;">
+                                    <strong style="color: {BRAND["dark"]};">Real-Time Alerts</strong><br>
+                                    <span style="color: {BRAND["gray"]}; font-size: 14px;">Get notified when markets move significantly</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px 0;">
+                        <table role="presentation" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td style="width: 32px; vertical-align: top;">
+                                    <span style="display: inline-block; width: 24px; height: 24px; background: {BRAND["light_bg"]}; border-radius: 6px; text-align: center; line-height: 24px;">📰</span>
+                                </td>
+                                <td style="padding-left: 12px;">
+                                    <strong style="color: {BRAND["dark"]};">Daily Briefings</strong><br>
+                                    <span style="color: {BRAND["gray"]}; font-size: 14px;">Curated market summaries delivered to your inbox</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+
+            {get_button_html("Explore Your Dashboard →", "https://oddwons.ai/dashboard")}
+
+            <p style="margin: 24px 0 0 0; font-size: 14px; color: {BRAND["gray"]};">
+                Questions? Just reply to this email - we're here to help!
+            </p>
+        '''
+
+        html_content = get_email_base_template(content, "Welcome to OddWons!")
 
         text_content = f"""
 {greeting}
 
-Thank you for joining OddWons! We're excited to help you find profitable prediction market opportunities.
+Welcome to OddWons!
 
-What to expect:
-- AI-powered market analysis for Kalshi and Polymarket
-- Real-time pattern detection and alerts
-- Cross-platform arbitrage opportunities
-- Personalized opportunity scoring
+Thanks for joining! We're here to help you stay on top of prediction markets across Kalshi and Polymarket.
 
-Your 7-day free trial starts now. Visit https://oddwons.ai/dashboard to see today's top opportunities!
+YOUR 7-DAY FREE TRIAL IS NOW ACTIVE
+Full access to all features. No credit card required.
+
+What you get:
+- AI Market Insights: Daily analysis of what's moving and why
+- Cross-Platform Comparison: See price differences between Kalshi & Polymarket
+- Real-Time Alerts: Get notified when markets move significantly
+- Daily Briefings: Curated market summaries delivered to your inbox
+
+Visit https://oddwons.ai/dashboard to get started.
+
+Questions? Just reply to this email - we're here to help!
 
 Best,
 The OddWons Team

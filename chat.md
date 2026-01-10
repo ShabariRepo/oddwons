@@ -1,295 +1,447 @@
-# OddWons - UI Fixes
+# OddWons - Critical Fixes
 
 ---
 
-## WHY IMAGES AREN'T SHOWING
+## ISSUE 1: Market Detail Page Shows Premium Content to Basic Users (BUG!)
 
-The backend code fetches images, but **existing data doesn't have images yet**.
+**Problem:** The `/markets/{id}` endpoint returns ALL AI insight fields without checking user tier. A BASIC user can see analyst_note, movement_context, upcoming_catalyst, and source_articles.
 
-**Fix:** Re-run data collection:
+**File:** `app/api/routes/markets.py`
 
-```bash
-railway run python -c "import asyncio; from app.services.data_collector import data_collector; asyncio.run(data_collector.run_collection())"
+**Fix:** Add authentication and tier-gating to the market detail endpoint.
+
+**Replace the `get_market` function (around line 150) with:**
+
+```python
+@router.get("/{market_id}")
+async def get_market(
+    market_id: str,
+    history_limit: int = Query(100, ge=1, le=1000, description="Number of historical snapshots"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """
+    Get full market details with price history, AI insight (if exists), and cross-platform match.
+    AI insight fields are tier-gated.
+    """
+    from app.models.cross_platform_match import CrossPlatformMatch
+    from app.models.user import SubscriptionTier
+
+    result = await db.execute(
+        select(Market).where(Market.id == market_id)
+    )
+    market = result.scalar_one_or_none()
+
+    if not market:
+        raise HTTPException(status_code=404, detail="Market not found")
+
+    # Fetch snapshots
+    snapshot_result = await db.execute(
+        select(MarketSnapshot)
+        .where(MarketSnapshot.market_id == market_id)
+        .order_by(MarketSnapshot.timestamp.desc())
+        .limit(history_limit)
+    )
+    snapshots = snapshot_result.scalars().all()
+
+    # Compute enriched fields for this single market
+    enriched = await compute_enriched_fields([market], db)
+
+    # Build price history
+    price_history = [
+        {
+            "timestamp": s.timestamp.isoformat() if s.timestamp else None,
+            "yes_price": s.yes_price,
+            "no_price": s.no_price,
+            "volume": s.volume,
+            "volume_24h": s.volume_24h,
+        }
+        for s in reversed(snapshots)
+    ]
+
+    # Check for AI insight
+    ai_insight_result = await db.execute(
+        select(AIInsight)
+        .where(AIInsight.market_id == market_id)
+        .where(AIInsight.status == "active")
+        .order_by(AIInsight.created_at.desc())
+        .limit(1)
+    )
+    ai_insight = ai_insight_result.scalar_one_or_none()
+
+    # Get user tier for gating
+    tier = current_user.subscription_tier if current_user else None
+
+    # Build tier-gated AI insight data
+    ai_insight_data = None
+    if ai_insight:
+        # Base data - ALL TIERS see summary
+        ai_insight_data = {
+            "id": ai_insight.id,
+            "summary": ai_insight.summary,
+            "current_odds": ai_insight.current_odds,
+            "implied_probability": ai_insight.implied_probability,
+            "created_at": ai_insight.created_at.isoformat() if ai_insight.created_at else None,
+        }
+
+        # BASIC+ get volume and movement
+        if tier and tier != SubscriptionTier.FREE:
+            ai_insight_data["volume_note"] = ai_insight.volume_note
+            ai_insight_data["recent_movement"] = ai_insight.recent_movement
+
+        # PREMIUM+ get full context
+        if tier in [SubscriptionTier.PREMIUM, SubscriptionTier.PRO]:
+            ai_insight_data["movement_context"] = ai_insight.movement_context
+            ai_insight_data["upcoming_catalyst"] = ai_insight.upcoming_catalyst
+            ai_insight_data["source_articles"] = ai_insight.source_articles
+
+        # PRO only gets analyst notes
+        if tier == SubscriptionTier.PRO:
+            ai_insight_data["analyst_note"] = ai_insight.analyst_note
+
+    # Check for cross-platform match
+    cross_platform = None
+    match_result = await db.execute(
+        select(CrossPlatformMatch)
+        .where(
+            (CrossPlatformMatch.kalshi_market_id == market_id) |
+            (CrossPlatformMatch.polymarket_market_id == market_id)
+        )
+        .limit(1)
+    )
+    cross_match = match_result.scalar_one_or_none()
+    if cross_match:
+        cross_platform = {
+            "match_id": cross_match.match_id,
+            "topic": cross_match.topic,
+            "kalshi_market_id": cross_match.kalshi_market_id,
+            "polymarket_market_id": cross_match.polymarket_market_id,
+            "kalshi_price": cross_match.kalshi_yes_price,
+            "polymarket_price": cross_match.polymarket_yes_price,
+            "price_gap": abs(
+                (cross_match.kalshi_yes_price or 0) - (cross_match.polymarket_yes_price or 0)
+            ) if cross_match.kalshi_yes_price and cross_match.polymarket_yes_price else None,
+        }
+
+    # Use stored market URL (should be set during collection)
+    market_url = market.url
+
+    # Build response
+    enriched_market = enriched[0]
+
+    # Get volume_24h from latest snapshot
+    volume_24h = None
+    if snapshots:
+        volume_24h = snapshots[0].volume_24h
+
+    return {
+        "market": {
+            "id": enriched_market.id,
+            "title": enriched_market.title,
+            "platform": enriched_market.platform.value if hasattr(enriched_market.platform, 'value') else enriched_market.platform,
+            "yes_price": enriched_market.yes_price,
+            "no_price": enriched_market.no_price,
+            "volume": enriched_market.volume,
+            "volume_24h": volume_24h,
+            "status": enriched_market.status,
+            "category": enriched_market.category,
+            "close_time": enriched_market.close_time.isoformat() if enriched_market.close_time else None,
+            "url": market_url,
+            "implied_probability": enriched_market.implied_probability,
+            "price_change_24h": enriched_market.price_change_24h,
+            "price_change_7d": enriched_market.price_change_7d,
+            "volume_rank": enriched_market.volume_rank,
+            "has_ai_highlight": enriched_market.has_ai_highlight,
+            "created_at": enriched_market.created_at.isoformat() if enriched_market.created_at else None,
+            "updated_at": enriched_market.updated_at.isoformat() if enriched_market.updated_at else None,
+        },
+        "price_history": price_history,
+        "ai_insight": ai_insight_data,
+        "cross_platform": cross_platform,
+        "tier": tier.value if tier else "free",
+    }
+```
+
+**Also add these imports at the top of markets.py:**
+
+```python
+from typing import Optional
+from app.models.user import User, SubscriptionTier
+from app.services.auth import get_current_user_optional
+```
+
+**Create the `get_current_user_optional` function in `app/services/auth.py`:**
+
+```python
+async def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Get current user if authenticated, otherwise return None."""
+    if not token:
+        return None
+    try:
+        return await get_current_user(token, db)
+    except HTTPException:
+        return None
+
+# Also add this OAuth scheme that doesn't require auth:
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 ```
 
 ---
 
-## TASK 1: Markets Page - Add Platform Color Gradient to Table Rows
+## ISSUE 2: External Links to Kalshi/Polymarket Don't Work
 
-**Keep the table layout**, but add a diagonal platform color indicator to each row.
+**Problem:** 
+- Polymarket URLs need the market SLUG, not the condition_id
+- Kalshi URLs need the EVENT ticker, not the market ticker
 
-**File:** `frontend/src/app/(app)/markets/page.tsx`
+**Current broken examples:**
+- Kalshi: `https://kalshi.com/markets/KXOSCARNOMPIC-26-WIC` → 404
+- Polymarket: `https://polymarket.com/event/0xe93c89c41d...` → 404
 
-**Replace the `MarketRow` function with:**
+**Correct formats:**
+- Kalshi: `https://kalshi.com/events/KXOSCARNOMPIC` (event ticker, not market ticker)
+- Polymarket: `https://polymarket.com/event/slug-name-here` (slug, not condition_id)
+
+### Fix Part A: Store correct URLs during data collection
+
+**File:** `app/services/data_collector.py`
+
+Find where markets are saved and ensure the `url` field is populated correctly from the API response.
+
+**For Polymarket** - the API returns a `slug` field. Use it:
+```python
+# In polymarket collection
+market_url = f"https://polymarket.com/event/{event_data.get('slug', '')}"
+```
+
+**For Kalshi** - extract event ticker from market ticker:
+```python
+# In kalshi collection  
+# Market ticker: KXOSCARNOMPIC-26-WIC
+# Event ticker: KXOSCARNOMPIC (everything before first hyphen followed by numbers)
+import re
+event_ticker = re.match(r'^([A-Z]+)', market_data.ticker).group(1) if market_data.ticker else ''
+market_url = f"https://kalshi.com/events/{event_ticker}"
+```
+
+### Fix Part B: Update data_collector.py
+
+**File:** `app/services/data_collector.py`
+
+Find the section where markets are saved to the database and add URL construction:
+
+```python
+# For Kalshi markets - extract event ticker
+def get_kalshi_url(ticker: str) -> str:
+    """Get Kalshi event URL from market ticker."""
+    # Market ticker format: KXOSCARNOMPIC-26-WIC or FED-26JAN29
+    # We need just the event part
+    if not ticker:
+        return None
+    # Try to find event ticker (letters before first number or hyphen)
+    import re
+    match = re.match(r'^([A-Z]+(?:-[A-Z]+)?)', ticker)
+    if match:
+        event_ticker = match.group(1)
+        return f"https://kalshi.com/events/{event_ticker}"
+    return f"https://kalshi.com/markets/{ticker}"
+
+# For Polymarket markets - use slug from API
+def get_polymarket_url(slug: str, condition_id: str) -> str:
+    """Get Polymarket URL from slug or condition_id."""
+    if slug:
+        return f"https://polymarket.com/event/{slug}"
+    return f"https://polymarket.com/markets/{condition_id}"
+```
+
+### Fix Part C: Update Polymarket client to return slug
+
+**File:** `app/services/polymarket_client.py`
+
+Ensure the `PolymarketMarketData` schema includes `slug`:
+
+```python
+@dataclass
+class PolymarketMarketData:
+    # ... existing fields ...
+    slug: Optional[str] = None  # ADD THIS
+```
+
+And populate it during parsing:
+```python
+slug=market.get("slug") or event.get("slug"),
+```
+
+---
+
+## ISSUE 3: Search Bar Doesn't Work
+
+**Problem:** The search bar in the header is just a placeholder and doesn't actually search anything.
+
+**File:** `frontend/src/components/Header.tsx` or wherever the search bar is
+
+**Option A: Make it functional** - Connect to markets search API:
 
 ```tsx
-function MarketRow({ market }: { market: Market }) {
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Search } from 'lucide-react'
+
+function SearchBar() {
+  const [query, setQuery] = useState('')
   const router = useRouter()
-  const yesPrice = market.yes_price ? (market.yes_price * 100).toFixed(1) : '-'
-  const noPrice = market.no_price ? (market.no_price * 100).toFixed(1) : '-'
 
-  // Platform colors
-  const platformColor = market.platform === 'kalshi' ? '#00D26A' : '#6366F1'
-  const platformLogo = market.platform === 'kalshi' 
-    ? '/logos/kalshi-logo.png' 
-    : '/logos/polymarket-logo.png'
-
-  const formatVolume = (vol?: number) => {
-    if (!vol) return '-'
-    if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`
-    if (vol >= 1000) return `$${(vol / 1000).toFixed(0)}K`
-    return `$${vol.toFixed(0)}`
-  }
-
-  const handleRowClick = () => {
-    router.push(`/markets/${market.id}`)
-  }
-
-  const handleExternalClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    const url = market.platform === 'kalshi'
-      ? `https://kalshi.com/markets/${market.id}`
-      : `https://polymarket.com/event/${market.id}`
-    window.open(url, '_blank')
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (query.trim()) {
+      router.push(`/markets?search=${encodeURIComponent(query.trim())}`)
+    }
   }
 
   return (
-    <tr 
-      className="hover:bg-gray-50 cursor-pointer relative overflow-hidden" 
-      onClick={handleRowClick}
+    <form onSubmit={handleSearch} className="relative">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+      <input
+        type="text"
+        placeholder="Search markets..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+      />
+    </form>
+  )
+}
+```
+
+**Option B: Remove it** - If search isn't needed, remove the non-functional element to avoid confusing users.
+
+---
+
+## ISSUE 4: Frontend Market Detail - Show Upgrade Prompts
+
+**File:** `frontend/src/app/(app)/markets/[id]/page.tsx`
+
+Update the AI insight section to show upgrade prompts for gated content:
+
+```tsx
+{/* AI Insight - if exists */}
+{ai_insight && (
+  <div className="card border-l-4 border-purple-500">
+    <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+      <Brain className="w-5 h-5 text-purple-500" />
+      AI Analysis
+    </h2>
+    
+    {/* Summary - all tiers */}
+    {ai_insight.summary && (
+      <p className="text-gray-600 mb-3">{ai_insight.summary}</p>
+    )}
+    
+    {/* Analyst note - PRO only */}
+    {ai_insight.analyst_note ? (
+      <p className="text-gray-700 whitespace-pre-wrap mb-4">{ai_insight.analyst_note}</p>
+    ) : data.tier !== 'pro' && (
+      <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
+        <span className="font-medium">Full AI analysis</span> available on Pro tier
+      </div>
+    )}
+
+    {/* Upcoming Catalyst - PREMIUM+ */}
+    {ai_insight.upcoming_catalyst ? (
+      <div className="p-3 bg-yellow-50 rounded-lg mb-4">
+        <p className="text-sm font-medium text-yellow-800">Upcoming Catalyst</p>
+        <p className="text-yellow-700 mt-1">{ai_insight.upcoming_catalyst}</p>
+      </div>
+    ) : data.tier === 'basic' && (
+      <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
+        <span className="font-medium">Upcoming catalysts</span> available on Premium+
+      </div>
+    )}
+
+    {/* Movement Context - PREMIUM+ */}
+    {ai_insight.movement_context ? (
+      <div className="p-3 bg-blue-50 rounded-lg mb-4">
+        <p className="text-sm font-medium text-blue-800">Why It Moved</p>
+        <p className="text-blue-700 mt-1">{ai_insight.movement_context}</p>
+      </div>
+    ) : data.tier === 'basic' && (
+      <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
+        <span className="font-medium">Movement context</span> available on Premium+
+      </div>
+    )}
+
+    {/* Source Articles - PREMIUM+ */}
+    {ai_insight.source_articles && ai_insight.source_articles.length > 0 ? (
+      <div className="border-t pt-4">
+        <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+          <Newspaper className="w-4 h-4" />
+          Sources (our homework)
+        </p>
+        <div className="space-y-2">
+          {ai_insight.source_articles.map((article: any, i: number) => (
+            <div key={i} className="text-sm text-gray-600">
+              {article.title} <span className="text-gray-400">({article.source})</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : data.tier === 'basic' && (
+      <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">
+        <span className="font-medium">Source articles</span> available on Premium+
+      </div>
+    )}
+
+    <Link
+      href={`/insights/${ai_insight.id}`}
+      className="text-sm text-purple-600 hover:underline mt-3 inline-block"
     >
-      <td className="px-4 py-4">
-        <div className="flex items-start gap-3">
-          {/* Platform logo + diagonal color bar */}
-          <div className="relative flex items-center gap-2 shrink-0">
-            <div 
-              className="w-1 h-10 rounded-full"
-              style={{ backgroundColor: platformColor }}
-            />
-            <Image
-              src={platformLogo}
-              alt={market.platform}
-              width={20}
-              height={20}
-              className="rounded-sm"
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
-              {market.title}
-            </p>
-            {market.category && (
-              <p className="text-xs text-gray-500 mt-0.5">{market.category}</p>
-            )}
-          </div>
-        </div>
-      </td>
-      <td className="px-4 py-4 text-center">
-        <span className="text-sm font-medium text-green-600">{yesPrice}¢</span>
-      </td>
-      <td className="px-4 py-4 text-center">
-        <span className="text-sm font-medium text-red-600">{noPrice}¢</span>
-      </td>
-      <td className="px-4 py-4 text-center">
-        <span className="text-sm text-gray-900">{formatVolume(market.volume)}</span>
-      </td>
-      <td className="px-4 py-4 text-center">
-        <span className={clsx(
-          'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-          market.status === 'active'
-            ? 'bg-green-100 text-green-800'
-            : 'bg-gray-100 text-gray-800'
-        )}>
-          {market.status}
-        </span>
-      </td>
-      {/* Diagonal gradient on the right side of row */}
-      <td className="px-4 py-4 text-right relative">
-        <div 
-          className="absolute right-0 top-0 bottom-0 w-16 pointer-events-none"
-          style={{
-            background: `linear-gradient(115deg, transparent 0%, transparent 30%, ${platformColor}20 30%, ${platformColor}40 100%)`,
-          }}
-        />
-        <button
-          className="text-gray-400 hover:text-gray-600 relative z-10"
-          onClick={handleExternalClick}
-          title="Open on platform"
-        >
-          <ExternalLink className="w-4 h-4" />
-        </button>
-      </td>
-    </tr>
-  )
-}
-```
-
-**Make sure Image is imported at the top:**
-```tsx
-import Image from 'next/image'
-```
-
----
-
-## TASK 2: Cross-Platform Page - Full Card Layout
-
-**File:** `frontend/src/app/(app)/cross-platform/page.tsx`
-
-**Replace `MatchCard` function with:**
-
-```tsx
-function MatchCard({ match }: { match: CrossPlatformMatch }) {
-  const kalshiPercent = match.kalshi_yes_price ? Math.round(match.kalshi_yes_price) : 50
-  const polyPercent = match.polymarket_yes_price ? Math.round(match.polymarket_yes_price) : 50
-  const gapColor = Math.abs(match.price_gap_cents) >= 5 ? 'text-green-600' : 'text-yellow-600'
-
-  return (
-    <div className="relative pt-14 mt-12">
-      {/* Floating Circle - Both logos for cross-platform */}
-      <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20">
-        <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gradient-to-br from-green-400 via-blue-500 to-purple-600">
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="flex items-center -space-x-2">
-              <Image src="/logos/kalshi-logo.png" alt="K" width={28} height={28} className="rounded-full border-2 border-white bg-white" />
-              <Image src="/logos/polymarket-logo.png" alt="P" width={28} height={28} className="rounded-full border-2 border-white bg-white" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Card */}
-      <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow border border-gray-100 overflow-hidden">
-        <div className="px-4 pt-10 pb-4">
-          {/* Category + Gap */}
-          <div className="flex items-center justify-between mb-2">
-            {match.category && (
-              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                {match.category}
-              </span>
-            )}
-            <span className={`text-sm font-bold ${gapColor}`}>
-              {match.price_gap_cents.toFixed(1)}¢ gap
-            </span>
-          </div>
-
-          {/* Topic */}
-          <h3 className="font-semibold text-gray-900 text-center mb-3 line-clamp-2">
-            {match.topic}
-          </h3>
-
-          {/* Platform price boxes */}
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="bg-green-50 rounded-lg py-2 px-3 text-center border border-green-100">
-              <div className="flex items-center justify-center gap-1 mb-1">
-                <Image src="/logos/kalshi-logo.png" alt="K" width={14} height={14} />
-                <span className="text-xs text-green-700 font-medium">Kalshi</span>
-              </div>
-              <p className="text-2xl font-bold text-green-700">{kalshiPercent}%</p>
-            </div>
-            <div className="bg-indigo-50 rounded-lg py-2 px-3 text-center border border-indigo-100">
-              <div className="flex items-center justify-center gap-1 mb-1">
-                <Image src="/logos/polymarket-logo.png" alt="P" width={14} height={14} />
-                <span className="text-xs text-indigo-700 font-medium">Polymarket</span>
-              </div>
-              <p className="text-2xl font-bold text-indigo-700">{polyPercent}%</p>
-            </div>
-          </div>
-
-          {/* Volume */}
-          <p className="text-sm text-gray-500 text-center">
-            ${(match.combined_volume / 1000).toFixed(0)}K combined
-          </p>
-        </div>
-
-        {/* Diagonal Footer - Split colors */}
-        <div className="relative h-10 overflow-hidden">
-          <div
-            className="absolute inset-0"
-            style={{
-              background: 'linear-gradient(115deg, #00D26A 0%, #00D26A 50%, #6366F1 50%, #6366F1 100%)',
-            }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center z-10">
-            <span className="text-white text-xs font-medium">Cross-Platform Match</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-```
-
-**Replace `MatchCardSkeleton` with:**
-
-```tsx
-function MatchCardSkeleton() {
-  return (
-    <div className="relative pt-14 mt-12">
-      <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20">
-        <div className="w-20 h-20 rounded-full bg-gray-200 animate-pulse border-4 border-white shadow-xl" />
-      </div>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-4 pt-10 pb-4 space-y-3">
-          <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
-          <div className="grid grid-cols-2 gap-3">
-            <div className="h-16 bg-gray-200 rounded animate-pulse" />
-            <div className="h-16 bg-gray-200 rounded animate-pulse" />
-          </div>
-        </div>
-        <div className="h-10 bg-gray-100" />
-      </div>
-    </div>
-  )
-}
-```
-
----
-
-## TASK 3: Add image_url to Market Type
-
-**File:** `frontend/src/lib/types.ts`
-
-Add `image_url` to the Market interface:
-
-```typescript
-export interface Market {
-  id: string
-  title: string
-  platform: string
-  category?: string
-  yes_price?: number
-  no_price?: number
-  volume?: number
-  liquidity?: number
-  status: string
-  close_time?: string
-  image_url?: string  // ADD THIS LINE
-  created_at: string
-  updated_at: string
-}
+      View full insight
+    </Link>
+  </div>
+)}
 ```
 
 ---
 
 ## SUMMARY
 
-| Task | File | Action |
-|------|------|--------|
-| Markets rows | `markets/page.tsx` | Add platform color bar + gradient to table rows (keep table layout) |
-| Cross-platform cards | `cross-platform/page.tsx` | Replace with full card layout (floating circle + diagonal footer) |
-| Market type | `lib/types.ts` | Add `image_url?: string` |
-| **Get images** | Backend | Re-run data collection |
+| Issue | File | Fix |
+|-------|------|-----|
+| 1. Tier gating on market detail | `app/api/routes/markets.py` | Add user auth + tier-gate ai_insight fields |
+| 1b. Optional auth helper | `app/services/auth.py` | Add `get_current_user_optional` |
+| 2. Broken Kalshi URLs | `app/services/data_collector.py` | Extract event ticker, use `/events/` URL |
+| 2. Broken Polymarket URLs | `app/services/data_collector.py` | Use slug field from API |
+| 3. Search bar | `frontend/src/components/Header.tsx` | Either make functional or remove |
+| 4. Frontend upgrade prompts | `frontend/src/app/(app)/markets/[id]/page.tsx` | Show upgrade prompts for gated content |
 
 ---
 
 ## PROMPT FOR CLAUDE CODE
 
 ```
-Read chat.md and implement:
+Read chat.md and implement all 4 fixes:
 
-1. In markets/page.tsx - Keep the TABLE layout but update MarketRow to have a colored vertical bar on the left (Kalshi=#00D26A, Polymarket=#6366F1) and a subtle diagonal gradient on the right side of each row
+1. BACKEND TIER GATING (CRITICAL):
+   - In app/api/routes/markets.py, update get_market endpoint to tier-gate AI insight fields
+   - Add get_current_user_optional to app/services/auth.py
+   - FREE: only summary, current_odds, implied_probability
+   - BASIC: add volume_note, recent_movement  
+   - PREMIUM: add movement_context, upcoming_catalyst, source_articles
+   - PRO: add analyst_note
 
-2. In cross-platform/page.tsx - Replace MatchCard and MatchCardSkeleton with the full card layout (floating circle with both platform logos, diagonal split-color footer)
+2. FIX EXTERNAL URLS:
+   - In data_collector.py, construct correct URLs:
+     - Kalshi: https://kalshi.com/events/{EVENT_TICKER} (not market ticker)
+     - Polymarket: https://polymarket.com/event/{SLUG} (not condition_id)
+   - Store the URL in the market.url field during collection
 
-3. In lib/types.ts - Add image_url?: string to Market interface
+3. SEARCH BAR:
+   - Either connect it to /markets?search= or remove it if not needed
+
+4. FRONTEND UPGRADE PROMPTS:
+   - In markets/[id]/page.tsx, show "available on Premium+" messages for gated content
 ```

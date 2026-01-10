@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Filter, ExternalLink, Brain } from 'lucide-react'
 import { useMarkets } from '@/hooks/useAPI'
 import { clsx } from 'clsx'
 import { Market } from '@/lib/types'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { PLATFORMS } from '@/lib/platforms'
 
 const platforms = [
@@ -149,9 +149,18 @@ function MarketRowSkeleton() {
 }
 
 export default function MarketsPage() {
+  const searchParams = useSearchParams()
   const [platform, setPlatform] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+
+  // Initialize search from URL params
+  useEffect(() => {
+    const urlSearch = searchParams.get('search')
+    if (urlSearch) {
+      setSearch(urlSearch)
+    }
+  }, [searchParams])
 
   const { data, isLoading } = useMarkets({
     platform: platform || undefined,

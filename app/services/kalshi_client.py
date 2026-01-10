@@ -133,7 +133,7 @@ class KalshiClient:
             logger.warning(f"Kalshi event metadata error for {event_ticker}: {e}")
             return {}
 
-    def parse_market(self, data: Dict[str, Any], event_image_url: Optional[str] = None) -> KalshiMarketData:
+    def parse_market(self, data: Dict[str, Any], event_image_url: Optional[str] = None, event_ticker: Optional[str] = None) -> KalshiMarketData:
         """Parse raw API response into structured data.
 
         Note: Kalshi API returns prices in cents (0-100), we convert to decimal (0-1)
@@ -156,8 +156,22 @@ class KalshiClient:
         )
 
         # Construct direct link to market on Kalshi
+        # Use event ticker for URL (not market ticker) - Kalshi URLs are /events/{event_ticker}
         ticker = market.get("ticker", "")
-        market_url = f"https://kalshi.com/markets/{ticker}" if ticker else None
+
+        # If event_ticker is provided, use it. Otherwise, try to extract from market ticker.
+        # Market ticker format examples: KXOSCARNOMPIC-26-WIC, FED-26JAN29, INXU-25JAN10-T8100.99
+        if event_ticker:
+            url_event = event_ticker
+        elif ticker:
+            # Extract event ticker (letters before first hyphen+digits)
+            import re
+            match = re.match(r'^([A-Z]+)', ticker)
+            url_event = match.group(1) if match else ticker
+        else:
+            url_event = None
+
+        market_url = f"https://kalshi.com/events/{url_event}" if url_event else None
 
         return KalshiMarketData(
             ticker=ticker,
@@ -230,7 +244,7 @@ class KalshiClient:
                             seen_tickers.add(ticker)
 
                             try:
-                                parsed = self.parse_market(m, event_image_url=event_image_url)
+                                parsed = self.parse_market(m, event_image_url=event_image_url, event_ticker=event_ticker)
                                 # Add category from event
                                 parsed.category = event.get("category")
                                 all_markets.append(parsed)

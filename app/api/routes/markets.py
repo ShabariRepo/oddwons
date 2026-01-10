@@ -16,6 +16,8 @@ from app.schemas.market import (
     MarketWithHistory,
     SnapshotResponse,
 )
+from app.models.user import User, SubscriptionTier
+from app.services.auth import get_current_user_optional
 
 router = APIRouter(prefix="/markets", tags=["markets"])
 
@@ -209,15 +211,18 @@ async def get_market(
     market_id: str,
     history_limit: int = Query(100, ge=1, le=1000, description="Number of historical snapshots"),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     Get full market details with price history, AI insight (if exists), and cross-platform match.
+    AI insight fields are tier-gated.
 
     Returns:
     - market: Full market data with computed fields
     - price_history: Historical price/volume data
-    - ai_insight: AI-generated analysis if available
+    - ai_insight: AI-generated analysis (tier-gated)
     - cross_platform: Cross-platform match if available
+    - tier: User's current tier
     """
     from app.models.cross_platform_match import CrossPlatformMatch
 
@@ -263,17 +268,35 @@ async def get_market(
     )
     ai_insight = ai_insight_result.scalar_one_or_none()
 
+    # Get user tier for gating
+    tier = current_user.subscription_tier if current_user else SubscriptionTier.FREE
+
+    # Build tier-gated AI insight data
     ai_insight_data = None
     if ai_insight:
+        # Base data - ALL TIERS see summary, current_odds, implied_probability
         ai_insight_data = {
             "id": ai_insight.id,
             "summary": ai_insight.summary,
-            "analyst_note": ai_insight.analyst_note,
-            "upcoming_catalyst": ai_insight.upcoming_catalyst,
-            "movement_context": ai_insight.movement_context,
-            "source_articles": ai_insight.source_articles,
+            "current_odds": ai_insight.current_odds,
+            "implied_probability": ai_insight.implied_probability,
             "created_at": ai_insight.created_at.isoformat() if ai_insight.created_at else None,
         }
+
+        # BASIC+ get volume and movement
+        if tier != SubscriptionTier.FREE:
+            ai_insight_data["volume_note"] = ai_insight.volume_note
+            ai_insight_data["recent_movement"] = ai_insight.recent_movement
+
+        # PREMIUM+ get full context
+        if tier in [SubscriptionTier.PREMIUM, SubscriptionTier.PRO]:
+            ai_insight_data["movement_context"] = ai_insight.movement_context
+            ai_insight_data["upcoming_catalyst"] = ai_insight.upcoming_catalyst
+            ai_insight_data["source_articles"] = ai_insight.source_articles
+
+        # PRO only gets analyst notes
+        if tier == SubscriptionTier.PRO:
+            ai_insight_data["analyst_note"] = ai_insight.analyst_note
 
     # Check for cross-platform match
     cross_platform = None
@@ -346,6 +369,7 @@ async def get_market(
         "price_history": price_history,
         "ai_insight": ai_insight_data,
         "cross_platform": cross_platform,
+        "tier": tier.value if tier else "free",
     }
 
 

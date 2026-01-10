@@ -57,7 +57,7 @@ export default function MarketDetailPage() {
     )
   }
 
-  const { market, price_history, ai_insight, cross_platform } = data
+  const { market, price_history, ai_insight, cross_platform, tier } = data
 
   const formatVolume = (vol?: number) => {
     if (!vol) return '-'
@@ -219,29 +219,70 @@ export default function MarketDetailPage() {
             <Brain className="w-5 h-5 text-purple-500" />
             AI Analysis
           </h2>
+
+          {/* Summary - all tiers */}
           {ai_insight.summary && (
             <p className="text-gray-600 mb-3">{ai_insight.summary}</p>
           )}
-          {ai_insight.analyst_note && (
-            <p className="text-gray-700 whitespace-pre-wrap mb-4">{ai_insight.analyst_note}</p>
+
+          {/* Volume Note - BASIC+ */}
+          {ai_insight.volume_note ? (
+            <p className="text-sm text-gray-500 mb-3">{ai_insight.volume_note}</p>
+          ) : tier === 'free' && (
+            <div className="p-3 bg-gray-50 rounded-lg mb-3 text-sm text-gray-500">
+              <span className="font-medium">Volume analysis</span> available on Basic+
+              <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
+            </div>
           )}
 
-          {ai_insight.upcoming_catalyst && (
+          {/* Recent Movement - BASIC+ */}
+          {ai_insight.recent_movement ? (
+            <p className="text-sm text-gray-600 mb-4">{ai_insight.recent_movement}</p>
+          ) : tier === 'free' && (
+            <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
+              <span className="font-medium">Movement analysis</span> available on Basic+
+              <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
+            </div>
+          )}
+
+          {/* Analyst note - PRO only */}
+          {ai_insight.analyst_note ? (
+            <p className="text-gray-700 whitespace-pre-wrap mb-4">{ai_insight.analyst_note}</p>
+          ) : tier !== 'pro' && (
+            <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
+              <span className="font-medium">Full analyst notes</span> available on Pro
+              <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
+            </div>
+          )}
+
+          {/* Upcoming Catalyst - PREMIUM+ */}
+          {ai_insight.upcoming_catalyst ? (
             <div className="p-3 bg-yellow-50 rounded-lg mb-4">
               <p className="text-sm font-medium text-yellow-800">Upcoming Catalyst</p>
               <p className="text-yellow-700 mt-1">{ai_insight.upcoming_catalyst}</p>
             </div>
+          ) : (tier === 'free' || tier === 'basic') && (
+            <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
+              <span className="font-medium">Upcoming catalysts</span> available on Premium+
+              <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
+            </div>
           )}
 
-          {ai_insight.movement_context && (
+          {/* Movement Context - PREMIUM+ */}
+          {ai_insight.movement_context ? (
             <div className="p-3 bg-blue-50 rounded-lg mb-4">
               <p className="text-sm font-medium text-blue-800">Why It Moved</p>
               <p className="text-blue-700 mt-1">{ai_insight.movement_context}</p>
             </div>
+          ) : (tier === 'free' || tier === 'basic') && (
+            <div className="p-3 bg-gray-50 rounded-lg mb-4 text-sm text-gray-500">
+              <span className="font-medium">Movement context</span> available on Premium+
+              <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
+            </div>
           )}
 
-          {/* Source Articles */}
-          {ai_insight.source_articles && ai_insight.source_articles.length > 0 && (
+          {/* Source Articles - PREMIUM+ */}
+          {ai_insight.source_articles && ai_insight.source_articles.length > 0 ? (
             <div className="border-t pt-4">
               <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                 <Newspaper className="w-4 h-4" />
@@ -254,6 +295,11 @@ export default function MarketDetailPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          ) : (tier === 'free' || tier === 'basic') && (
+            <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-500">
+              <span className="font-medium">Source articles</span> available on Premium+
+              <Link href="/settings" className="text-primary-600 ml-2 hover:underline">Upgrade</Link>
             </div>
           )}
 
