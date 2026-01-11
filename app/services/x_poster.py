@@ -443,9 +443,10 @@ Guidelines:
 - Be casual but not cringe - no "fellow kids" energy
 - Can use lowercase for vibe, but keep data readable
 - End with low-key CTA pointing to oddwons.ai
-- Keep under 260 characters
+- Keep under 260 characters (leave room for hashtags)
 - NO betting advice, we're just observing
 - Occasional "lol", "ngl", "lowkey" is fine when natural
+- ALWAYS end with 2-3 hashtags: #PredictionMarkets is required, then add 1-2 relevant ones like #Polymarket #Kalshi #Crypto #Politics #Sports #Elections based on the market topic
 
 Market data:
 {market_data}
@@ -463,7 +464,9 @@ Fed rate cut March?
 
 something shifted 👀
 
-full breakdown → oddwons.ai"
+oddwons.ai
+
+#PredictionMarkets #Politics"
 
 2. Platform Gap:
 "the platforms can't agree lol
@@ -474,7 +477,9 @@ Poly:   38% ████░░░░░░
 
 4 points is a lot... why tho?
 
-oddwons.ai has thoughts"
+oddwons.ai
+
+#PredictionMarkets #Crypto #Polymarket"
 
 3. Market Highlight:
 "this one's getting spicy
@@ -486,7 +491,9 @@ Super Bowl odds rn:
 
 there's a reason for the shuffle
 
-oddwons.ai"
+oddwons.ai
+
+#PredictionMarkets #NFL #Sports"
 
 4. Big movement:
 "yo this market MOVED
@@ -496,9 +503,11 @@ was 35% → now 52%
 
 ngl the reason is kinda interesting
 
-oddwons.ai"
+oddwons.ai
 
-Write ONLY the tweet, nothing else. Match the chill energy."""
+#PredictionMarkets #Kalshi"
+
+Write ONLY the tweet, nothing else. Match the chill energy and include relevant hashtags."""
 
 
 async def generate_tweet_with_ai(
@@ -919,12 +928,12 @@ async def post_morning_movers():
                     select(Market)
                     .where(
                         and_(
-                            Market.last_updated >= yesterday,
+                            Market.updated_at >= yesterday,
                             Market.status == 'active',
                             Market.yes_price.isnot(None)
                         )
                     )
-                    .order_by(Market.volume_24h.desc())
+                    .order_by(Market.volume.desc())
                     .limit(5)
                 )
                 markets = result.scalars().all()
@@ -942,7 +951,7 @@ async def post_morning_movers():
                         "title": m.title,
                         "old_price": (m.yes_price or 0.5) * 100 - random.randint(-5, 5),
                         "new_price": (m.yes_price or 0.5) * 100,
-                        "context": f"${format_volume(m.volume_24h or 0)} volume"
+                        "context": f"${format_volume(m.volume or 0)} volume"
                     })
                 
                 market_data = {"markets": market_list}
@@ -1112,7 +1121,7 @@ async def post_market_highlight():
                 result = await session.execute(
                     select(Market)
                     .where(Market.status == 'active')
-                    .order_by(Market.volume_24h.desc())
+                    .order_by(Market.volume.desc())
                     .limit(1)
                 )
                 market = result.scalar_one_or_none()
@@ -1127,7 +1136,7 @@ async def post_market_highlight():
                     "title": market.title,
                     "platform": market.platform,
                     "yes_price": market.yes_price or 0.5,
-                    "volume_24h": market.volume_24h or 0,
+                    "volume_24h": market.volume or 0,
                     "summary": f"High activity market on {market.platform}",
                 }
                 tweet = generate_template_tweet(market_data, "market_highlight")
@@ -1162,8 +1171,8 @@ async def post_weekly_recap():
             market_result = await session.execute(
                 select(
                     func.count(Market.id).label("total"),
-                    func.sum(Market.volume_24h).label("volume")
-                ).where(Market.last_updated >= week_ago)
+                    func.sum(Market.volume).label("volume")
+                ).where(Market.updated_at >= week_ago)
             )
             stats = market_result.first()
             
@@ -1177,8 +1186,8 @@ async def post_weekly_recap():
             # Get top markets
             top_result = await session.execute(
                 select(Market)
-                .where(Market.last_updated >= week_ago)
-                .order_by(Market.volume_24h.desc())
+                .where(Market.updated_at >= week_ago)
+                .order_by(Market.volume.desc())
                 .limit(3)
             )
             top_markets = top_result.scalars().all()
@@ -1240,7 +1249,7 @@ async def post_daily_stats():
             
             # Total volume
             volume_result = await session.execute(
-                select(func.sum(Market.volume_24h))
+                select(func.sum(Market.volume))
             )
             total_volume = volume_result.scalar() or 0
             
