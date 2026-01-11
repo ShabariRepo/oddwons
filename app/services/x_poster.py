@@ -446,7 +446,7 @@ Guidelines:
 - Keep under 260 characters (leave room for hashtags)
 - NO betting advice, we're just observing
 - Occasional "lol", "ngl", "lowkey" is fine when natural
-- ALWAYS end with 2-3 hashtags: #PredictionMarkets is required, then add 1-2 relevant ones like #Polymarket #Kalshi #Crypto #Politics #Sports #Elections based on the market topic
+- ALWAYS end with hashtags: #PredictionMarkets #Polymarket #Kalshi are REQUIRED on every tweet, then optionally add 1 more relevant one like #Crypto #Politics #Sports #Elections based on the topic
 
 Market data:
 {market_data}
@@ -466,7 +466,7 @@ something shifted 👀
 
 oddwons.ai
 
-#PredictionMarkets #Politics"
+#PredictionMarkets #Polymarket #Kalshi #Politics"
 
 2. Platform Gap:
 "the platforms can't agree lol
@@ -479,7 +479,7 @@ Poly:   38% ████░░░░░░
 
 oddwons.ai
 
-#PredictionMarkets #Crypto #Polymarket"
+#PredictionMarkets #Polymarket #Kalshi #Crypto"
 
 3. Market Highlight:
 "this one's getting spicy
@@ -493,7 +493,7 @@ there's a reason for the shuffle
 
 oddwons.ai
 
-#PredictionMarkets #NFL #Sports"
+#PredictionMarkets #Polymarket #Kalshi #NFL"
 
 4. Big movement:
 "yo this market MOVED
@@ -505,9 +505,9 @@ ngl the reason is kinda interesting
 
 oddwons.ai
 
-#PredictionMarkets #Kalshi"
+#PredictionMarkets #Polymarket #Kalshi"
 
-Write ONLY the tweet, nothing else. Match the chill energy and include relevant hashtags."""
+Write ONLY the tweet, nothing else. Match the chill energy and always include #PredictionMarkets #Polymarket #Kalshi."""
 
 
 async def generate_tweet_with_ai(
