@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # Gemini (Google AI) - for web search grounding
     gemini_api_key: str = ""
 
+    # Worker/Scheduler settings
+    run_scheduler: bool = True  # Set to false when using separate worker service
+
     def model_post_init(self, __context):
         """Fix Railway's DATABASE_URL format for asyncpg."""
         if self.database_url.startswith("postgresql://") and "+asyncpg" not in self.database_url:
