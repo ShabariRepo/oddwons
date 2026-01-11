@@ -1,148 +1,146 @@
-# X (Twitter) Integration - Teaser Posts to Funnel Users
+# OddWons - Current Status & Quick Reference
 
-## The Strategy
+## Production URLs
+- **App:** https://oddwons.ai
+- **X/Twitter:** https://x.com/oddwons (automated posting active)
 
-**Show the DATA, tease the ANALYSIS, funnel to oddwons.ai**
+---
 
-| What We Show | What We Tease | What's on Platform |
-|--------------|---------------|-------------------|
-| Prices, movements, % changes | "Why the jump?" | Full movement_context |
-| Platform gaps | "What do they know?" | Complete analyst_note |
-| Visual formatting | "One stat explains this..." | Source articles, deep dive |
+## Worker Service Schedule (Railway)
 
-## Example Posts
+### Data Pipeline (Every 15 min)
+- Data collection from Kalshi + Polymarket (~1-2 min)
+- AI analysis with Groq (~1-2 min)
+- Cross-platform market matching (~30-60s)
+- Alert email processing
 
-**Morning Movers:**
-```
-📊 Overnight Movers
+### X (Twitter) Posting (~19 posts/day)
 
-Fed rate cut March?
-├ Was: 45%
-└ Now: 52% (+7%)
+| Time (EST) | Post Type |
+|------------|-----------|
+| 8 AM | Morning Movers |
+| 9 AM | Crypto Spotlight |
+| 10 AM | Platform Gap |
+| 11 AM | Politics Spotlight |
+| 12 PM | Market Highlight |
+| 1 PM | Sports Spotlight |
+| 2 PM | Platform Gap |
+| 3 PM | Daily Poll |
+| 4 PM | Big Movers |
+| 5 PM | Finance Spotlight |
+| 6 PM | Market Highlight |
+| 7 PM | Promo (with logo) |
+| 8 PM | Platform Gap |
+| 9 PM | Entertainment Spotlight |
+| 10 PM | Market Highlight |
+| 11 PM | Late Night Sports |
+| 12 AM | Late Night Crypto |
+| 1 AM | Late Night Action |
+| Sunday 10 AM | Weekly Recap Thread |
 
-📈 What's behind the move?
+### Email Jobs
+- 8 AM UTC: Daily digest emails
+- 10 AM UTC: Trial reminder emails
+- Every 5 min: Process pending alert emails
 
-Full analysis → oddwons.ai
+### Maintenance
+- 3 AM UTC: Database cleanup (7-day snapshot retention)
 
-[IMAGE from Kalshi/Polymarket]
-```
+---
 
-**Platform Comparison:**
-```
-⚖️ Platforms disagree
+## Database Cleanup
 
-Bitcoin $100K by June
+**Automated:** Runs daily at 3 AM UTC via worker.py
 
-Kalshi:     42% ████░░░░░░
-Polymarket: 38% ████░░░░░░
+**Manual cleanup (if needed):**
+```sql
+-- Check table sizes
+SELECT
+    relname AS table_name,
+    pg_size_pretty(pg_total_relation_size(relid)) AS total_size
+FROM pg_catalog.pg_statio_user_tables
+ORDER BY pg_total_relation_size(relid) DESC;
 
-🤔 Why the 4pt gap?
+-- Delete old snapshots (7 day retention)
+DELETE FROM market_snapshots
+WHERE timestamp < NOW() - INTERVAL '7 days';
 
-oddwons.ai has the breakdown
-
-[IMAGE]
-```
-
-**Market Highlight:**
-```
-🔥 Market to Watch
-
-Super Bowl winner odds shifting
-
-├ Chiefs: 32%
-├ 49ers: 28%
-└ Lions: 18%
-
-💡 One key factor is driving this...
-
-Full analysis → oddwons.ai
-
-[IMAGE]
-```
-
-## What's Happening Under the Hood
-
-```
-1. Pull AIInsight from DB (has the full analysis)
-2. Extract DATA: prices, movements, percentages
-3. Pass to Groq with TEASER prompt
-4. Groq sees the context but only hints at it
-5. Attach market image
-6. Post with CTA to oddwons.ai
+-- Reclaim disk space
+VACUUM FULL market_snapshots;
 ```
 
-## Teaser Phrases Used
+---
 
-- "What's behind the move?"
-- "Why the jump?"
-- "We broke down the why..."
-- "The story behind the numbers..."
-- "One stat explains this..."
-- "What do they know that you don't?"
-- "There's more to this story..."
+## Tier Value Matrix
 
-## What I Need You To Do
+| Feature | FREE | BASIC | PREMIUM | PRO |
+|---------|------|-------|---------|-----|
+| **Data freshness** | 24h+ old | 6h+ old | 1h+ old | Real-time |
+| **# of insights** | 3 | 10 | 30 | 50 |
+| **Volume/movement** | - | Yes | Yes | Yes |
+| **Movement context** | - | - | Yes | Yes |
+| **Upcoming catalyst** | - | - | Yes | Yes |
+| **Source articles** | - | - | Yes | Yes |
+| **Analyst note** | - | - | - | Yes |
+| **Daily digest email** | - | Yes | Yes | Yes |
+| **Cross-platform gaps** | - | - | Yes | Yes |
 
-### 1. Test X Connection
-```python
+---
+
+## Environment Variables
+
+### Required for X Bot
+```env
+X_CONSUMER_KEY=jWYlfYS...       # API Key from X Developer Portal
+X_CONSUMER_SECRET=2ttLQgT...    # API Key Secret
+X_API_KEY=2010413698...         # Access Token (with Read+Write)
+X_API_SECRET=ofL6mEsG...        # Access Token Secret
+```
+
+### AI Services
+```env
+GROQ_API_KEY=gsk_...            # For tweet generation + insights
+GEMINI_API_KEY=AIzaSy...        # For web search grounding
+```
+
+---
+
+## Quick Test Commands
+
+```bash
+# Test X connection
+python -c "
 import asyncio
 from app.services.x_poster import test_x_connection
+asyncio.run(test_x_connection())
+"
 
-result = asyncio.run(test_x_connection())
-print(result)
-```
-
-### 2. Test a teaser tweet (without posting):
-```python
+# Trigger manual X post
+python -c "
 import asyncio
-from app.services.x_poster import generate_tweet_with_ai
+from app.services.x_poster import run_scheduled_posts
+asyncio.run(run_scheduled_posts('morning'))
+"
 
-# Groq sees the full context but only teases it
-market_data = {
-    "markets": [
-        {
-            "title": "Fed cuts rates in March",
-            "current_odds": {"yes": 0.52, "no": 0.48},
-            "recent_movement": "+7% this week",
-            "movement_context": "Jobs report came in mixed, unemployment ticked up",  # Groq knows this
-            "analyst_note": "Historical pattern suggests Fed acts within 60 days of labor weakness",  # But won't reveal
-        }
-    ]
-}
-
-tweet = asyncio.run(generate_tweet_with_ai(market_data, "morning_movers"))
-print(tweet)
-# Should tease "What shifted?" not explain the jobs report
-```
-
-### 3. Post a real teaser:
-```python
+# Run full data pipeline manually
+python -c "
 import asyncio
-from app.services.x_poster import post_morning_movers
-
-result = asyncio.run(post_morning_movers())
-print(result)
+from worker import run_full_pipeline
+asyncio.run(run_full_pipeline())
+"
 ```
 
-### 4. Verify you have GROQ_API_KEY in .env
-Uses Groq (llama-3.3-70b) for tweet generation. Without it, falls back to static templates.
+---
 
-## Scheduled Posts
+## Analytics
+- **Google Ads:** AW-17868225226 (tracking + audiences)
+- **Microsoft Clarity:** uzztv414sk (session recordings + heatmaps)
 
-| Time (EST) | Post Type | Teaser Style |
-|------------|-----------|--------------|
-| 9:00 AM | Morning Movers | "What's behind the move?" |
-| 2:00 PM | Platform Gap | "Why the gap?" |
-| 6:00 PM | Market Highlight | "One factor is driving this..." |
-| Sun 10 AM | Weekly Recap | Stats + "Follow for daily insights" |
+---
 
-## The Funnel
+## Recent Changes (Jan 2026)
 
-```
-X Post (teaser)     →    oddwons.ai    →    Subscribe
-   "Why did it move?"      Full analysis       $9.99/mo
-   [visual data]           Source articles
-   [market image]          AI insights
-```
-
-Users see enough to be intrigued, but need the platform for the full scoop.
+1. **X Bot Upgrade:** Hourly posting (8AM-1AM EST), category spotlights, polls, late night strategy
+2. **Scheduler Fix:** Scheduler starts before pipeline to prevent delayed X posts
+3. **Analytics:** Added Google Ads tag + Microsoft Clarity
+4. **All tweets include #OddWons hashtag**
