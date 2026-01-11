@@ -66,11 +66,16 @@ async function authFetch<T>(endpoint: string, options?: RequestInit): Promise<T>
   }
 
   if (res.status === 401) {
+    // Only redirect if user had a token (session expired)
+    // Don't redirect for login/register failures
+    const hadToken = !!token
     removeToken()
-    if (typeof window !== 'undefined') {
+    if (hadToken && typeof window !== 'undefined') {
       window.location.href = '/login'
     }
-    throw new Error('Unauthorized')
+    // Let the error propagate so login page can show it
+    const error = await res.json().catch(() => ({ detail: 'Unauthorized' }))
+    throw new Error(error.detail || 'Unauthorized')
   }
 
   if (!res.ok) {
