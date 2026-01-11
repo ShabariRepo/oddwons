@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     # Gemini (Google AI) - for web search grounding
     gemini_api_key: str = ""
 
+    # X (Twitter) API - for automated posting
+    x_api_key: str = ""  # Access Token
+    x_api_secret: str = ""  # Access Token Secret
+    x_consumer_key: str = ""  # API Key
+    x_consumer_secret: str = ""  # API Key Secret
+
     # Worker/Scheduler settings
     run_scheduler: bool = True  # Set to false when using separate worker service
 

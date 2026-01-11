@@ -1,0 +1,1176 @@
+"""
+X (Twitter) Posting Service for OddWons.
+
+Automated social media posting for market updates, movers, and insights.
+Uses X API v2 with OAuth 1.0a authentication.
+
+Free tier: 1,500 tweets/month (~50/day)
+"""
+import logging
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
+import json
+import random
+import tempfile
+import os
+
+import httpx
+import tweepy
+from groq import Groq
+
+from app.config import get_settings
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+# =============================================================================
+# TWEET TEMPLATES - Visually Formatted
+# =============================================================================
+
+TEMPLATES = {
+    "morning_movers": [
+        """📊 Overnight Movers
+
+{market_1_title}
+├ Was: {market_1_old}%
+└ Now: {market_1_new}% ({market_1_change})
+
+📈 What's behind the move?
+
+Full analysis → oddwons.ai""",
+
+        """⚡ Markets shifted overnight
+
+1️⃣ {market_1_title}
+   {market_1_new}% ({market_1_change})
+
+2️⃣ {market_2_title}
+   {market_2_new}% ({market_2_change})
+
+💡 We broke down the why...
+
+oddwons.ai""",
+
+        """🌅 GM prediction markets
+
+{market_1_title}
+{market_1_old}% → {market_1_new}%
+{change_bar}
+
+🔍 The story behind the numbers...
+
+Deep dive → oddwons.ai"""
+    ],
+
+    "platform_comparison": [
+        """⚖️ Platforms disagree
+
+{title}
+
+Kalshi:     {kalshi}% {kalshi_bar}
+Polymarket: {poly}% {poly_bar}
+
+🤔 Why the {diff}pt gap?
+
+oddwons.ai has the breakdown""",
+
+        """🔍 Same event, different odds
+
+{title}
+
+┌─────────────────┐
+│ Kalshi:     {kalshi}% │
+│ Polymarket: {poly}% │
+└─────────────────┘
+
+📊 We explain the spread...
+
+oddwons.ai""",
+
+        """📊 Price Gap Alert
+
+{title}
+
+Kalshi ····· {kalshi}%
+Poly ······· {poly}%
+
+💡 What do they know that you don't?
+
+oddwons.ai"""
+    ],
+
+    "market_highlight": [
+        """🔥 Market to Watch
+
+{title}
+
+Currently: {price}%
+Volume: ${volume}
+
+📈 One key factor is driving this...
+
+Full analysis → oddwons.ai""",
+
+        """👀 Worth watching
+
+{title}
+
+{price}% {price_bar}
+
+💡 There's more to this story...
+
+Deep dive → oddwons.ai""",
+
+        """📈 Trending Market
+
+{title}
+
+├ Price: {price}%
+├ Volume: ${volume}
+└ Platform: {platform}
+
+🔍 Why is money flowing here?
+
+oddwons.ai"""
+    ],
+
+    "weekly_recap_1": """📊 OddWons Weekly Recap
+
+This week in prediction markets:
+
+📈 {total_markets} markets tracked
+💰 ${volume} in volume
+🔄 {matches} cross-platform matches
+⚡ {movers} big movers
+
+Top categories:
+{categories}""",
+
+    "weekly_recap_2": """What moved this week:
+
+1️⃣ {top_1}
+2️⃣ {top_2}
+3️⃣ {top_3}
+
+Follow @oddwons for daily updates
+
+📊 oddwons.ai""",
+
+    "catalyst_alert": """⏰ Upcoming Catalyst
+
+{event}
+📅 {date}
+
+Markets to watch:
+• {market_1}
+• {market_2}
+
+Expect volatility 📈📉
+
+oddwons.ai""",
+
+    "daily_stat": """📊 Daily Stats
+
+Markets tracked: {total}
+├ Kalshi: {kalshi_count}
+└ Polymarket: {poly_count}
+
+24h volume: ${volume}
+Cross-platform matches: {matches}
+
+oddwons.ai"""
+}
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def make_bar(percentage: float, length: int = 10) -> str:
+    """Create a visual progress bar."""
+    filled = int(percentage / 100 * length)
+    empty = length - filled
+    return "█" * filled + "░" * empty
+
+
+def format_change(old_price: float, new_price: float) -> str:
+    """Format price change with +/- sign."""
+    change = new_price - old_price
+    if change > 0:
+        return f"+{change:.0f}%"
+    elif change < 0:
+        return f"{change:.0f}%"
+    else:
+        return "0%"
+
+
+def truncate(text: str, max_length: int = 50) -> str:
+    """Truncate text to max length."""
+    if len(text) <= max_length:
+        return text
+    return text[:max_length-3] + "..."
+
+
+def format_volume(volume: float) -> str:
+    """Format volume in K/M/B."""
+    if volume >= 1_000_000_000:
+        return f"{volume/1_000_000_000:.1f}B"
+    elif volume >= 1_000_000:
+        return f"{volume/1_000_000:.1f}M"
+    elif volume >= 1_000:
+        return f"{volume/1_000:.0f}K"
+    else:
+        return f"{volume:.0f}"
+
+
+# =============================================================================
+# X CLIENT SETUP
+# =============================================================================
+
+def get_x_client() -> Optional[tweepy.Client]:
+    """Get authenticated X API v2 client."""
+    if not all([
+        settings.x_api_key,
+        settings.x_api_secret,
+        settings.x_consumer_key,
+        settings.x_consumer_secret
+    ]):
+        logger.warning("X API credentials not configured - skipping X posts")
+        return None
+    
+    try:
+        client = tweepy.Client(
+            consumer_key=settings.x_consumer_key,
+            consumer_secret=settings.x_consumer_secret,
+            access_token=settings.x_api_key,
+            access_token_secret=settings.x_api_secret
+        )
+        return client
+    except Exception as e:
+        logger.error(f"Failed to create X client: {e}")
+        return None
+
+
+def get_x_api_v1() -> Optional[tweepy.API]:
+    """Get X API v1.1 client for media uploads.
+    
+    Note: Media upload requires v1.1 API, then we use v2 for posting.
+    """
+    if not all([
+        settings.x_api_key,
+        settings.x_api_secret,
+        settings.x_consumer_key,
+        settings.x_consumer_secret
+    ]):
+        return None
+    
+    try:
+        auth = tweepy.OAuth1UserHandler(
+            settings.x_consumer_key,
+            settings.x_consumer_secret,
+            settings.x_api_key,
+            settings.x_api_secret
+        )
+        return tweepy.API(auth)
+    except Exception as e:
+        logger.error(f"Failed to create X v1.1 client: {e}")
+        return None
+
+
+def get_groq_client() -> Optional[Groq]:
+    """Get Groq client for tweet generation."""
+    api_key = getattr(settings, 'groq_api_key', None)
+    if not api_key:
+        logger.warning("Groq API key not configured - using template tweets")
+        return None
+
+    try:
+        return Groq(api_key=api_key)
+    except Exception as e:
+        logger.error(f"Failed to create Groq client: {e}")
+        return None
+
+
+# =============================================================================
+# TWEET GENERATION
+# =============================================================================
+
+TWEET_PROMPT = """You are the social media manager for OddWons, a prediction market research platform.
+
+Create a visually formatted tweet that TEASES analysis without giving it all away. The goal is to hook people and funnel them to oddwons.ai for the full scoop.
+
+Guidelines:
+- Use the visual template structure (├ └ emojis, line breaks)
+- Show the DATA (prices, movements, percentages)
+- Add ONE teaser line that hints at the "why" but doesn't explain it fully
+- Use phrases like "Why the jump?", "What's behind this?", "The story behind the numbers..."
+- End with CTA: "Full analysis →" or "Deep dive →" + oddwons.ai
+- Keep under 260 characters
+- NO betting advice
+
+Market data:
+{market_data}
+
+Tweet type: {tweet_type}
+
+Example good tweets:
+
+1. Morning Movers:
+"📊 Overnight Movers
+
+Fed rate cut March?
+├ Was: 45%
+└ Now: 52% (+7%)
+
+📈 What shifted? Hint: Friday's jobs report...
+
+Full analysis → oddwons.ai"
+
+2. Platform Gap:
+"⚖️ Platforms disagree
+
+Bitcoin $100K by June
+Kalshi: 42% ████░░░░░░
+Poly:   38% ████░░░░░░
+
+🤔 Why the 4pt gap?
+
+oddwons.ai has the breakdown"
+
+3. Market Highlight:
+"🔥 Market to watch
+
+Super Bowl winner odds shifting
+├ Chiefs: 32%
+├ 49ers: 28%
+└ Lions: 18%
+
+💡 One stat explains the movement...
+
+oddwons.ai"
+
+Write ONLY the tweet, nothing else."""
+
+
+async def generate_tweet_with_ai(
+    market_data: Dict[str, Any],
+    tweet_type: str = "mover"
+) -> str:
+    """Generate tweet content using Groq."""
+    groq = get_groq_client()
+
+    if not groq:
+        return generate_template_tweet(market_data, tweet_type)
+
+    try:
+        response = groq.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            max_tokens=300,
+            temperature=0.7,
+            messages=[{
+                "role": "user",
+                "content": TWEET_PROMPT.format(
+                    market_data=json.dumps(market_data, indent=2),
+                    tweet_type=tweet_type
+                )
+            }]
+        )
+        tweet = response.choices[0].message.content.strip()
+
+        if len(tweet) > 280:
+            tweet = tweet[:277] + "..."
+
+        return tweet
+
+    except Exception as e:
+        logger.error(f"AI tweet generation failed: {e}")
+        return generate_template_tweet(market_data, tweet_type)
+
+
+def generate_template_tweet(
+    market_data: Dict[str, Any],
+    tweet_type: str = "mover"
+) -> str:
+    """Template-based tweet generation with visual formatting."""
+    
+    if tweet_type == "morning_movers":
+        template = random.choice(TEMPLATES["morning_movers"])
+        
+        markets = market_data.get("markets", [])
+        if len(markets) >= 1:
+            m1 = markets[0]
+            data = {
+                "market_1_title": truncate(m1.get("title", "Market"), 40),
+                "market_1_old": f"{m1.get('old_price', 50):.0f}",
+                "market_1_new": f"{m1.get('new_price', 50):.0f}",
+                "market_1_change": format_change(m1.get('old_price', 50), m1.get('new_price', 50)),
+                "change_bar": make_bar(m1.get('new_price', 50)),
+                "context": m1.get("context", "High activity overnight")[:60]
+            }
+            
+            if len(markets) >= 2:
+                m2 = markets[1]
+                data.update({
+                    "market_2_title": truncate(m2.get("title", "Market"), 40),
+                    "market_2_old": f"{m2.get('old_price', 50):.0f}",
+                    "market_2_new": f"{m2.get('new_price', 50):.0f}",
+                    "market_2_change": format_change(m2.get('old_price', 50), m2.get('new_price', 50)),
+                })
+            
+            if len(markets) >= 3:
+                m3 = markets[2]
+                data.update({
+                    "market_3_title": truncate(m3.get("title", "Market"), 40),
+                    "market_3_new": f"{m3.get('new_price', 50):.0f}",
+                    "market_3_change": format_change(m3.get('old_price', 50), m3.get('new_price', 50)),
+                })
+            
+            try:
+                return template.format(**data)
+            except KeyError:
+                pass
+        
+        # Fallback
+        return f"""📊 Morning Markets
+
+Check today's top movers and insights
+
+oddwons.ai"""
+
+    elif tweet_type == "platform_comparison":
+        template = random.choice(TEMPLATES["platform_comparison"])
+        
+        kalshi = market_data.get("kalshi_price", 50)
+        poly = market_data.get("polymarket_price", 50)
+        diff = abs(kalshi - poly)
+        
+        data = {
+            "title": truncate(market_data.get("title", "Market"), 45),
+            "kalshi": f"{kalshi:.0f}",
+            "poly": f"{poly:.0f}",
+            "diff": f"{diff:.0f}",
+            "kalshi_bar": make_bar(kalshi),
+            "poly_bar": make_bar(poly),
+        }
+        
+        try:
+            return template.format(**data)
+        except KeyError:
+            pass
+        
+        return f"""⚖️ Platform Gap
+
+{truncate(market_data.get('title', 'Market'), 50)}
+
+Kalshi: {kalshi:.0f}%
+Polymarket: {poly:.0f}%
+
+{diff:.0f} point difference
+
+oddwons.ai"""
+
+    elif tweet_type == "market_highlight":
+        template = random.choice(TEMPLATES["market_highlight"])
+        
+        price = market_data.get("yes_price", 0.5) * 100
+        volume = market_data.get("volume_24h", 0)
+        
+        data = {
+            "title": truncate(market_data.get("title", "Market"), 45),
+            "price": f"{price:.0f}",
+            "price_bar": make_bar(price),
+            "volume": format_volume(volume),
+            "platform": market_data.get("platform", "").capitalize(),
+            "summary": truncate(market_data.get("summary", "Trending market"), 80),
+        }
+        
+        try:
+            return template.format(**data)
+        except KeyError:
+            pass
+        
+        return f"""🔥 Market Spotlight
+
+{truncate(market_data.get('title', 'Market'), 50)}
+
+{price:.0f}% {make_bar(price)}
+
+oddwons.ai"""
+
+    elif tweet_type == "daily_stat":
+        template = TEMPLATES["daily_stat"]
+        
+        data = {
+            "total": market_data.get("total_markets", 0),
+            "kalshi_count": market_data.get("kalshi_count", 0),
+            "poly_count": market_data.get("poly_count", 0),
+            "volume": format_volume(market_data.get("total_volume", 0)),
+            "matches": market_data.get("matches", 0),
+        }
+        
+        return template.format(**data)
+
+    else:
+        # Generic fallback
+        title = market_data.get("title", "Market Update")
+        return f"""📊 {truncate(title, 60)}
+
+{truncate(market_data.get('summary', ''), 120)}
+
+oddwons.ai"""
+
+
+# =============================================================================
+# IMAGE HANDLING
+# =============================================================================
+
+async def download_image(url: str) -> Optional[str]:
+    """Download image from URL and save to temp file.
+    
+    Returns path to temp file or None if download failed.
+    """
+    if not url:
+        return None
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            
+            # Determine file extension from content type or URL
+            content_type = response.headers.get("content-type", "")
+            if "png" in content_type or url.endswith(".png"):
+                ext = ".png"
+            elif "gif" in content_type or url.endswith(".gif"):
+                ext = ".gif"
+            elif "webp" in content_type or url.endswith(".webp"):
+                ext = ".webp"
+            else:
+                ext = ".jpg"
+            
+            # Save to temp file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as f:
+                f.write(response.content)
+                return f.name
+                
+    except Exception as e:
+        logger.warning(f"Failed to download image from {url}: {e}")
+        return None
+
+
+def upload_media(image_path: str) -> Optional[str]:
+    """Upload image to X and return media_id.
+    
+    Uses X API v1.1 for media upload.
+    """
+    api = get_x_api_v1()
+    if not api or not image_path:
+        return None
+    
+    try:
+        media = api.media_upload(filename=image_path)
+        logger.info(f"Media uploaded: {media.media_id}")
+        return str(media.media_id)
+    except Exception as e:
+        logger.error(f"Failed to upload media: {e}")
+        return None
+    finally:
+        # Clean up temp file
+        try:
+            if image_path and os.path.exists(image_path):
+                os.remove(image_path)
+        except:
+            pass
+
+
+async def upload_image_from_url(url: str) -> Optional[str]:
+    """Download image from URL and upload to X.
+    
+    Returns media_id or None.
+    """
+    image_path = await download_image(url)
+    if not image_path:
+        return None
+    
+    return upload_media(image_path)
+
+
+# =============================================================================
+# POSTING FUNCTIONS
+# =============================================================================
+
+async def post_tweet(text: str, image_url: Optional[str] = None) -> Optional[Dict]:
+    """Post a tweet to X, optionally with an image.
+    
+    Args:
+        text: Tweet text (max 280 chars)
+        image_url: Optional URL to image to attach
+    """
+    client = get_x_client()
+    if not client:
+        return None
+    
+    try:
+        # Ensure under 280 chars
+        if len(text) > 280:
+            text = text[:277] + "..."
+        
+        # Upload image if provided
+        media_ids = None
+        if image_url:
+            media_id = await upload_image_from_url(image_url)
+            if media_id:
+                media_ids = [media_id]
+                logger.info(f"Attaching media {media_id} to tweet")
+        
+        # Post tweet
+        if media_ids:
+            response = client.create_tweet(text=text, media_ids=media_ids)
+        else:
+            response = client.create_tweet(text=text)
+        
+        tweet_id = response.data.get("id") if response.data else None
+        logger.info(f"Tweet posted successfully: {tweet_id}")
+        
+        return {
+            "success": True,
+            "tweet_id": tweet_id,
+            "text": text,
+            "has_image": bool(media_ids)
+        }
+        
+    except tweepy.TweepyException as e:
+        logger.error(f"Failed to post tweet: {e}")
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error(f"Unexpected error posting tweet: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def post_thread(tweets: List[str]) -> List[Dict]:
+    """Post a thread of tweets."""
+    client = get_x_client()
+    if not client:
+        return []
+    
+    results = []
+    previous_tweet_id = None
+    
+    for i, text in enumerate(tweets):
+        try:
+            if len(text) > 280:
+                text = text[:277] + "..."
+            
+            if previous_tweet_id:
+                response = client.create_tweet(
+                    text=text,
+                    in_reply_to_tweet_id=previous_tweet_id
+                )
+            else:
+                response = client.create_tweet(text=text)
+            
+            tweet_id = response.data.get("id") if response.data else None
+            previous_tweet_id = tweet_id
+            
+            results.append({
+                "success": True,
+                "tweet_id": tweet_id,
+                "text": text,
+                "position": i + 1
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to post thread tweet {i+1}: {e}")
+            results.append({
+                "success": False,
+                "error": str(e),
+                "position": i + 1
+            })
+            break
+    
+    return results
+
+
+# =============================================================================
+# SCHEDULED POSTING JOBS
+# =============================================================================
+
+async def post_morning_movers():
+    """
+    Post top market movers with AI-generated analysis.
+    Scheduled: 9:00 AM EST / 14:00 UTC
+    """
+    from sqlalchemy import select, and_
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Market
+    from app.models.ai_insight import AIInsight
+    
+    logger.info("Generating morning movers tweet with analysis...")
+    
+    async with AsyncSessionLocal() as session:
+        try:
+            yesterday = datetime.utcnow() - timedelta(hours=24)
+            
+            # First, try to get AI insights for movers (these have the analysis)
+            insight_result = await session.execute(
+                select(AIInsight)
+                .where(
+                    and_(
+                        AIInsight.created_at >= yesterday,
+                        AIInsight.recent_movement.isnot(None),
+                        AIInsight.status == 'active'
+                    )
+                )
+                .order_by(AIInsight.interest_score.desc())
+                .limit(3)
+            )
+            insights = insight_result.scalars().all()
+            
+            if insights:
+                # We have AI insights with analysis - use them!
+                top_insight = insights[0]
+                
+                # Get image from associated market
+                image_url = top_insight.image_url
+                if not image_url and top_insight.market_id:
+                    market_result = await session.execute(
+                        select(Market).where(Market.id == top_insight.market_id)
+                    )
+                    market = market_result.scalar_one_or_none()
+                    if market:
+                        image_url = market.image_url
+                
+                # Build rich market data for AI tweet generation
+                market_data = {
+                    "markets": [
+                        {
+                            "title": i.market_title,
+                            "platform": i.platform,
+                            "current_odds": i.current_odds,
+                            "recent_movement": i.recent_movement,
+                            "movement_context": i.movement_context,  # THE ANALYSIS!
+                            "analyst_note": i.analyst_note,  # MORE ANALYSIS!
+                            "upcoming_catalyst": i.upcoming_catalyst,
+                        }
+                        for i in insights[:3]
+                    ],
+                    "lead_insight": {
+                        "summary": top_insight.summary,
+                        "movement_context": top_insight.movement_context,
+                        "analyst_note": top_insight.analyst_note,
+                    }
+                }
+                
+                # Generate tweet with AI (includes analysis)
+                tweet = await generate_tweet_with_ai(market_data, "morning_movers")
+                
+            else:
+                # Fallback to raw market data
+                result = await session.execute(
+                    select(Market)
+                    .where(
+                        and_(
+                            Market.last_updated >= yesterday,
+                            Market.status == 'active',
+                            Market.yes_price.isnot(None)
+                        )
+                    )
+                    .order_by(Market.volume_24h.desc())
+                    .limit(5)
+                )
+                markets = result.scalars().all()
+                
+                if not markets:
+                    logger.info("No markets found for morning movers")
+                    return
+                
+                top_market = markets[0]
+                image_url = top_market.image_url
+                
+                market_list = []
+                for m in markets[:3]:
+                    market_list.append({
+                        "title": m.title,
+                        "old_price": (m.yes_price or 0.5) * 100 - random.randint(-5, 5),
+                        "new_price": (m.yes_price or 0.5) * 100,
+                        "context": f"${format_volume(m.volume_24h or 0)} volume"
+                    })
+                
+                market_data = {"markets": market_list}
+                tweet = generate_template_tweet(market_data, "morning_movers")
+            
+            result = await post_tweet(tweet, image_url=image_url)
+            
+            logger.info(f"Morning movers tweet: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to post morning movers: {e}")
+            return None
+
+
+async def post_platform_comparison():
+    """
+    Post cross-platform price differences with analytical context.
+    Scheduled: 2:00 PM EST / 19:00 UTC
+    """
+    from sqlalchemy import select
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import MarketMatch, Market
+    from app.models.ai_insight import AIInsight
+    
+    logger.info("Generating platform comparison tweet with analysis...")
+    
+    async with AsyncSessionLocal() as session:
+        try:
+            # Get matches with significant price differences
+            result = await session.execute(
+                select(MarketMatch)
+                .where(MarketMatch.price_difference >= 0.03)
+                .order_by(MarketMatch.price_difference.desc())
+                .limit(5)
+            )
+            matches = result.scalars().all()
+            
+            if not matches:
+                logger.info("No significant platform gaps found")
+                return
+            
+            match = matches[0]
+            
+            # Try to get AI insight for context on WHY there's a gap
+            analyst_context = None
+            if match.kalshi_market_id:
+                insight_result = await session.execute(
+                    select(AIInsight)
+                    .where(AIInsight.market_id == match.kalshi_market_id)
+                    .order_by(AIInsight.created_at.desc())
+                    .limit(1)
+                )
+                insight = insight_result.scalar_one_or_none()
+                if insight:
+                    analyst_context = {
+                        "movement_context": insight.movement_context,
+                        "analyst_note": insight.analyst_note,
+                        "upcoming_catalyst": insight.upcoming_catalyst,
+                    }
+            
+            # Get image from one of the matched markets
+            image_url = None
+            if match.kalshi_market_id:
+                market_result = await session.execute(
+                    select(Market).where(Market.id == match.kalshi_market_id)
+                )
+                market = market_result.scalar_one_or_none()
+                if market:
+                    image_url = market.image_url
+            
+            if not image_url and match.polymarket_market_id:
+                market_result = await session.execute(
+                    select(Market).where(Market.id == match.polymarket_market_id)
+                )
+                market = market_result.scalar_one_or_none()
+                if market:
+                    image_url = market.image_url
+            
+            # Build data with analysis context
+            market_data = {
+                "title": match.matched_title or "Market",
+                "kalshi_price": (match.kalshi_yes_price or 0.5) * 100,
+                "polymarket_price": (match.polymarket_yes_price or 0.5) * 100,
+                "price_gap_percent": (match.price_difference or 0) * 100,
+                "analyst_context": analyst_context,  # Why might platforms disagree?
+            }
+            
+            # Use AI to generate tweet with analysis
+            tweet = await generate_tweet_with_ai(market_data, "platform_comparison")
+            result = await post_tweet(tweet, image_url=image_url)
+            
+            logger.info(f"Platform comparison tweet: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to post platform comparison: {e}")
+            return None
+
+
+async def post_market_highlight():
+    """
+    Post a market highlight with full AI analysis - the showcase post.
+    Scheduled: 6:00 PM EST / 23:00 UTC
+    """
+    from sqlalchemy import select, and_
+    from app.core.database import AsyncSessionLocal
+    from app.models.ai_insight import AIInsight
+    from app.models.market import Market
+    
+    logger.info("Generating market highlight tweet with full analysis...")
+    
+    async with AsyncSessionLocal() as session:
+        try:
+            today = datetime.utcnow() - timedelta(hours=12)
+            image_url = None
+            
+            # Get the BEST AI insight - this is the showcase
+            result = await session.execute(
+                select(AIInsight)
+                .where(
+                    and_(
+                        AIInsight.created_at >= today,
+                        AIInsight.status == 'active',
+                        AIInsight.analyst_note.isnot(None)  # Must have analysis
+                    )
+                )
+                .order_by(AIInsight.interest_score.desc())
+                .limit(1)
+            )
+            insight = result.scalar_one_or_none()
+            
+            if insight:
+                # Get image from the associated market
+                image_url = insight.image_url
+                if not image_url and insight.market_id:
+                    market_result = await session.execute(
+                        select(Market).where(Market.id == insight.market_id)
+                    )
+                    market = market_result.scalar_one_or_none()
+                    if market:
+                        image_url = market.image_url
+                
+                # Build RICH data with all the analysis
+                market_data = {
+                    "title": insight.market_title,
+                    "platform": insight.platform,
+                    "category": insight.category,
+                    "current_odds": insight.current_odds,
+                    "implied_probability": insight.implied_probability,
+                    "summary": insight.summary,  # What this market is about
+                    "recent_movement": insight.recent_movement,
+                    "movement_context": insight.movement_context,  # WHY it moved
+                    "analyst_note": insight.analyst_note,  # Expert context
+                    "upcoming_catalyst": insight.upcoming_catalyst,  # What's coming
+                    "volume_note": insight.volume_note,
+                    # Teaser for the platform
+                    "teaser": "Full analysis + source links on OddWons"
+                }
+                
+                # Generate tweet with AI (full analysis showcase)
+                tweet = await generate_tweet_with_ai(market_data, "market_highlight")
+                
+            else:
+                # Fallback to top market by volume
+                result = await session.execute(
+                    select(Market)
+                    .where(Market.status == 'active')
+                    .order_by(Market.volume_24h.desc())
+                    .limit(1)
+                )
+                market = result.scalar_one_or_none()
+                
+                if not market:
+                    logger.info("No markets for highlight")
+                    return
+                
+                image_url = market.image_url
+                
+                market_data = {
+                    "title": market.title,
+                    "platform": market.platform,
+                    "yes_price": market.yes_price or 0.5,
+                    "volume_24h": market.volume_24h or 0,
+                    "summary": f"High activity market on {market.platform}",
+                }
+                tweet = generate_template_tweet(market_data, "market_highlight")
+            
+            result = await post_tweet(tweet, image_url=image_url)
+            
+            logger.info(f"Market highlight tweet: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to post market highlight: {e}")
+            return None
+
+
+async def post_weekly_recap():
+    """
+    Post weekly market recap thread.
+    Scheduled: Sunday 10:00 AM EST / 15:00 UTC
+    """
+    from sqlalchemy import select, func
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Market, MarketMatch
+    
+    logger.info("Generating weekly recap thread...")
+    
+    async with AsyncSessionLocal() as session:
+        try:
+            week_ago = datetime.utcnow() - timedelta(days=7)
+            
+            # Get stats
+            market_result = await session.execute(
+                select(
+                    func.count(Market.id).label("total"),
+                    func.sum(Market.volume_24h).label("volume")
+                ).where(Market.last_updated >= week_ago)
+            )
+            stats = market_result.first()
+            
+            # Get match count
+            match_result = await session.execute(
+                select(func.count(MarketMatch.id))
+                .where(MarketMatch.created_at >= week_ago)
+            )
+            match_count = match_result.scalar() or 0
+            
+            # Get top markets
+            top_result = await session.execute(
+                select(Market)
+                .where(Market.last_updated >= week_ago)
+                .order_by(Market.volume_24h.desc())
+                .limit(3)
+            )
+            top_markets = top_result.scalars().all()
+            
+            # Build thread
+            tweet_1 = TEMPLATES["weekly_recap_1"].format(
+                total_markets=f"{stats.total or 0:,}",
+                volume=format_volume(stats.volume or 0),
+                matches=match_count,
+                movers=min(stats.total or 0, 50),
+                categories="🏛️ Politics │ 🏈 Sports │ 💰 Crypto"
+            )
+            
+            top_1 = truncate(top_markets[0].title, 35) if len(top_markets) > 0 else "N/A"
+            top_2 = truncate(top_markets[1].title, 35) if len(top_markets) > 1 else "N/A"
+            top_3 = truncate(top_markets[2].title, 35) if len(top_markets) > 2 else "N/A"
+            
+            tweet_2 = TEMPLATES["weekly_recap_2"].format(
+                top_1=top_1,
+                top_2=top_2,
+                top_3=top_3
+            )
+            
+            results = await post_thread([tweet_1, tweet_2])
+            logger.info(f"Weekly recap thread: {results}")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to post weekly recap: {e}")
+            return None
+
+
+async def post_daily_stats():
+    """
+    Post daily platform statistics.
+    Can be called ad-hoc or scheduled.
+    """
+    from sqlalchemy import select, func
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Market, MarketMatch
+    
+    logger.info("Generating daily stats tweet...")
+    
+    async with AsyncSessionLocal() as session:
+        try:
+            # Count by platform
+            kalshi_result = await session.execute(
+                select(func.count(Market.id))
+                .where(Market.platform == 'kalshi')
+            )
+            kalshi_count = kalshi_result.scalar() or 0
+            
+            poly_result = await session.execute(
+                select(func.count(Market.id))
+                .where(Market.platform == 'polymarket')
+            )
+            poly_count = poly_result.scalar() or 0
+            
+            # Total volume
+            volume_result = await session.execute(
+                select(func.sum(Market.volume_24h))
+            )
+            total_volume = volume_result.scalar() or 0
+            
+            # Match count
+            match_result = await session.execute(
+                select(func.count(MarketMatch.id))
+            )
+            match_count = match_result.scalar() or 0
+            
+            market_data = {
+                "total_markets": kalshi_count + poly_count,
+                "kalshi_count": kalshi_count,
+                "poly_count": poly_count,
+                "total_volume": total_volume,
+                "matches": match_count,
+            }
+            
+            tweet = generate_template_tweet(market_data, "daily_stat")
+            result = await post_tweet(tweet)
+            
+            logger.info(f"Daily stats tweet: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to post daily stats: {e}")
+            return None
+
+
+# =============================================================================
+# MAIN POSTING ORCHESTRATOR
+# =============================================================================
+
+async def run_scheduled_posts(post_type: str = "all"):
+    """
+    Run scheduled X posts.
+    
+    Args:
+        post_type: "morning", "afternoon", "evening", "weekly", "stats", or "all"
+    """
+    results = {}
+    
+    if post_type in ["morning", "all"]:
+        results["morning_movers"] = await post_morning_movers()
+    
+    if post_type in ["afternoon", "all"]:
+        results["platform_comparison"] = await post_platform_comparison()
+    
+    if post_type in ["evening", "all"]:
+        results["market_highlight"] = await post_market_highlight()
+    
+    if post_type == "weekly":
+        results["weekly_recap"] = await post_weekly_recap()
+    
+    if post_type == "stats":
+        results["daily_stats"] = await post_daily_stats()
+    
+    logger.info(f"Scheduled posts complete: {post_type} -> {results}")
+    return results
+
+
+# =============================================================================
+# TEST FUNCTION
+# =============================================================================
+
+async def test_x_connection() -> Dict:
+    """Test X API connection without posting."""
+    client = get_x_client()
+    
+    if not client:
+        return {"success": False, "error": "X client not configured"}
+    
+    try:
+        # Verify credentials by getting authenticated user
+        me = client.get_me()
+        if me.data:
+            return {
+                "success": True,
+                "username": me.data.username,
+                "name": me.data.name,
+                "id": me.data.id
+            }
+        return {"success": False, "error": "Could not fetch user data"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

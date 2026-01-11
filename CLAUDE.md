@@ -854,3 +854,65 @@ async def run_full_pipeline():
     await run_analysis()          # Pattern detection + AI insights
     await run_market_matching()   # Cross-platform fuzzy matching
 ```
+
+### X (Twitter) Automated Posting (Jan 11, 2026)
+**MARKETING FEATURE:** Automated X posts to funnel users to oddwons.ai.
+
+**Strategy:** Show DATA, tease ANALYSIS, funnel to platform.
+
+| Shows on Twitter | Teases | Available on oddwons.ai |
+|------------------|--------|-------------------------|
+| Prices, movements, % changes | "Why the jump?" | Full `movement_context` |
+| Platform gaps (Kalshi vs Poly) | "What do they know?" | Complete `analyst_note` |
+| Visual bars + stats | "One stat explains this..." | Source articles, deep dive |
+
+**Post Schedule (all times EST):**
+| Time | Post Type | Template |
+|------|-----------|----------|
+| 9:00 AM | Morning Movers | Top overnight price changes |
+| 2:00 PM | Platform Gap | Kalshi vs Polymarket differences |
+| 6:00 PM | Market Highlight | Showcase market with analysis teaser |
+| Sun 10 AM | Weekly Recap | Thread with stats + top markets |
+
+**How It Works:**
+1. Pull `AIInsight` from DB (has full Groq/Gemini analysis)
+2. Extract DATA: prices, movements, percentages
+3. Pass to Groq (llama-3.3-70b) with TEASER prompt
+4. Groq generates tweet that hints but doesn't reveal
+5. Attach market image if available
+6. Post with CTA to oddwons.ai
+
+**Files:**
+- `app/services/x_poster.py` - Tweet generation + posting logic
+- `worker.py` - Scheduled jobs (lines 345-383)
+
+**Environment Variables (add to Worker service):**
+```bash
+X_API_KEY=           # Access Token
+X_API_SECRET=        # Access Token Secret
+X_CONSUMER_KEY=      # API Key (Consumer Key)
+X_CONSUMER_SECRET=   # API Key Secret (Consumer Secret)
+# GROQ_API_KEY already in Worker - used for tweet generation
+```
+
+**Test Commands:**
+```python
+# Test X connection
+from app.services.x_poster import test_x_connection
+result = asyncio.run(test_x_connection())
+
+# Test tweet generation (no posting)
+from app.services.x_poster import generate_tweet_with_ai
+tweet = asyncio.run(generate_tweet_with_ai(market_data, "morning_movers"))
+
+# Manually trigger a post
+from app.services.x_poster import post_morning_movers
+result = asyncio.run(post_morning_movers())
+```
+
+**Teaser Phrases:**
+- "What's behind the move?"
+- "Why the jump?"
+- "We broke down the why..."
+- "One stat explains this..."
+- "What do they know that you don't?"

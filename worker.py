@@ -285,6 +285,19 @@ async def run_daily_jobs():
         logger.error(f"Daily jobs failed: {e}")
 
 
+async def post_to_x(post_type: str = "morning"):
+    """Post to X (Twitter) account."""
+    logger.info(f"Running X post job: {post_type}")
+    try:
+        from app.services.x_poster import run_scheduled_posts
+        result = await run_scheduled_posts(post_type)
+        logger.info(f"X post complete: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"X post failed: {e}")
+        return None
+
+
 def create_scheduler() -> AsyncIOScheduler:
     """Create and configure the APScheduler."""
     scheduler = AsyncIOScheduler()
@@ -329,7 +342,47 @@ def create_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
     )
 
-    logger.info(f"Scheduler configured: pipeline every {interval_minutes}min, digest 8am UTC, trials 10am UTC, alerts every 5min")
+    # =========================================================================
+    # X (TWITTER) POSTING JOBS
+    # =========================================================================
+    
+    # Morning movers - 9:00 AM EST (14:00 UTC)
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("morning")),
+        CronTrigger(hour=14, minute=0),
+        id="x_morning_movers",
+        name="X Morning Movers Post",
+        replace_existing=True,
+    )
+    
+    # Afternoon comparison - 2:00 PM EST (19:00 UTC)
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("afternoon")),
+        CronTrigger(hour=19, minute=0),
+        id="x_afternoon_comparison",
+        name="X Platform Comparison Post",
+        replace_existing=True,
+    )
+    
+    # Evening highlight - 6:00 PM EST (23:00 UTC)
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("evening")),
+        CronTrigger(hour=23, minute=0),
+        id="x_evening_highlight",
+        name="X Evening Highlight Post",
+        replace_existing=True,
+    )
+    
+    # Weekly recap - Sunday 10:00 AM EST (15:00 UTC)
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("weekly")),
+        CronTrigger(day_of_week="sun", hour=15, minute=0),
+        id="x_weekly_recap",
+        name="X Weekly Recap Thread",
+        replace_existing=True,
+    )
+
+    logger.info(f"Scheduler configured: pipeline every {interval_minutes}min, digest 8am UTC, trials 10am UTC, alerts every 5min, X posts 9am/2pm/6pm EST")
     return scheduler
 
 
