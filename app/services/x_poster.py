@@ -965,7 +965,8 @@ async def post_platform_comparison():
     """
     from sqlalchemy import select
     from app.core.database import AsyncSessionLocal
-    from app.models.market import MarketMatch, Market
+    from app.models.market import Market
+    from app.models.cross_platform_match import CrossPlatformMatch
     from app.models.ai_insight import AIInsight
     
     logger.info("Generating platform comparison tweet with analysis...")
@@ -974,9 +975,9 @@ async def post_platform_comparison():
         try:
             # Get matches with significant price differences
             result = await session.execute(
-                select(MarketMatch)
-                .where(MarketMatch.price_difference >= 0.03)
-                .order_by(MarketMatch.price_difference.desc())
+                select(CrossPlatformMatch)
+                .where(CrossPlatformMatch.price_gap_cents >= 0.03)
+                .order_by(CrossPlatformMatch.price_gap_cents.desc())
                 .limit(5)
             )
             matches = result.scalars().all()
@@ -1024,10 +1025,10 @@ async def post_platform_comparison():
             
             # Build data with analysis context
             market_data = {
-                "title": match.matched_title or "Market",
+                "title": match.topic or "Market",
                 "kalshi_price": (match.kalshi_yes_price or 0.5) * 100,
                 "polymarket_price": (match.polymarket_yes_price or 0.5) * 100,
-                "price_gap_percent": (match.price_difference or 0) * 100,
+                "price_gap_percent": match.price_gap_cents or 0,
                 "analyst_context": analyst_context,  # Why might platforms disagree?
             }
             
@@ -1148,7 +1149,8 @@ async def post_weekly_recap():
     """
     from sqlalchemy import select, func
     from app.core.database import AsyncSessionLocal
-    from app.models.market import Market, MarketMatch
+    from app.models.market import Market
+    from app.models.cross_platform_match import CrossPlatformMatch
     
     logger.info("Generating weekly recap thread...")
     
@@ -1167,8 +1169,8 @@ async def post_weekly_recap():
             
             # Get match count
             match_result = await session.execute(
-                select(func.count(MarketMatch.id))
-                .where(MarketMatch.created_at >= week_ago)
+                select(func.count(CrossPlatformMatch.id))
+                .where(CrossPlatformMatch.created_at >= week_ago)
             )
             match_count = match_result.scalar() or 0
             
@@ -1216,7 +1218,8 @@ async def post_daily_stats():
     """
     from sqlalchemy import select, func
     from app.core.database import AsyncSessionLocal
-    from app.models.market import Market, MarketMatch
+    from app.models.market import Market
+    from app.models.cross_platform_match import CrossPlatformMatch
     
     logger.info("Generating daily stats tweet...")
     
@@ -1243,7 +1246,7 @@ async def post_daily_stats():
             
             # Match count
             match_result = await session.execute(
-                select(func.count(MarketMatch.id))
+                select(func.count(CrossPlatformMatch.id))
             )
             match_count = match_result.scalar() or 0
             
