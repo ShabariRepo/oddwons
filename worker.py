@@ -508,18 +508,16 @@ async def main():
         # Continuous mode: run scheduler (recommended for Railway)
         logger.info("Running in CONTINUOUS mode (scheduler)")
 
-        # Run pipeline immediately on startup
-        run_on_start = os.getenv("WORKER_RUN_ON_START", "true").lower() == "true"
-        if run_on_start:
-            logger.info("Running initial pipeline on startup...")
-            try:
-                await run_full_pipeline()
-            except Exception as e:
-                logger.error(f"Initial pipeline failed: {e}")
-
-        # Start scheduler for all subsequent jobs
+        # Start scheduler FIRST so X posts aren't delayed
         scheduler = create_scheduler()
         scheduler.start()
+        logger.info("Scheduler started - X posts will fire on schedule")
+
+        # Run pipeline in background (doesn't block scheduled posts)
+        run_on_start = os.getenv("WORKER_RUN_ON_START", "true").lower() == "true"
+        if run_on_start:
+            logger.info("Running initial pipeline in background...")
+            asyncio.create_task(run_full_pipeline())
 
         logger.info("Worker scheduler started. Press Ctrl+C to exit.")
 
