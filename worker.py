@@ -343,101 +343,136 @@ def create_scheduler() -> AsyncIOScheduler:
     )
 
     # =========================================================================
-    # X (TWITTER) POSTING JOBS - Every 2 hours from 8 AM - 10 PM EST
+    # X (TWITTER) POSTING JOBS - HOURLY from 8 AM - 10 PM EST + Late Night
     # EST = UTC - 5
+    # ~19 posts/day = ~570/month (under 1,500 limit)
     # =========================================================================
 
+    # --- MORNING BLOCK (8 AM - 12 PM EST) ---
     # 8 AM EST (13:00 UTC) - Morning Movers
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("morning")),
         CronTrigger(hour=13, minute=0),
-        id="x_8am",
-        name="X 8AM Morning Movers",
-        replace_existing=True,
+        id="x_8am", name="X 8AM Morning Movers", replace_existing=True,
     )
-
+    # 9 AM EST (14:00 UTC) - Category Spotlight: Crypto
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("spotlight_crypto")),
+        CronTrigger(hour=14, minute=0),
+        id="x_9am", name="X 9AM Crypto Spotlight", replace_existing=True,
+    )
     # 10 AM EST (15:00 UTC) - Platform Gap
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("afternoon")),
         CronTrigger(hour=15, minute=0),
-        id="x_10am",
-        name="X 10AM Platform Gap",
-        replace_existing=True,
+        id="x_10am", name="X 10AM Platform Gap", replace_existing=True,
     )
-
+    # 11 AM EST (16:00 UTC) - Category Spotlight: Politics
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("spotlight_politics")),
+        CronTrigger(hour=16, minute=0),
+        id="x_11am", name="X 11AM Politics Spotlight", replace_existing=True,
+    )
     # 12 PM EST (17:00 UTC) - Market Highlight
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("evening")),
         CronTrigger(hour=17, minute=0),
-        id="x_12pm",
-        name="X 12PM Market Highlight",
-        replace_existing=True,
+        id="x_12pm", name="X 12PM Market Highlight", replace_existing=True,
     )
 
+    # --- AFTERNOON BLOCK (1 PM - 5 PM EST) ---
+    # 1 PM EST (18:00 UTC) - Category Spotlight: Sports
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("spotlight_sports")),
+        CronTrigger(hour=18, minute=0),
+        id="x_1pm", name="X 1PM Sports Spotlight", replace_existing=True,
+    )
     # 2 PM EST (19:00 UTC) - Platform Gap
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("afternoon")),
         CronTrigger(hour=19, minute=0),
-        id="x_2pm",
-        name="X 2PM Platform Gap",
-        replace_existing=True,
+        id="x_2pm", name="X 2PM Platform Gap", replace_existing=True,
     )
-
-    # 4 PM EST (21:00 UTC) - Morning Movers (big movers during day)
+    # 3 PM EST (20:00 UTC) - Daily Poll (engagement)
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("poll")),
+        CronTrigger(hour=20, minute=0),
+        id="x_3pm", name="X 3PM Daily Poll", replace_existing=True,
+    )
+    # 4 PM EST (21:00 UTC) - Morning Movers (afternoon update)
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("morning")),
         CronTrigger(hour=21, minute=0),
-        id="x_4pm",
-        name="X 4PM Big Movers",
-        replace_existing=True,
+        id="x_4pm", name="X 4PM Big Movers", replace_existing=True,
+    )
+    # 5 PM EST (22:00 UTC) - Category Spotlight: Finance
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("spotlight_finance")),
+        CronTrigger(hour=22, minute=0),
+        id="x_5pm", name="X 5PM Finance Spotlight", replace_existing=True,
     )
 
+    # --- EVENING BLOCK (6 PM - 10 PM EST) ---
     # 6 PM EST (23:00 UTC) - Market Highlight
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("evening")),
         CronTrigger(hour=23, minute=0),
-        id="x_6pm",
-        name="X 6PM Market Highlight",
-        replace_existing=True,
+        id="x_6pm", name="X 6PM Market Highlight", replace_existing=True,
     )
-
-    # 7 PM EST (00:00 UTC next day) - PROMO with logo
+    # 7 PM EST (00:00 UTC) - PROMO with logo
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("promo")),
         CronTrigger(hour=0, minute=0),
-        id="x_7pm_promo",
-        name="X 7PM Daily Promo",
-        replace_existing=True,
+        id="x_7pm", name="X 7PM Daily Promo", replace_existing=True,
     )
-
     # 8 PM EST (01:00 UTC) - Platform Gap
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("afternoon")),
         CronTrigger(hour=1, minute=0),
-        id="x_8pm",
-        name="X 8PM Platform Gap",
-        replace_existing=True,
+        id="x_8pm", name="X 8PM Platform Gap", replace_existing=True,
     )
-
+    # 9 PM EST (02:00 UTC) - Category Spotlight: Entertainment
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("spotlight_entertainment")),
+        CronTrigger(hour=2, minute=0),
+        id="x_9pm", name="X 9PM Entertainment Spotlight", replace_existing=True,
+    )
     # 10 PM EST (03:00 UTC) - Market Highlight
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("evening")),
         CronTrigger(hour=3, minute=0),
-        id="x_10pm",
-        name="X 10PM Market Highlight",
-        replace_existing=True,
+        id="x_10pm", name="X 10PM Market Highlight", replace_existing=True,
     )
 
-    # Weekly recap - Sunday 10:00 AM EST (15:00 UTC)
+    # --- LATE NIGHT BLOCK (11 PM - 1 AM EST) - Gambling audience ---
+    # 11 PM EST (04:00 UTC) - Sports focus (late night bettors)
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("latenight_sports")),
+        CronTrigger(hour=4, minute=0),
+        id="x_11pm", name="X 11PM Late Night Sports", replace_existing=True,
+    )
+    # 12 AM EST (05:00 UTC) - Crypto focus (24/7 market)
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("latenight_crypto")),
+        CronTrigger(hour=5, minute=0),
+        id="x_12am", name="X 12AM Late Night Crypto", replace_existing=True,
+    )
+    # 1 AM EST (06:00 UTC) - Mixed high-action markets
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("latenight_action")),
+        CronTrigger(hour=6, minute=0),
+        id="x_1am", name="X 1AM Late Night Action", replace_existing=True,
+    )
+
+    # --- WEEKLY ---
+    # Sunday 10:00 AM EST (15:00 UTC) - Weekly Recap Thread
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("weekly")),
         CronTrigger(day_of_week="sun", hour=15, minute=0),
-        id="x_weekly_recap",
-        name="X Weekly Recap Thread",
-        replace_existing=True,
+        id="x_weekly_recap", name="X Weekly Recap Thread", replace_existing=True,
     )
 
-    logger.info(f"Scheduler configured: pipeline every {interval_minutes}min, X posts every 2hrs 8AM-10PM EST + 7PM promo")
+    logger.info(f"Scheduler configured: pipeline every {interval_minutes}min, X posts hourly 8AM-1AM EST (~19/day)")
     return scheduler
 
 

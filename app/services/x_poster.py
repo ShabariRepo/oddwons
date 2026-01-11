@@ -1375,6 +1375,360 @@ oddwons.ai
 
 
 # =============================================================================
+# CATEGORY SPOTLIGHT POSTS
+# =============================================================================
+
+async def post_category_spotlight(category: str):
+    """
+    Post a spotlight on a specific market category.
+    Shows top markets and interesting activity in that category.
+    """
+    from sqlalchemy import select, func
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Market
+
+    logger.info(f"Generating {category} spotlight tweet...")
+
+    category_hashtags = {
+        "crypto": "#Crypto #Bitcoin #Ethereum",
+        "politics": "#Politics #Elections #Trump",
+        "sports": "#Sports #NFL #NBA #Betting",
+        "finance": "#Finance #Stocks #Economy",
+        "entertainment": "#Entertainment #Movies #Celebrities",
+    }
+
+    category_emojis = {
+        "crypto": "🪙",
+        "politics": "🏛️",
+        "sports": "🏈",
+        "finance": "📈",
+        "entertainment": "🎬",
+    }
+
+    async with AsyncSessionLocal() as session:
+        try:
+            # Get top markets in this category by volume
+            result = await session.execute(
+                select(Market)
+                .where(
+                    Market.category.ilike(f"%{category}%"),
+                    Market.status == 'active',
+                    Market.yes_price.isnot(None)
+                )
+                .order_by(Market.volume.desc())
+                .limit(3)
+            )
+            markets = result.scalars().all()
+
+            if not markets:
+                logger.info(f"No {category} markets found for spotlight")
+                return None
+
+            emoji = category_emojis.get(category, "📊")
+            extra_hashtags = category_hashtags.get(category, "")
+
+            # Build tweet
+            lines = [f"{emoji} {category.upper()} SPOTLIGHT\n"]
+            lines.append("what's moving rn:\n")
+
+            for i, m in enumerate(markets[:3], 1):
+                price_pct = int((m.yes_price or 0.5) * 100)
+                title_short = m.title[:40] + "..." if len(m.title) > 40 else m.title
+                lines.append(f"{i}. {title_short}")
+                lines.append(f"   └ {price_pct}% yes\n")
+
+            lines.append("\nfull analysis → oddwons.ai")
+            lines.append(f"\n#OddWons #PredictionMarkets #Polymarket #Kalshi {extra_hashtags}")
+
+            tweet = "".join(lines)
+
+            # Ensure under 280 chars
+            if len(tweet) > 280:
+                tweet = tweet[:277] + "..."
+
+            result = await post_tweet(tweet)
+            logger.info(f"{category} spotlight posted: {result}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to post {category} spotlight: {e}")
+            return None
+
+
+async def post_spotlight_crypto():
+    """Post crypto category spotlight."""
+    return await post_category_spotlight("crypto")
+
+
+async def post_spotlight_politics():
+    """Post politics category spotlight."""
+    return await post_category_spotlight("politics")
+
+
+async def post_spotlight_sports():
+    """Post sports category spotlight."""
+    return await post_category_spotlight("sports")
+
+
+async def post_spotlight_finance():
+    """Post finance category spotlight."""
+    return await post_category_spotlight("finance")
+
+
+async def post_spotlight_entertainment():
+    """Post entertainment category spotlight."""
+    return await post_category_spotlight("entertainment")
+
+
+# =============================================================================
+# DAILY POLL
+# =============================================================================
+
+async def post_poll():
+    """
+    Post an engagement poll about prediction markets.
+    Note: X API free tier doesn't support creating polls programmatically,
+    so we post a "soft poll" asking people to reply/like.
+    """
+    from sqlalchemy import select
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Market
+
+    logger.info("Generating daily poll tweet...")
+
+    poll_templates = [
+        {
+            "question": "which platform do you trust more for odds?",
+            "options": ["🅰️ Kalshi (regulated)", "🅱️ Polymarket (crypto)"],
+            "cta": "reply with A or B 👇"
+        },
+        {
+            "question": "what category are you watching most rn?",
+            "options": ["🏛️ Politics", "🪙 Crypto", "🏈 Sports", "📈 Finance"],
+            "cta": "drop your pick below 👇"
+        },
+        {
+            "question": "when a market moves 10%+ overnight...",
+            "options": ["📈 usually overreaction", "📉 usually correct"],
+            "cta": "what's your take? 👇"
+        },
+        {
+            "question": "how often do you check prediction markets?",
+            "options": ["👀 multiple times/day", "📅 once a day", "📆 few times/week"],
+            "cta": "be honest 👇"
+        },
+        {
+            "question": "biggest edge in prediction markets?",
+            "options": ["🔍 research", "⚡ speed", "🧠 contrarian thinking", "📊 data"],
+            "cta": "what's your strategy? 👇"
+        },
+    ]
+
+    import random
+    poll = random.choice(poll_templates)
+
+    lines = [f"quick poll 🗳️\n\n{poll['question']}\n"]
+    for opt in poll["options"]:
+        lines.append(f"\n{opt}")
+    lines.append(f"\n\n{poll['cta']}")
+    lines.append("\n\n#OddWons #PredictionMarkets #Polymarket #Kalshi")
+
+    tweet = "".join(lines)
+
+    try:
+        result = await post_tweet(tweet)
+        logger.info(f"Poll tweet posted: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to post poll: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# LATE NIGHT POSTS (Gambling Audience)
+# =============================================================================
+
+async def post_latenight_sports():
+    """
+    Late night sports post targeting gambling audience.
+    Focus on upcoming games, spreads, over/unders.
+    """
+    from sqlalchemy import select
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Market
+
+    logger.info("Generating late night sports tweet...")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            # Get top sports markets
+            result = await session.execute(
+                select(Market)
+                .where(
+                    Market.category.ilike("%sport%"),
+                    Market.status == 'active',
+                    Market.yes_price.isnot(None)
+                )
+                .order_by(Market.volume.desc())
+                .limit(2)
+            )
+            markets = result.scalars().all()
+
+            if not markets:
+                # Fallback generic sports tweet
+                tweet = """🏈 late night sports check
+
+prediction markets never sleep
+
+who else is up tracking odds rn? 👀
+
+oddwons.ai
+
+#OddWons #PredictionMarkets #Polymarket #Kalshi #SportsBetting"""
+            else:
+                lines = ["🌙 late night sports update\n"]
+                for m in markets:
+                    price_pct = int((m.yes_price or 0.5) * 100)
+                    title_short = m.title[:35] + "..." if len(m.title) > 35 else m.title
+                    lines.append(f"\n{title_short}")
+                    lines.append(f"└ {price_pct}% odds")
+
+                lines.append("\n\ncan't sleep, might as well research")
+                lines.append("\noddwons.ai")
+                lines.append("\n\n#OddWons #PredictionMarkets #Polymarket #Kalshi #SportsBetting")
+                tweet = "".join(lines)
+
+            if len(tweet) > 280:
+                tweet = tweet[:277] + "..."
+
+            result = await post_tweet(tweet)
+            logger.info(f"Late night sports posted: {result}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to post late night sports: {e}")
+            return None
+
+
+async def post_latenight_crypto():
+    """
+    Late night crypto post - crypto never sleeps.
+    """
+    from sqlalchemy import select
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Market
+
+    logger.info("Generating late night crypto tweet...")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            # Get top crypto markets
+            result = await session.execute(
+                select(Market)
+                .where(
+                    Market.category.ilike("%crypto%"),
+                    Market.status == 'active',
+                    Market.yes_price.isnot(None)
+                )
+                .order_by(Market.volume.desc())
+                .limit(2)
+            )
+            markets = result.scalars().all()
+
+            if not markets:
+                tweet = """🪙 crypto markets don't sleep
+
+and neither do we apparently
+
+what's your midnight thesis? 👇
+
+oddwons.ai
+
+#OddWons #PredictionMarkets #Polymarket #Kalshi #Crypto #Bitcoin"""
+            else:
+                lines = ["🌙 midnight crypto check\n"]
+                for m in markets:
+                    price_pct = int((m.yes_price or 0.5) * 100)
+                    title_short = m.title[:35] + "..." if len(m.title) > 35 else m.title
+                    lines.append(f"\n{title_short}")
+                    lines.append(f"└ {price_pct}%")
+
+                lines.append("\n\n24/7 markets, 24/7 tracking")
+                lines.append("\noddwons.ai")
+                lines.append("\n\n#OddWons #PredictionMarkets #Polymarket #Kalshi #Crypto")
+                tweet = "".join(lines)
+
+            if len(tweet) > 280:
+                tweet = tweet[:277] + "..."
+
+            result = await post_tweet(tweet)
+            logger.info(f"Late night crypto posted: {result}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to post late night crypto: {e}")
+            return None
+
+
+async def post_latenight_action():
+    """
+    Late night high-action markets post.
+    Mix of sports + crypto for the degens still up.
+    """
+    from sqlalchemy import select
+    from app.core.database import AsyncSessionLocal
+    from app.models.market import Market
+    from app.models.cross_platform_match import CrossPlatformMatch
+
+    logger.info("Generating late night action tweet...")
+
+    async with AsyncSessionLocal() as session:
+        try:
+            # Get biggest cross-platform gap
+            match_result = await session.execute(
+                select(CrossPlatformMatch)
+                .order_by(CrossPlatformMatch.price_gap_cents.desc())
+                .limit(1)
+            )
+            match = match_result.scalar_one_or_none()
+
+            if match and match.price_gap_cents and match.price_gap_cents >= 2:
+                tweet = f"""🌙 1 AM market check
+
+{match.topic[:40]}...
+
+Kalshi: {int(match.kalshi_yes_price or 0)}%
+Poly:   {int(match.polymarket_yes_price or 0)}%
+
+{int(match.price_gap_cents)}% gap at 1am... interesting 👀
+
+oddwons.ai
+
+#OddWons #PredictionMarkets #Polymarket #Kalshi"""
+            else:
+                tweet = """🌙 still up tracking markets?
+
+same
+
+late night is when the real ones do their research
+
+oddwons.ai
+
+#OddWons #PredictionMarkets #Polymarket #Kalshi"""
+
+            if len(tweet) > 280:
+                tweet = tweet[:277] + "..."
+
+            result = await post_tweet(tweet)
+            logger.info(f"Late night action posted: {result}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to post late night action: {e}")
+            return None
+
+
+# =============================================================================
 # MAIN POSTING ORCHESTRATOR
 # =============================================================================
 
@@ -1454,6 +1808,54 @@ async def run_scheduled_posts(post_type: str = "all"):
     if post_type == "promo":
         results["promo"] = await run_and_save(
             "promo", post_promo, "promo"
+        )
+
+    # Category Spotlights
+    if post_type == "spotlight_crypto":
+        results["spotlight_crypto"] = await run_and_save(
+            "spotlight_crypto", post_spotlight_crypto, "morning_movers"  # Use existing toggle
+        )
+
+    if post_type == "spotlight_politics":
+        results["spotlight_politics"] = await run_and_save(
+            "spotlight_politics", post_spotlight_politics, "morning_movers"
+        )
+
+    if post_type == "spotlight_sports":
+        results["spotlight_sports"] = await run_and_save(
+            "spotlight_sports", post_spotlight_sports, "morning_movers"
+        )
+
+    if post_type == "spotlight_finance":
+        results["spotlight_finance"] = await run_and_save(
+            "spotlight_finance", post_spotlight_finance, "morning_movers"
+        )
+
+    if post_type == "spotlight_entertainment":
+        results["spotlight_entertainment"] = await run_and_save(
+            "spotlight_entertainment", post_spotlight_entertainment, "morning_movers"
+        )
+
+    # Daily Poll
+    if post_type == "poll":
+        results["poll"] = await run_and_save(
+            "poll", post_poll, "morning_movers"  # Use existing toggle
+        )
+
+    # Late Night Posts
+    if post_type == "latenight_sports":
+        results["latenight_sports"] = await run_and_save(
+            "latenight_sports", post_latenight_sports, "morning_movers"
+        )
+
+    if post_type == "latenight_crypto":
+        results["latenight_crypto"] = await run_and_save(
+            "latenight_crypto", post_latenight_crypto, "morning_movers"
+        )
+
+    if post_type == "latenight_action":
+        results["latenight_action"] = await run_and_save(
+            "latenight_action", post_latenight_action, "morning_movers"
         )
 
     logger.info(f"Scheduled posts complete: {post_type} -> {results}")
