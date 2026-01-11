@@ -268,3 +268,82 @@ export async function getAdminHealth() {
     stripe: string
   }>('/admin/health')
 }
+
+// ============ X BOT ADMIN ============
+
+export interface XPost {
+  id: string
+  tweet_id: string | null
+  tweet_url: string | null
+  post_type: string
+  status: string
+  content: string
+  has_image: boolean
+  image_url: string | null
+  market_data: any | null
+  insight_ids: string[] | null
+  market_ids: string[] | null
+  error_message: string | null
+  created_at: string | null
+  posted_at: string | null
+}
+
+export interface XBotSettings {
+  enabled: boolean
+  morning_movers_enabled: boolean
+  platform_comparison_enabled: boolean
+  market_highlight_enabled: boolean
+  weekly_recap_enabled: boolean
+  max_posts_per_day: number
+  updated_at: string | null
+  updated_by: string | null
+}
+
+export async function getXPosts(params?: { status?: string; post_type?: string; page?: number; page_size?: number }) {
+  const searchParams = new URLSearchParams()
+  if (params?.status) searchParams.set('status', params.status)
+  if (params?.post_type) searchParams.set('post_type', params.post_type)
+  if (params?.page) searchParams.set('page', params.page.toString())
+  if (params?.page_size) searchParams.set('page_size', params.page_size.toString())
+
+  return fetchAPI<{
+    posts: XPost[]
+    total: number
+    page: number
+    page_size: number
+  }>(`/admin/x-posts?${searchParams}`)
+}
+
+export async function getXPostStats() {
+  return fetchAPI<{
+    totals: { total: number; posted: number; failed: number }
+    recent: { last_24h: number; last_7d: number }
+    by_type: Record<string, number>
+    bot_enabled: boolean
+  }>('/admin/x-posts/stats')
+}
+
+export async function getXBotSettings() {
+  return fetchAPI<{ settings: XBotSettings }>('/admin/x-bot/settings')
+}
+
+export async function toggleXBot(enabled: boolean) {
+  return fetchAPI<{ message: string; settings: XBotSettings }>(
+    `/admin/x-bot/toggle?enabled=${enabled}`,
+    { method: 'POST' }
+  )
+}
+
+export async function toggleXPostType(postType: string, enabled: boolean) {
+  return fetchAPI<{ message: string; settings: XBotSettings }>(
+    `/admin/x-bot/toggle-post-type?post_type=${postType}&enabled=${enabled}`,
+    { method: 'POST' }
+  )
+}
+
+export async function triggerXPost(postType: string) {
+  return fetchAPI<{ message: string; result: any }>(
+    `/admin/x-bot/post-now?post_type=${postType}`,
+    { method: 'POST' }
+  )
+}

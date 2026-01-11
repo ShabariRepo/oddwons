@@ -916,3 +916,34 @@ result = asyncio.run(post_morning_movers())
 - "We broke down the why..."
 - "One stat explains this..."
 - "What do they know that you don't?"
+
+### X Bot Admin Panel (Jan 11, 2026)
+**Admin controls for managing the X (Twitter) bot.**
+
+**New Database Tables:**
+- `x_posts` - Tracks all posts (posted, failed, pending) with content, tweet URLs, and context
+- `x_bot_settings` - Bot configuration (enabled, per-post-type toggles)
+
+**Admin API Endpoints:**
+- `GET /api/v1/admin/x-posts` - List all posts with filters (status, post_type, pagination)
+- `GET /api/v1/admin/x-posts/stats` - Get posting statistics
+- `GET /api/v1/admin/x-posts/{id}` - Get single post detail
+- `GET /api/v1/admin/x-bot/settings` - Get current bot settings
+- `POST /api/v1/admin/x-bot/toggle?enabled=true` - Enable/disable bot (master switch)
+- `POST /api/v1/admin/x-bot/toggle-post-type?post_type=morning_movers&enabled=false` - Toggle specific post type
+- `POST /api/v1/admin/x-bot/post-now?post_type=morning` - Manually trigger a post
+- `DELETE /api/v1/admin/x-posts/{id}` - Delete post record
+
+**Frontend Admin Page:** `/admin/x-bot`
+- Master on/off toggle for the bot
+- Stats: total posts, posted, failed, last 24h
+- Per-post-type controls with "Post Now" buttons
+- List of recent posts with expandable content
+- Links to view tweets on X
+
+**Files:**
+- `app/models/x_post.py` - XPost, XBotSettings models
+- `app/api/routes/admin.py` - X bot endpoints (lines 599+)
+- `app/services/x_poster.py` - Updated with bot check + DB tracking
+- `frontend/src/app/(app)/admin/x-bot/page.tsx` - Admin UI
+- `frontend/src/lib/api.ts` - X bot API functions

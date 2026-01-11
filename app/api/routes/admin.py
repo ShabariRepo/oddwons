@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.models.user import User, SubscriptionTier, SubscriptionStatus
 from app.models.ai_insight import AIInsight
 from app.models.market import Market
+from app.models.x_post import XPost, XPostType, XPostStatus, XBotSettings
 from app.services.auth import require_admin
 from app.services.billing import PRICE_TO_TIER
 from app.config import get_settings
@@ -593,3 +594,243 @@ async def cleanup_duplicate_subscriptions(
 
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ X (TWITTER) BOT MANAGEMENT ============
+
+@router.get("/x-posts")
+async def list_x_posts(
+    status: Optional[str] = Query(None, description="Filter by status: posted, failed, pending"),
+    post_type: Optional[str] = Query(None, description="Filter by type: morning_movers, platform_comparison, etc"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all X posts with pagination and filters."""
+    query = select(XPost)
+
+    if status:
+        query = query.where(XPost.status == XPostStatus(status))
+
+    if post_type:
+        query = query.where(XPost.post_type == XPostType(post_type))
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query)
+
+    # Paginate (newest first)
+    query = query.order_by(desc(XPost.created_at))
+    query = query.offset((page - 1) * page_size).limit(page_size)
+
+    result = await db.execute(query)
+    posts = result.scalars().all()
+
+    return {
+        "posts": [p.to_dict() for p in posts],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/x-posts/stats")
+async def get_x_post_stats(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get X posting statistics."""
+    now = datetime.utcnow()
+    day_ago = now - timedelta(days=1)
+    week_ago = now - timedelta(days=7)
+
+    # Total counts
+    total_posts = await db.scalar(select(func.count()).select_from(XPost))
+    posted_count = await db.scalar(
+        select(func.count()).select_from(XPost).where(XPost.status == XPostStatus.POSTED)
+    )
+    failed_count = await db.scalar(
+        select(func.count()).select_from(XPost).where(XPost.status == XPostStatus.FAILED)
+    )
+
+    # Recent activity
+    posts_24h = await db.scalar(
+        select(func.count()).select_from(XPost).where(XPost.created_at > day_ago)
+    )
+    posts_7d = await db.scalar(
+        select(func.count()).select_from(XPost).where(XPost.created_at > week_ago)
+    )
+
+    # By type
+    type_counts = {}
+    for pt in XPostType:
+        count = await db.scalar(
+            select(func.count()).select_from(XPost)
+            .where(XPost.post_type == pt)
+            .where(XPost.status == XPostStatus.POSTED)
+        )
+        type_counts[pt.value] = count or 0
+
+    # Get bot settings
+    settings_result = await db.execute(
+        select(XBotSettings).where(XBotSettings.id == "default")
+    )
+    bot_settings = settings_result.scalar_one_or_none()
+
+    return {
+        "totals": {
+            "total": total_posts,
+            "posted": posted_count,
+            "failed": failed_count,
+        },
+        "recent": {
+            "last_24h": posts_24h,
+            "last_7d": posts_7d,
+        },
+        "by_type": type_counts,
+        "bot_enabled": bot_settings.enabled if bot_settings else True,
+    }
+
+
+@router.get("/x-posts/{post_id}")
+async def get_x_post(
+    post_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get detailed X post info."""
+    result = await db.execute(select(XPost).where(XPost.id == post_id))
+    post = result.scalar_one_or_none()
+
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    return {"post": post.to_dict()}
+
+
+@router.get("/x-bot/settings")
+async def get_x_bot_settings(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get current X bot settings."""
+    result = await db.execute(
+        select(XBotSettings).where(XBotSettings.id == "default")
+    )
+    settings_row = result.scalar_one_or_none()
+
+    if not settings_row:
+        # Create default settings
+        settings_row = XBotSettings(id="default", enabled=True)
+        db.add(settings_row)
+        await db.commit()
+        await db.refresh(settings_row)
+
+    return {"settings": settings_row.to_dict()}
+
+
+@router.post("/x-bot/toggle")
+async def toggle_x_bot(
+    enabled: bool = Query(..., description="Enable or disable the bot"),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Enable or disable the X bot (master switch)."""
+    result = await db.execute(
+        select(XBotSettings).where(XBotSettings.id == "default")
+    )
+    settings_row = result.scalar_one_or_none()
+
+    if not settings_row:
+        settings_row = XBotSettings(id="default", enabled=enabled)
+        db.add(settings_row)
+    else:
+        settings_row.enabled = enabled
+        settings_row.updated_by = admin.id
+
+    await db.commit()
+    await db.refresh(settings_row)
+
+    return {
+        "message": f"X bot {'enabled' if enabled else 'disabled'}",
+        "settings": settings_row.to_dict(),
+    }
+
+
+@router.post("/x-bot/toggle-post-type")
+async def toggle_x_post_type(
+    post_type: str = Query(..., description="Post type to toggle: morning_movers, platform_comparison, market_highlight, weekly_recap"),
+    enabled: bool = Query(..., description="Enable or disable this post type"),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Enable or disable a specific post type."""
+    result = await db.execute(
+        select(XBotSettings).where(XBotSettings.id == "default")
+    )
+    settings_row = result.scalar_one_or_none()
+
+    if not settings_row:
+        settings_row = XBotSettings(id="default")
+        db.add(settings_row)
+
+    # Map post type to column
+    type_map = {
+        "morning_movers": "morning_movers_enabled",
+        "platform_comparison": "platform_comparison_enabled",
+        "market_highlight": "market_highlight_enabled",
+        "weekly_recap": "weekly_recap_enabled",
+    }
+
+    column_name = type_map.get(post_type)
+    if not column_name:
+        raise HTTPException(status_code=400, detail=f"Invalid post type: {post_type}")
+
+    setattr(settings_row, column_name, enabled)
+    settings_row.updated_by = admin.id
+
+    await db.commit()
+    await db.refresh(settings_row)
+
+    return {
+        "message": f"{post_type} {'enabled' if enabled else 'disabled'}",
+        "settings": settings_row.to_dict(),
+    }
+
+
+@router.post("/x-bot/post-now")
+async def trigger_x_post(
+    post_type: str = Query(..., description="Post type to trigger: morning, afternoon, evening, weekly, stats"),
+    admin: User = Depends(require_admin),
+):
+    """Manually trigger an X post."""
+    from app.services.x_poster import run_scheduled_posts
+
+    try:
+        result = await run_scheduled_posts(post_type)
+        return {
+            "message": f"Triggered {post_type} post",
+            "result": result,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/x-posts/{post_id}")
+async def delete_x_post_record(
+    post_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an X post record (doesn't delete the tweet from X)."""
+    result = await db.execute(select(XPost).where(XPost.id == post_id))
+    post = result.scalar_one_or_none()
+
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    await db.delete(post)
+    await db.commit()
+
+    return {"message": "Post record deleted", "id": post_id}

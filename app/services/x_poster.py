@@ -17,11 +17,139 @@ import os
 import httpx
 import tweepy
 from groq import Groq
+import uuid
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+# =============================================================================
+# BOT SETTINGS & POST TRACKING
+# =============================================================================
+
+async def get_bot_settings() -> Dict[str, Any]:
+    """Get current bot settings from database."""
+    from sqlalchemy import select
+    from app.core.database import AsyncSessionLocal
+    from app.models.x_post import XBotSettings
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(XBotSettings).where(XBotSettings.id == "default")
+        )
+        settings_row = result.scalar_one_or_none()
+
+        if not settings_row:
+            # Create default settings if not exists
+            settings_row = XBotSettings(id="default", enabled=True)
+            session.add(settings_row)
+            await session.commit()
+            await session.refresh(settings_row)
+
+        return settings_row.to_dict()
+
+
+async def is_bot_enabled(post_type: str = None) -> bool:
+    """Check if the bot is enabled (globally and for specific post type)."""
+    try:
+        settings = await get_bot_settings()
+
+        # Check master switch
+        if not settings.get("enabled", True):
+            logger.info("X bot is disabled (master switch)")
+            return False
+
+        # Check specific post type if provided
+        if post_type:
+            type_key = f"{post_type}_enabled"
+            if not settings.get(type_key, True):
+                logger.info(f"X bot is disabled for {post_type}")
+                return False
+
+        return True
+    except Exception as e:
+        logger.error(f"Error checking bot settings: {e}")
+        return True  # Default to enabled if error
+
+
+async def save_x_post(
+    post_type: str,
+    content: str,
+    tweet_result: Optional[Dict] = None,
+    market_data: Optional[Dict] = None,
+    insight_ids: Optional[List[str]] = None,
+    market_ids: Optional[List[str]] = None,
+    image_url: Optional[str] = None,
+) -> Optional[str]:
+    """Save an X post record to the database."""
+    from sqlalchemy import select
+    from app.core.database import AsyncSessionLocal
+    from app.models.x_post import XPost, XPostType, XPostStatus
+
+    async with AsyncSessionLocal() as session:
+        try:
+            # Map post_type string to enum
+            type_map = {
+                "morning": XPostType.MORNING_MOVERS,
+                "morning_movers": XPostType.MORNING_MOVERS,
+                "afternoon": XPostType.PLATFORM_COMPARISON,
+                "platform_comparison": XPostType.PLATFORM_COMPARISON,
+                "evening": XPostType.MARKET_HIGHLIGHT,
+                "market_highlight": XPostType.MARKET_HIGHLIGHT,
+                "weekly": XPostType.WEEKLY_RECAP,
+                "weekly_recap": XPostType.WEEKLY_RECAP,
+                "stats": XPostType.DAILY_STATS,
+                "daily_stats": XPostType.DAILY_STATS,
+            }
+            x_post_type = type_map.get(post_type, XPostType.MANUAL)
+
+            # Determine status and tweet info
+            if tweet_result and tweet_result.get("success"):
+                status = XPostStatus.POSTED
+                tweet_id = tweet_result.get("tweet_id")
+                tweet_url = f"https://x.com/i/status/{tweet_id}" if tweet_id else None
+                error_message = None
+                posted_at = datetime.utcnow()
+            elif tweet_result:
+                status = XPostStatus.FAILED
+                tweet_id = None
+                tweet_url = None
+                error_message = tweet_result.get("error", "Unknown error")
+                posted_at = None
+            else:
+                status = XPostStatus.PENDING
+                tweet_id = None
+                tweet_url = None
+                error_message = None
+                posted_at = None
+
+            post = XPost(
+                id=str(uuid.uuid4()),
+                tweet_id=tweet_id,
+                tweet_url=tweet_url,
+                post_type=x_post_type,
+                status=status,
+                content=content,
+                has_image=bool(image_url) or (tweet_result and tweet_result.get("has_image", False)),
+                image_url=image_url,
+                market_data=market_data,
+                insight_ids=insight_ids,
+                market_ids=market_ids,
+                error_message=error_message,
+                posted_at=posted_at,
+            )
+
+            session.add(post)
+            await session.commit()
+
+            logger.info(f"Saved X post record: {post.id} ({status.value})")
+            return post.id
+
+        except Exception as e:
+            logger.error(f"Failed to save X post record: {e}")
+            return None
 
 
 # =============================================================================
@@ -1124,28 +1252,77 @@ async def post_daily_stats():
 
 async def run_scheduled_posts(post_type: str = "all"):
     """
-    Run scheduled X posts.
-    
+    Run scheduled X posts with bot check and DB tracking.
+
     Args:
         post_type: "morning", "afternoon", "evening", "weekly", "stats", or "all"
     """
     results = {}
-    
+
+    # Check master bot switch first
+    if not await is_bot_enabled():
+        logger.info("X bot is disabled - skipping all posts")
+        return {"skipped": True, "reason": "bot_disabled"}
+
+    # Map post types to their functions and settings keys
+    post_config = {
+        "morning": ("morning_movers", post_morning_movers),
+        "afternoon": ("platform_comparison", post_platform_comparison),
+        "evening": ("market_highlight", post_market_highlight),
+        "weekly": ("weekly_recap", post_weekly_recap),
+        "stats": ("daily_stats", post_daily_stats),
+    }
+
+    async def run_and_save(key: str, func, settings_key: str):
+        """Run a posting function and save the result."""
+        # Check if this specific post type is enabled
+        if not await is_bot_enabled(settings_key):
+            logger.info(f"Skipping {key} - disabled in settings")
+            return {"skipped": True, "reason": f"{settings_key}_disabled"}
+
+        # Run the posting function
+        result = await func()
+
+        # Save to database
+        if result:
+            content = result.get("text", "") if isinstance(result, dict) else ""
+            # For threads (weekly recap), content might be different
+            if isinstance(result, list) and result:
+                content = result[0].get("text", "") if isinstance(result[0], dict) else ""
+
+            await save_x_post(
+                post_type=key,
+                content=content,
+                tweet_result=result if isinstance(result, dict) else (result[0] if result else None),
+            )
+
+        return result
+
     if post_type in ["morning", "all"]:
-        results["morning_movers"] = await post_morning_movers()
-    
+        results["morning_movers"] = await run_and_save(
+            "morning_movers", post_morning_movers, "morning_movers"
+        )
+
     if post_type in ["afternoon", "all"]:
-        results["platform_comparison"] = await post_platform_comparison()
-    
+        results["platform_comparison"] = await run_and_save(
+            "platform_comparison", post_platform_comparison, "platform_comparison"
+        )
+
     if post_type in ["evening", "all"]:
-        results["market_highlight"] = await post_market_highlight()
-    
+        results["market_highlight"] = await run_and_save(
+            "market_highlight", post_market_highlight, "market_highlight"
+        )
+
     if post_type == "weekly":
-        results["weekly_recap"] = await post_weekly_recap()
-    
+        results["weekly_recap"] = await run_and_save(
+            "weekly_recap", post_weekly_recap, "weekly_recap"
+        )
+
     if post_type == "stats":
-        results["daily_stats"] = await post_daily_stats()
-    
+        results["daily_stats"] = await run_and_save(
+            "daily_stats", post_daily_stats, "daily_stats"
+        )
+
     logger.info(f"Scheduled posts complete: {post_type} -> {results}")
     return results
 

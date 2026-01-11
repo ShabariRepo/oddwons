@@ -4,13 +4,14 @@ import { useAuth } from '@/components/AuthProvider'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { Users, CreditCard, Brain, Activity, BarChart3 } from 'lucide-react'
+import { Users, CreditCard, Brain, Activity, BarChart3, Twitter } from 'lucide-react'
 
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: BarChart3 },
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/billing', label: 'Billing', icon: CreditCard },
   { href: '/admin/content', label: 'Content', icon: Brain },
+  { href: '/admin/x-bot', label: 'X Bot', icon: Twitter },
   { href: '/admin/system', label: 'System', icon: Activity },
 ]
 
