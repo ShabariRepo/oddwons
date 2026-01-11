@@ -33,6 +33,7 @@ interface XBotSettings {
   platform_comparison_enabled: boolean
   market_highlight_enabled: boolean
   weekly_recap_enabled: boolean
+  promo_enabled: boolean
   max_posts_per_day: number
   updated_at: string | null
 }
@@ -133,6 +134,7 @@ export default function XBotAdminPage() {
       market_highlight: 'Market Highlight',
       weekly_recap: 'Weekly Recap',
       daily_stats: 'Daily Stats',
+      promo: 'Daily Promo',
       manual: 'Manual',
     }
     return labels[postType] || postType
@@ -218,9 +220,10 @@ export default function XBotAdminPage() {
         <h3 className="font-semibold mb-4">Post Types</h3>
         <div className="space-y-3">
           {[
-            { key: 'morning_movers', label: 'Morning Movers', time: '9:00 AM EST', triggerKey: 'morning' },
-            { key: 'platform_comparison', label: 'Platform Gap', time: '2:00 PM EST', triggerKey: 'afternoon' },
-            { key: 'market_highlight', label: 'Market Highlight', time: '6:00 PM EST', triggerKey: 'evening' },
+            { key: 'morning_movers', label: 'Morning Movers', time: 'Every 2hrs (8AM, 4PM)', triggerKey: 'morning' },
+            { key: 'platform_comparison', label: 'Platform Gap', time: 'Every 2hrs (10AM, 2PM, 8PM)', triggerKey: 'afternoon' },
+            { key: 'market_highlight', label: 'Market Highlight', time: 'Every 2hrs (12PM, 6PM, 10PM)', triggerKey: 'evening' },
+            { key: 'promo', label: 'Daily Promo', time: '7:00 PM EST (with logo)', triggerKey: 'promo' },
             { key: 'weekly_recap', label: 'Weekly Recap', time: 'Sun 10 AM EST', triggerKey: 'weekly' },
           ].map((pt) => {
             const settingKey = `${pt.key}_enabled` as keyof XBotSettings

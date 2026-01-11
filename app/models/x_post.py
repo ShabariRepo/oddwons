@@ -13,6 +13,7 @@ class XPostType(str, enum.Enum):
     MARKET_HIGHLIGHT = "market_highlight"
     WEEKLY_RECAP = "weekly_recap"
     DAILY_STATS = "daily_stats"
+    PROMO = "promo"
     MANUAL = "manual"
 
 
@@ -88,6 +89,7 @@ class XBotSettings(Base):
     platform_comparison_enabled = Column(Boolean, default=True)
     market_highlight_enabled = Column(Boolean, default=True)
     weekly_recap_enabled = Column(Boolean, default=True)
+    promo_enabled = Column(Boolean, default=True)
 
     # Rate limiting
     max_posts_per_day = Column(String, default="10")
@@ -104,6 +106,7 @@ class XBotSettings(Base):
             "platform_comparison_enabled": self.platform_comparison_enabled,
             "market_highlight_enabled": self.market_highlight_enabled,
             "weekly_recap_enabled": self.weekly_recap_enabled,
+            "promo_enabled": self.promo_enabled,
             "max_posts_per_day": int(self.max_posts_per_day) if self.max_posts_per_day else 10,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "updated_by": self.updated_by,

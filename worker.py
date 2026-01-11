@@ -343,36 +343,91 @@ def create_scheduler() -> AsyncIOScheduler:
     )
 
     # =========================================================================
-    # X (TWITTER) POSTING JOBS
+    # X (TWITTER) POSTING JOBS - Every 2 hours from 8 AM - 10 PM EST
+    # EST = UTC - 5
     # =========================================================================
-    
-    # Morning movers - 9:00 AM EST (14:00 UTC)
+
+    # 8 AM EST (13:00 UTC) - Morning Movers
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("morning")),
-        CronTrigger(hour=14, minute=0),
-        id="x_morning_movers",
-        name="X Morning Movers Post",
+        CronTrigger(hour=13, minute=0),
+        id="x_8am",
+        name="X 8AM Morning Movers",
         replace_existing=True,
     )
-    
-    # Afternoon comparison - 2:00 PM EST (19:00 UTC)
+
+    # 10 AM EST (15:00 UTC) - Platform Gap
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("afternoon")),
+        CronTrigger(hour=15, minute=0),
+        id="x_10am",
+        name="X 10AM Platform Gap",
+        replace_existing=True,
+    )
+
+    # 12 PM EST (17:00 UTC) - Market Highlight
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("evening")),
+        CronTrigger(hour=17, minute=0),
+        id="x_12pm",
+        name="X 12PM Market Highlight",
+        replace_existing=True,
+    )
+
+    # 2 PM EST (19:00 UTC) - Platform Gap
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("afternoon")),
         CronTrigger(hour=19, minute=0),
-        id="x_afternoon_comparison",
-        name="X Platform Comparison Post",
+        id="x_2pm",
+        name="X 2PM Platform Gap",
         replace_existing=True,
     )
-    
-    # Evening highlight - 6:00 PM EST (23:00 UTC)
+
+    # 4 PM EST (21:00 UTC) - Morning Movers (big movers during day)
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("morning")),
+        CronTrigger(hour=21, minute=0),
+        id="x_4pm",
+        name="X 4PM Big Movers",
+        replace_existing=True,
+    )
+
+    # 6 PM EST (23:00 UTC) - Market Highlight
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("evening")),
         CronTrigger(hour=23, minute=0),
-        id="x_evening_highlight",
-        name="X Evening Highlight Post",
+        id="x_6pm",
+        name="X 6PM Market Highlight",
         replace_existing=True,
     )
-    
+
+    # 7 PM EST (00:00 UTC next day) - PROMO with logo
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("promo")),
+        CronTrigger(hour=0, minute=0),
+        id="x_7pm_promo",
+        name="X 7PM Daily Promo",
+        replace_existing=True,
+    )
+
+    # 8 PM EST (01:00 UTC) - Platform Gap
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("afternoon")),
+        CronTrigger(hour=1, minute=0),
+        id="x_8pm",
+        name="X 8PM Platform Gap",
+        replace_existing=True,
+    )
+
+    # 10 PM EST (03:00 UTC) - Market Highlight
+    scheduler.add_job(
+        lambda: asyncio.create_task(post_to_x("evening")),
+        CronTrigger(hour=3, minute=0),
+        id="x_10pm",
+        name="X 10PM Market Highlight",
+        replace_existing=True,
+    )
+
     # Weekly recap - Sunday 10:00 AM EST (15:00 UTC)
     scheduler.add_job(
         lambda: asyncio.create_task(post_to_x("weekly")),
@@ -382,7 +437,7 @@ def create_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
     )
 
-    logger.info(f"Scheduler configured: pipeline every {interval_minutes}min, digest 8am UTC, trials 10am UTC, alerts every 5min, X posts 9am/2pm/6pm EST")
+    logger.info(f"Scheduler configured: pipeline every {interval_minutes}min, X posts every 2hrs 8AM-10PM EST + 7PM promo")
     return scheduler
 
 

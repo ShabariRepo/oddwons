@@ -102,6 +102,7 @@ async def save_x_post(
                 "weekly_recap": XPostType.WEEKLY_RECAP,
                 "stats": XPostType.DAILY_STATS,
                 "daily_stats": XPostType.DAILY_STATS,
+                "promo": XPostType.PROMO,
             }
             x_post_type = type_map.get(post_type, XPostType.MANUAL)
 
@@ -446,7 +447,7 @@ Guidelines:
 - Keep under 260 characters (leave room for hashtags)
 - NO betting advice, we're just observing
 - Occasional "lol", "ngl", "lowkey" is fine when natural
-- ALWAYS end with hashtags: #PredictionMarkets #Polymarket #Kalshi are REQUIRED on every tweet, then optionally add 1 more relevant one like #Crypto #Politics #Sports #Elections based on the topic
+- ALWAYS end with hashtags: #OddWons #PredictionMarkets #Polymarket #Kalshi are REQUIRED on every tweet, then optionally add 1 more relevant one like #Crypto #Politics #Sports #Elections based on the topic
 
 Market data:
 {market_data}
@@ -466,7 +467,7 @@ something shifted 👀
 
 oddwons.ai
 
-#PredictionMarkets #Polymarket #Kalshi #Politics"
+#OddWons #PredictionMarkets #Polymarket #Kalshi"
 
 2. Platform Gap:
 "the platforms can't agree lol
@@ -479,7 +480,7 @@ Poly:   38% ████░░░░░░
 
 oddwons.ai
 
-#PredictionMarkets #Polymarket #Kalshi #Crypto"
+#OddWons #PredictionMarkets #Polymarket #Kalshi"
 
 3. Market Highlight:
 "this one's getting spicy
@@ -493,7 +494,7 @@ there's a reason for the shuffle
 
 oddwons.ai
 
-#PredictionMarkets #Polymarket #Kalshi #NFL"
+#OddWons #PredictionMarkets #Polymarket #Kalshi"
 
 4. Big movement:
 "yo this market MOVED
@@ -505,9 +506,9 @@ ngl the reason is kinda interesting
 
 oddwons.ai
 
-#PredictionMarkets #Polymarket #Kalshi"
+#OddWons #PredictionMarkets #Polymarket #Kalshi"
 
-Write ONLY the tweet, nothing else. Match the chill energy and always include #PredictionMarkets #Polymarket #Kalshi."""
+Write ONLY the tweet, nothing else. Match the chill energy and always include #OddWons #PredictionMarkets #Polymarket #Kalshi."""
 
 
 async def generate_tweet_with_ai(
@@ -1278,6 +1279,101 @@ async def post_daily_stats():
             return None
 
 
+async def post_promo():
+    """
+    Post daily promo tweet with logo.
+    Static content highlighting what users can do on OddWons.
+    Scheduled: 7:00 PM EST / 00:00 UTC
+    """
+    logger.info("Posting daily promo tweet...")
+
+    # Static promo text - rotates through different messages
+    promo_messages = [
+        """what we do at OddWons 👇
+
+📊 Track 70k+ prediction markets
+⚖️ Compare Kalshi vs Polymarket odds
+🔍 AI-powered market analysis
+📈 Price movement alerts
+🎯 Cross-platform price gaps
+
+your research companion for prediction markets
+
+oddwons.ai
+
+#OddWons #PredictionMarkets #Polymarket #Kalshi""",
+
+        """prediction markets, simplified 🎯
+
+we track the markets so you don't have to:
+
+├ Real-time odds from Kalshi + Polymarket
+├ AI highlights on what's moving
+├ Cross-platform comparisons
+└ Daily briefings
+
+oddwons.ai
+
+#OddWons #PredictionMarkets #Polymarket #Kalshi""",
+
+        """tired of checking multiple platforms?
+
+OddWons brings it all together:
+
+📊 70k+ markets tracked
+🔄 Kalshi + Polymarket side-by-side
+🤖 AI explains what's happening
+📱 One dashboard, all the data
+
+oddwons.ai
+
+#OddWons #PredictionMarkets #Polymarket #Kalshi""",
+
+        """your daily prediction market briefing 📰
+
+├ Top movers
+├ Platform price gaps
+├ AI analysis
+├ Key dates & catalysts
+└ Volume trends
+
+all in one place
+
+oddwons.ai
+
+#OddWons #PredictionMarkets #Polymarket #Kalshi""",
+
+        """why check 2 platforms when you can check 1? 🤔
+
+OddWons aggregates:
+• Kalshi odds
+• Polymarket odds
+• Price gaps between them
+• AI-powered context
+
+the smarter way to research prediction markets
+
+oddwons.ai
+
+#OddWons #PredictionMarkets #Polymarket #Kalshi""",
+    ]
+
+    # Pick a random promo message
+    import random
+    promo_text = random.choice(promo_messages)
+
+    # Logo URL - update this to your actual logo URL
+    logo_url = os.getenv("ODDWONS_LOGO_URL", "https://oddwons.ai/oddwons-logo.png")
+
+    try:
+        result = await post_tweet(promo_text, image_url=logo_url)
+        logger.info(f"Promo tweet posted: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to post promo: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # =============================================================================
 # MAIN POSTING ORCHESTRATOR
 # =============================================================================
@@ -1287,7 +1383,7 @@ async def run_scheduled_posts(post_type: str = "all"):
     Run scheduled X posts with bot check and DB tracking.
 
     Args:
-        post_type: "morning", "afternoon", "evening", "weekly", "stats", or "all"
+        post_type: "morning", "afternoon", "evening", "weekly", "stats", "promo", or "all"
     """
     results = {}
 
@@ -1353,6 +1449,11 @@ async def run_scheduled_posts(post_type: str = "all"):
     if post_type == "stats":
         results["daily_stats"] = await run_and_save(
             "daily_stats", post_daily_stats, "daily_stats"
+        )
+
+    if post_type == "promo":
+        results["promo"] = await run_and_save(
+            "promo", post_promo, "promo"
         )
 
     logger.info(f"Scheduled posts complete: {post_type} -> {results}")
