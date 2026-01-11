@@ -294,6 +294,7 @@ export interface XBotSettings {
   platform_comparison_enabled: boolean
   market_highlight_enabled: boolean
   weekly_recap_enabled: boolean
+  promo_enabled: boolean
   max_posts_per_day: number
   updated_at: string | null
   updated_by: string | null
