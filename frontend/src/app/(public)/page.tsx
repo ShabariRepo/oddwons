@@ -137,9 +137,8 @@ export default function LandingPage() {
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 leading-tight">
-            Your{' '}
-            <span className="text-primary-600">Prediction Market</span>{' '}
-            Research Companion
+            <span className="text-primary-600">Prediction Markets</span>{' '}
+            On Crack
           </h1>
           <p className="mt-6 text-xl text-gray-600 max-w-2xl mx-auto">
             AI-powered insights for Kalshi and Polymarket. Compare prices across platforms,
