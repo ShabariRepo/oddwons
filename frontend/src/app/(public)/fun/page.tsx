@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
-import { BrandPattern } from '@/components/BrandPattern'
+import BrandPattern from '@/components/BrandPattern'
 
 interface Emoji {
   id: number
